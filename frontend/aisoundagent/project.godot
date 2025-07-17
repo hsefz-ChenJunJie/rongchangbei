@@ -17,11 +17,13 @@ config/icon="res://icon.svg"
 
 [audio]
 
+general/text_to_speech=true
 driver/enable_input=true
 
 [autoload]
 
 SceneManager="*res://SceneManager.gd"
+TtsManager="*res://tts_manager.gd"
 
 [display]
 

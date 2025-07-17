@@ -1,7 +1,7 @@
 [gd_scene load_steps=9 format=3 uid="uid://ccmej2ta7xfh7"]
 
 [ext_resource type="Theme" uid="uid://cieb7ta71pkeo" path="res://ControlTheme.tres" id="1_42dj3"]
-[ext_resource type="Texture2D" uid="uid://v5jh4ith1ubb" path="res://wpy1 - 副本.jpg" id="2_8rhti"]
+[ext_resource type="Texture2D" uid="uid://17t44oaj7rmq" path="res://fyhj0ibovbp.jpg" id="2_42dj3"]
 [ext_resource type="Texture2D" uid="uid://co333k25yb6cs" path="res://SVG/outline/chevron-left.svg" id="3_21bcp"]
 [ext_resource type="Script" uid="uid://wcu4cqpihknu" path="res://base_texture_rect.gd" id="3_42dj3"]
 [ext_resource type="Script" uid="uid://dpefco1m684p3" path="res://base_back.gd" id="4_tpea4"]
@@ -29,9 +29,9 @@ grow_horizontal = 2
 grow_vertical = 2
 
 [node name="TextureRect" type="TextureRect" parent="MarginContainer"]
-modulate = Color(1, 1, 1, 0.168627)
+modulate = Color(1, 1, 1, 0.364706)
 layout_mode = 2
-texture = ExtResource("2_8rhti")
+texture = ExtResource("2_42dj3")
 expand_mode = 1
 script = ExtResource("3_42dj3")
 

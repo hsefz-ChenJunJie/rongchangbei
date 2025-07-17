@@ -1,8 +1,9 @@
-[gd_scene load_steps=4 format=3 uid="uid://te5bukuj7duq"]
+[gd_scene load_steps=5 format=3 uid="uid://te5bukuj7duq"]
 
 [ext_resource type="PackedScene" uid="uid://ccmej2ta7xfh7" path="res://base.tscn" id="1_r305v"]
 [ext_resource type="Theme" uid="uid://cieb7ta71pkeo" path="res://ControlTheme.tres" id="1_upmy7"]
 [ext_resource type="FontFile" uid="uid://bmai4ga2nqrvj" path="res://YanShiChunFengKai-2.ttf" id="2_52bhu"]
+[ext_resource type="Script" uid="uid://2kt5lnbovrmf" path="res://start_button.gd" id="4_gx2gx"]
 
 [node name="Control" type="Control"]
 layout_mode = 3
@@ -32,3 +33,6 @@ grow_vertical = 2
 theme_override_fonts/font = ExtResource("2_52bhu")
 theme_override_font_sizes/font_size = 50
 text = "快速开始"
+script = ExtResource("4_gx2gx")
+
+[connection signal="pressed" from="Button" to="Button" method="_on_pressed"]

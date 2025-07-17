@@ -1,10 +1,20 @@
-[gd_scene load_steps=5 format=3 uid="uid://8jysn4e5t86m"]
+[gd_scene load_steps=13 format=3 uid="uid://8jysn4e5t86m"]
 
 [ext_resource type="PackedScene" uid="uid://ccmej2ta7xfh7" path="res://base.tscn" id="1_1tt3r"]
 [ext_resource type="Theme" uid="uid://cieb7ta71pkeo" path="res://ControlTheme.tres" id="1_n86ok"]
 [ext_resource type="Script" uid="uid://bfktylxevj2yw" path="res://record_control.gd" id="3_buvxa"]
+[ext_resource type="Texture2D" uid="uid://dlhu8hgd0yqvb" path="res://SVG/fill/plus.svg" id="4_or2g1"]
+[ext_resource type="Texture2D" uid="uid://d0d1cuy8bvsh5" path="res://SVG/fill/square-plus.svg" id="5_or2g1"]
+[ext_resource type="Texture2D" uid="uid://b2yj5pew8cs4c" path="res://SVG/outline/square-plus.svg" id="6_wc7ga"]
+[ext_resource type="Script" uid="uid://bo54hhvijmv7w" path="res://input_texture_button.gd" id="7_cmv46"]
+[ext_resource type="Script" uid="uid://dkmtm57x0r204" path="res://input_text_edit.gd" id="7_oawvg"]
+[ext_resource type="Script" uid="uid://ccmdw6wo62jev" path="res://input_tts_button.gd" id="9_8dxnk"]
 
 [sub_resource type="SystemFont" id="SystemFont_or2g1"]
+
+[sub_resource type="AudioStreamMicrophone" id="AudioStreamMicrophone_8dxnk"]
+
+[sub_resource type="AudioStreamWAV" id="AudioStreamWAV_n86ok"]
 
 [node name="Control" type="Control"]
 layout_mode = 3
@@ -28,9 +38,9 @@ anchor_bottom = 0.005
 offset_left = 32.0
 offset_top = 128.0
 offset_right = -32.0
-offset_bottom = 1639.6
+offset_bottom = 679.6
 
-[node name="LineEdit" type="LineEdit" parent="Panel"]
+[node name="SceneInput" type="LineEdit" parent="Panel"]
 layout_mode = 1
 anchors_preset = 10
 anchor_right = 1.0
@@ -39,6 +49,7 @@ offset_top = 32.0
 offset_right = -32.0
 offset_bottom = 96.0
 grow_horizontal = 2
+theme_override_font_sizes/font_size = 36
 
 [node name="Label1" type="Label" parent="Panel"]
 layout_mode = 1
@@ -87,6 +98,7 @@ offset_top = 216.0
 offset_right = -24.0
 offset_bottom = 464.0
 grow_horizontal = 2
+theme_override_font_sizes/font_size = 36
 
 [node name="RecordStateLabel" type="RichTextLabel" parent="Panel"]
 layout_mode = 1
@@ -114,13 +126,120 @@ grow_horizontal = 2
 theme_override_font_sizes/font_size = 20
 text = "No recording found."
 
-[node name="RecordControl" type="Control" parent="Panel"]
-visible = false
-anchors_preset = 0
-offset_right = 40.0
-offset_bottom = 40.0
+[node name="RecordControl" type="AudioStreamPlayer" parent="Panel"]
+stream = SubResource("AudioStreamMicrophone_8dxnk")
+bus = &"Record"
 script = ExtResource("3_buvxa")
 
 [node name="Timer" type="Timer" parent="Panel/RecordControl"]
 
+[node name="AudioStreamPlayer" type="AudioStreamPlayer" parent="Panel/RecordControl"]
+stream = SubResource("AudioStreamWAV_n86ok")
+autoplay = true
+
+[node name="PlayButton" type="Button" parent="Panel"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 568.0
+offset_top = 480.0
+offset_right = -24.0
+offset_bottom = 544.0
+grow_horizontal = 2
+
+[node name="Panel2" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 32.0
+offset_top = 720.0
+offset_right = -32.0
+offset_bottom = 1656.0
+grow_horizontal = 2
+
+[node name="BriefInput" type="LineEdit" parent="Panel2"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+offset_left = 32.0
+offset_top = 32.0
+offset_right = -128.0
+offset_bottom = 96.0
+theme_override_font_sizes/font_size = 36
+placeholder_text = "简要描述"
+
+[node name="SuggestionsContainer" type="VBoxContainer" parent="Panel2"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 32.0
+offset_top = 112.0
+offset_right = -32.0
+offset_bottom = 320.0
+grow_horizontal = 2
+
+[node name="TextureButton" type="TextureButton" parent="Panel2"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 560.0
+offset_top = 32.0
+offset_right = -78.0
+offset_bottom = 50.0
+grow_horizontal = 2
+scale = Vector2(3.556, 3.556)
+texture_normal = ExtResource("4_or2g1")
+texture_pressed = ExtResource("5_or2g1")
+texture_hover = ExtResource("5_or2g1")
+texture_focused = ExtResource("6_wc7ga")
+script = ExtResource("7_cmv46")
+
+[node name="TextEdit" type="TextEdit" parent="Panel2"]
+layout_mode = 2
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 32.0
+offset_top = -472.0
+offset_right = -32.0
+offset_bottom = -112.0
+theme_override_font_sizes/font_size = 36
+placeholder_text = "等待输入……"
+script = ExtResource("7_oawvg")
+
+[node name="Timer" type="Timer" parent="Panel2"]
+wait_time = 5.0
+one_shot = true
+autostart = true
+
+[node name="TTSButton" type="Button" parent="Panel2"]
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 32.0
+offset_top = -80.0
+offset_right = -32.0
+offset_bottom = -24.0
+theme_override_font_sizes/font_size = 36
+text = "文字转语音"
+alignment = 2
+script = ExtResource("9_8dxnk")
+
+[node name="TTS_Request" type="HTTPRequest" parent="Panel2/TTSButton"]
+
+[node name="Speaker_Request" type="HTTPRequest" parent="Panel2/TTSButton"]
+
+[node name="OptionButton" type="OptionButton" parent="Panel2/TTSButton"]
+layout_mode = 0
+offset_right = 368.0
+offset_bottom = 56.0
+
+[node name="HTTPRequest" type="HTTPRequest" parent="."]
+
 [connection signal="pressed" from="Panel/ToggleRecording" to="Panel/RecordControl" method="_on_record_button_pressed"]
+[connection signal="pressed" from="Panel/PlayButton" to="Panel/RecordControl" method="_on_play_button_pressed"]
+[connection signal="pressed" from="Panel2/TextureButton" to="Panel2/TextureButton" method="_on_pressed"]
+[connection signal="timeout" from="Panel2/Timer" to="Panel2/TextEdit" method="_on_timer_timeout"]
+[connection signal="pressed" from="Panel2/TTSButton" to="Panel2/TTSButton" method="_on_button_pressed"]
