@@ -147,12 +147,12 @@ def load_tts_model():
 def load_llm_model():
     """
     加载LLM模型，在应用启动时调用
-    使用llama-cpp-python库从本地路径加载GGUF格式的模型
+    使用ctransformers库从本地路径加载GGUF格式的模型
     """
     global llm_model
     try:
-        # 导入llama-cpp-python
-        from llama_cpp import Llama
+        # 导入ctransformers
+        from ctransformers import AutoModelForCausalLM
         
         # LLM模型路径配置
         llm_model_path = os.path.join(os.path.dirname(__file__), "..", "models", "llm", "Qwen3-4B-Q4_0.gguf")
@@ -170,86 +170,81 @@ def load_llm_model():
         
         # 智能配置硬件参数
         import psutil
-        import platform
         
         # 获取系统信息
         cpu_count = psutil.cpu_count(logical=False)  # 物理核心数
         memory_gb = psutil.virtual_memory().total / (1024**3)  # 总内存GB
         
         # 智能配置参数
-        n_ctx = 4096  # 上下文窗口大小
-        n_threads = min(cpu_count, 8)  # 线程数不超过8
+        context_length = 4096  # 上下文窗口大小
+        threads = min(cpu_count, 8)  # 线程数不超过8
         
-        # GPU卸载层数配置（如果有GPU）
-        n_gpu_layers = 0
+        # GPU配置（ctransformers支持GPU加速）
+        gpu = False
         try:
             import torch
             if torch.cuda.is_available():
-                # 如果有CUDA，尝试卸载一些层到GPU
-                gpu_memory_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-                if gpu_memory_gb > 6:  # 如果GPU内存大于6GB
-                    n_gpu_layers = 35  # 卸载35层到GPU
-                elif gpu_memory_gb > 4:  # 如果GPU内存大于4GB
-                    n_gpu_layers = 20  # 卸载20层到GPU
-                logger.info(f"检测到GPU，将卸载 {n_gpu_layers} 层到GPU")
+                gpu = True
+                logger.info("检测到GPU，启用GPU加速")
         except ImportError:
             logger.info("未检测到PyTorch或CUDA，使用CPU模式")
         
         # 根据内存调整上下文窗口
         if memory_gb < 8:
-            n_ctx = 2048  # 内存不足8GB时减少上下文窗口
-            logger.info(f"内存较小({memory_gb:.1f}GB)，调整上下文窗口为{n_ctx}")
+            context_length = 2048  # 内存不足8GB时减少上下文窗口
+            logger.info(f"内存较小({memory_gb:.1f}GB)，调整上下文窗口为{context_length}")
         
-        logger.info(f"硬件配置: CPU核心={cpu_count}, 内存={memory_gb:.1f}GB, 线程={n_threads}, 上下文={n_ctx}, GPU层={n_gpu_layers}")
+        logger.info(f"硬件配置: CPU核心={cpu_count}, 内存={memory_gb:.1f}GB, 线程={threads}, 上下文={context_length}, GPU={gpu}")
         
         # 加载模型
         try:
-            llm_model = Llama(
-                model_path=llm_model_path,
-                n_ctx=n_ctx,
-                n_threads=n_threads,
-                n_gpu_layers=n_gpu_layers,
-                verbose=False,  # 减少输出
-                use_mmap=True,  # 使用内存映射减少内存使用
-                use_mlock=False,  # 不锁定内存
-                n_batch=512,  # 批处理大小
+            llm_model = AutoModelForCausalLM.from_pretrained(
+                llm_model_path,
+                model_type="qwen",  # 指定模型类型
+                context_length=context_length,
+                threads=threads,
+                gpu_layers=-1 if gpu else 0,  # -1表示全部层使用GPU，0表示CPU
+                stream=True,  # 启用流式输出
+                local_files_only=True  # 只使用本地文件
             )
         except Exception as e:
             error_msg = str(e)
             logger.error(f"LLM模型初始化失败: {error_msg}")
             
-            # 检查是否是模型架构不支持的问题
-            if "unknown model architecture" in error_msg.lower():
-                logger.error("检测到模型架构不被当前llama-cpp-python版本支持")
-                logger.error("建议检查llama-cpp-python版本是否支持该模型架构")
-                logger.error("或者使用transformers库作为替代方案")
-                return False
-            
             # 尝试使用更保守的参数
             logger.info("尝试使用更保守的参数重新加载LLM模型")
             try:
-                llm_model = Llama(
-                    model_path=llm_model_path,
-                    n_ctx=2048,  # 减少上下文窗口
-                    n_threads=2,  # 减少线程数
-                    n_gpu_layers=0,  # 禁用GPU
-                    verbose=True,  # 启用详细输出以便调试
-                    use_mmap=True,
-                    use_mlock=False,
-                    n_batch=256,  # 减少批处理大小
+                llm_model = AutoModelForCausalLM.from_pretrained(
+                    llm_model_path,
+                    model_type="qwen",
+                    context_length=2048,  # 减少上下文窗口
+                    threads=2,  # 减少线程数
+                    gpu_layers=0,  # 禁用GPU
+                    stream=True,
+                    local_files_only=True
                 )
             except Exception as e2:
                 logger.error(f"保守参数也失败: {str(e2)}")
-                if "unknown model architecture" in str(e2).lower():
-                    logger.error("模型架构不支持，需要更换兼容的模型文件")
+                # 尝试自动检测模型类型
+                logger.info("尝试自动检测模型类型")
+                try:
+                    llm_model = AutoModelForCausalLM.from_pretrained(
+                        llm_model_path,
+                        context_length=2048,
+                        threads=2,
+                        gpu_layers=0,
+                        stream=True,
+                        local_files_only=True
+                    )
+                except Exception as e3:
+                    logger.error(f"自动检测也失败: {str(e3)}")
                     return False
-                raise e2
         
         logger.info("LLM模型加载成功")
         return True
         
     except ImportError:
-        logger.error("llama-cpp-python库未安装，请运行: pip install llama-cpp-python")
+        logger.error("ctransformers库未安装，请运行: pip install ctransformers")
         return False
     except Exception as e:
         logger.error(f"LLM模型加载失败: {str(e)}")
@@ -298,6 +293,23 @@ def build_structured_prompt(request: 'GenerateSuggestionsRequest') -> str:
     # 生成要求
     suggestion_count = request.suggestion_count or 3
     prompt_parts.append(f"请生成{suggestion_count}条高质量的回答建议。")
+    
+    # 输出格式要求（因为ctransformers不支持JSON Schema，需要在提示词中指定）
+    prompt_parts.append("请严格按照以下JSON格式输出，不要添加任何额外的文字说明：")
+    prompt_parts.append(json.dumps({
+        "suggestions": [
+            {
+                "id": 1,
+                "content": "建议内容1",
+                "confidence": 0.85
+            },
+            {
+                "id": 2,
+                "content": "建议内容2",
+                "confidence": 0.80
+            }
+        ]
+    }, ensure_ascii=False, indent=2))
     
     return '\n\n'.join(prompt_parts)
 
@@ -653,9 +665,6 @@ async def generate_suggestions(request: GenerateSuggestionsRequest):
     # 应用Qwen2聊天模板
     formatted_prompt = apply_qwen2_chat_template(system_prompt, user_prompt)
     
-    # 获取JSON Schema
-    json_schema = get_json_schema()
-    
     logger.info(f"开始生成建议，prompt长度: {len(formatted_prompt)}")
     
     # 生成器函数，用于流式响应
@@ -663,41 +672,33 @@ async def generate_suggestions(request: GenerateSuggestionsRequest):
         try:
             start_time = time.time()
             
-            # 使用llama-cpp-python进行流式生成，启用JSON Mode
-            stream = llm_model(
+            # 使用ctransformers进行流式生成
+            # ctransformers的API稍有不同，需要适配
+            accumulated_text = ""
+            
+            # ctransformers流式生成
+            for token in llm_model(
                 formatted_prompt,
-                max_tokens=1024,
+                max_new_tokens=1024,
                 temperature=0.7,
                 top_p=0.9,
                 stop=["<|im_end|>", "<|endoftext|>"],
                 stream=True,
-                echo=False,
-                response_format={"type": "json_object"},  # 启用JSON Mode
-                json_schema=json_schema  # 使用JSON Schema
-            )
-            
-            # 累积生成的文本
-            accumulated_text = ""
-            
-            # 流式发送token
-            for chunk in stream:
-                if 'choices' in chunk and len(chunk['choices']) > 0:
-                    choice = chunk['choices'][0]
-                    if 'delta' in choice and 'content' in choice['delta']:
-                        token = choice['delta']['content']
-                        accumulated_text += token
-                        
-                        # 发送token数据
-                        yield {
-                            "event": "token",
-                            "data": json.dumps({
-                                "token": token,
-                                "accumulated": accumulated_text
-                            }, ensure_ascii=False)
-                        }
-                        
-                        # 添加小延迟以模拟真实的流式效果
-                        await asyncio.sleep(0.01)
+                reset=False  # 不重置对话历史
+            ):
+                accumulated_text += token
+                
+                # 发送token数据
+                yield {
+                    "event": "token",
+                    "data": json.dumps({
+                        "token": token,
+                        "accumulated": accumulated_text
+                    }, ensure_ascii=False)
+                }
+                
+                # 添加小延迟以模拟真实的流式效果
+                await asyncio.sleep(0.01)
             
             # 计算处理时间
             processing_time = time.time() - start_time
