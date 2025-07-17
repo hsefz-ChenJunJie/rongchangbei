@@ -12,10 +12,21 @@ import logging
 import json
 import asyncio
 import aiohttp
+import traceback
 
 # 配置日志
-logging.basicConfig(level=logging.INFO)
+# 设置为 DEBUG 级别以查看详细调试信息，设置为 INFO 以查看一般信息
+LOG_LEVEL = logging.DEBUG  # 可以改为 logging.INFO 来减少日志输出
+
+logging.basicConfig(
+    level=LOG_LEVEL,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
+
+# 为了避免aiohttp的调试日志过多，单独设置其日志级别
+logging.getLogger('aiohttp').setLevel(logging.WARNING)
+logging.getLogger('asyncio').setLevel(logging.WARNING)
 
 # ==================== 远程API服务商配置 ====================
 # 请在这里填写您的远程API服务商信息
@@ -230,22 +241,34 @@ async def call_remote_llm_api(system_prompt: str, user_prompt: str):
             "Authorization": f"Bearer {REMOTE_API_CONFIG['api_key']}"
         }
         
-        logger.info(f"调用远程API: {REMOTE_API_CONFIG['api_url']}")
+        logger.info(f"📡 调用远程API: {REMOTE_API_CONFIG['api_url']}")
+        logger.info(f"📝 使用模型: {REMOTE_API_CONFIG['model_name']}")
+        logger.info(f"💬 系统提示词长度: {len(system_prompt)} 字符")
+        logger.info(f"💬 用户提示词长度: {len(user_prompt)} 字符")
+        logger.debug(f"📋 请求数据: {json.dumps(request_data, ensure_ascii=False, indent=2)}")
         
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=300)) as session:
+            logger.info("🔄 发送HTTP请求...")
             async with session.post(
                 REMOTE_API_CONFIG["api_url"], 
                 json=request_data, 
                 headers=headers
             ) as response:
                 
+                logger.info(f"📨 收到响应: HTTP {response.status}")
+                
                 if response.status != 200:
                     error_text = await response.text()
-                    logger.error(f"远程API调用失败: {response.status} - {error_text}")
-                    raise Exception(f"远程API调用失败: {response.status}")
+                    logger.error(f"❌ 远程API调用失败: {response.status}")
+                    logger.error(f"❌ 错误详情: {error_text}")
+                    logger.error(f"❌ 响应头: {dict(response.headers)}")
+                    raise Exception(f"远程API调用失败: {response.status} - {error_text}")
                 
                 # 处理流式响应
+                logger.info("🔄 开始处理流式响应...")
                 accumulated_text = ""
+                token_count = 0
+                
                 async for line in response.content:
                     line_text = line.decode('utf-8').strip()
                     
@@ -258,6 +281,7 @@ async def call_remote_llm_api(system_prompt: str, user_prompt: str):
                     
                     # 检查是否是结束标记
                     if data_text == '[DONE]':
+                        logger.info("✅ 流式响应完成")
                         break
                     
                     try:
@@ -270,6 +294,11 @@ async def call_remote_llm_api(system_prompt: str, user_prompt: str):
                             if 'content' in delta:
                                 token = delta['content']
                                 accumulated_text += token
+                                token_count += 1
+                                
+                                # 每100个token记录一次进度
+                                if token_count % 100 == 0:
+                                    logger.debug(f"📊 已接收 {token_count} 个token，当前长度: {len(accumulated_text)}")
                                 
                                 # 生成token事件
                                 yield {
@@ -283,11 +312,22 @@ async def call_remote_llm_api(system_prompt: str, user_prompt: str):
                                 # 添加小延迟
                                 await asyncio.sleep(0.01)
                                 
-                    except json.JSONDecodeError:
+                    except json.JSONDecodeError as e:
+                        logger.warning(f"⚠️ JSON解析失败: {e}, 原始数据: {data_text[:100]}...")
                         continue
                 
+                logger.info(f"📊 远程API调用完成，总共接收 {token_count} 个token，最终长度: {len(accumulated_text)}")
+                
+    except asyncio.TimeoutError:
+        logger.error("❌ 远程API调用超时")
+        raise Exception("远程API调用超时")
+    except aiohttp.ClientError as e:
+        logger.error(f"❌ 网络连接错误: {type(e).__name__}: {str(e)}")
+        logger.error(f"❌ 错误堆栈: {traceback.format_exc()}")
+        raise Exception(f"网络连接错误: {str(e)}")
     except Exception as e:
-        logger.error(f"远程API调用失败: {str(e)}")
+        logger.error(f"❌ 远程API调用失败: {type(e).__name__}: {str(e)}")
+        logger.error(f"❌ 错误堆栈: {traceback.format_exc()}")
         raise
 
 
@@ -418,28 +458,34 @@ def load_llm_model():
     
     # 本地模型加载失败，尝试使用远程API
     try:
+        logger.info("🔄 尝试配置远程API作为备用方案...")
+        
         # 验证远程API配置
         is_valid, message = validate_remote_api_config()
         if not is_valid:
-            logger.error(f"远程API配置无效: {message}")
-            logger.error("请在代码顶部的REMOTE_API_CONFIG中配置您的API服务商信息")
+            logger.error(f"❌ 远程API配置无效: {message}")
+            logger.error("❌ 请在代码顶部的REMOTE_API_CONFIG中配置您的API服务商信息")
+            logger.error("❌ 需要配置的字段: api_url, api_key, model_name")
             return False
         
         # 测试远程API连接
-        logger.info("正在测试远程API连接...")
+        logger.info("🔄 正在验证远程API配置...")
         
         # 这里不进行实际的API调用测试，只是标记使用远程API
         use_remote_llm = True
         llm_model = None  # 远程API不需要本地模型实例
         
-        logger.info(f"已配置远程API: {REMOTE_API_CONFIG['api_url']}")
-        logger.info(f"使用模型: {REMOTE_API_CONFIG['model_name']}")
-        logger.info("远程LLM API配置成功")
+        logger.info(f"✅ 已配置远程API: {REMOTE_API_CONFIG['api_url']}")
+        logger.info(f"✅ 使用模型: {REMOTE_API_CONFIG['model_name']}")
+        logger.info(f"✅ 温度设置: {REMOTE_API_CONFIG['temperature']}")
+        logger.info(f"✅ Top-p设置: {REMOTE_API_CONFIG['top_p']}")
+        logger.info("✅ 远程LLM API配置成功")
         
         return True
         
     except Exception as e:
-        logger.error(f"远程API配置失败: {str(e)}")
+        logger.error(f"❌ 远程API配置失败: {type(e).__name__}: {str(e)}")
+        logger.error(f"❌ 错误堆栈: {traceback.format_exc()}")
         return False
 
 
@@ -551,22 +597,42 @@ app = FastAPI(title="荣昶杯项目 API", version="1.0.0")
 @app.on_event("startup")
 async def startup_event():
     """应用启动时执行的事件"""
-    logger.info("正在启动荣昶杯项目 API...")
+    logger.info("🚀 正在启动荣昶杯项目 API...")
+    logger.info("=" * 50)
     
     # 加载STT模型
+    logger.info("🔄 开始加载STT模型...")
     stt_success = load_stt_model()
     if not stt_success:
-        logger.warning("STT模型加载失败，STT功能将不可用")
+        logger.warning("⚠️ STT模型加载失败，STT功能将不可用")
+    else:
+        logger.info("✅ STT模型加载成功")
     
     # 加载TTS模型
+    logger.info("🔄 开始加载TTS模型...")
     tts_success = load_tts_model()
     if not tts_success:
-        logger.warning("TTS模型加载失败，TTS功能将不可用")
+        logger.warning("⚠️ TTS模型加载失败，TTS功能将不可用")
+    else:
+        logger.info("✅ TTS模型加载成功")
     
     # 加载LLM模型
+    logger.info("🔄 开始加载LLM模型...")
     llm_success = load_llm_model()
     if not llm_success:
-        logger.warning("LLM模型加载失败，LLM功能将不可用")
+        logger.warning("⚠️ LLM模型加载失败，LLM功能将不可用")
+    else:
+        logger.info("✅ LLM模型加载成功")
+    
+    # 启动总结
+    logger.info("=" * 50)
+    logger.info("📊 启动状态总结:")
+    logger.info(f"   STT: {'✅ 可用' if stt_success else '❌ 不可用'}")
+    logger.info(f"   TTS: {'✅ 可用' if tts_success else '❌ 不可用'}")
+    logger.info(f"   LLM: {'✅ 可用' if llm_success else '❌ 不可用'}")
+    logger.info(f"   服务模式: {'🌐 远程API' if use_remote_llm else '🏠 本地模型'}")
+    logger.info("🎉 荣昶杯项目 API 启动完成!")
+    logger.info("=" * 50)
 
 app.add_middleware(
     CORSMiddleware,
@@ -913,100 +979,158 @@ async def generate_suggestions(request: GenerateSuggestionsRequest):
     """
     global llm_model, use_remote_llm
     
+    logger.info("🚀 开始处理生成建议请求")
+    logger.info(f"📋 请求参数: {request.dict()}")
+    
     # 检查是否有可用的LLM服务
     if not use_remote_llm and llm_model is None:
+        logger.error("❌ LLM服务未配置")
         raise HTTPException(status_code=503, detail="LLM服务未配置，请检查本地模型或远程API配置")
     
-    # 加载系统提示词
-    system_prompt = load_system_prompt()
-    
-    # 构建结构化的用户Prompt
-    user_prompt = build_structured_prompt(request)
-    
-    logger.info(f"开始生成建议，使用{'远程API' if use_remote_llm else '本地模型'}")
+    try:
+        # 加载系统提示词
+        logger.info("📖 加载系统提示词...")
+        system_prompt = load_system_prompt()
+        logger.info(f"📖 系统提示词长度: {len(system_prompt)} 字符")
+        
+        # 构建结构化的用户Prompt
+        logger.info("🔧 构建用户提示词...")
+        user_prompt = build_structured_prompt(request)
+        logger.info(f"🔧 用户提示词长度: {len(user_prompt)} 字符")
+        logger.debug(f"📝 用户提示词内容: {user_prompt}")
+        
+        service_type = "远程API" if use_remote_llm else "本地模型"
+        logger.info(f"⚙️ 开始生成建议，使用 {service_type}")
+        
+    except Exception as e:
+        logger.error(f"❌ 请求预处理失败: {type(e).__name__}: {str(e)}")
+        logger.error(f"❌ 错误堆栈: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"请求预处理失败: {str(e)}")
     
     # 生成器函数，用于流式响应
     async def generate_stream():
         try:
             start_time = time.time()
             accumulated_text = ""
+            logger.info("🔄 开始生成流式响应...")
             
             if use_remote_llm:
                 # 使用远程API服务商
-                logger.info("使用远程API生成建议")
+                logger.info("🌐 使用远程API生成建议")
                 
-                async for chunk in call_remote_llm_api(system_prompt, user_prompt):
-                    if chunk["event"] == "token":
-                        # 直接转发token事件
-                        yield chunk
-                        
-                        # 更新累积文本
-                        token_data = json.loads(chunk["data"])
-                        accumulated_text = token_data["accumulated"]
-                        
-                        # 添加小延迟
-                        await asyncio.sleep(0.01)
+                try:
+                    async for chunk in call_remote_llm_api(system_prompt, user_prompt):
+                        if chunk["event"] == "token":
+                            # 直接转发token事件
+                            yield chunk
+                            
+                            # 更新累积文本
+                            token_data = json.loads(chunk["data"])
+                            accumulated_text = token_data["accumulated"]
+                            
+                            # 添加小延迟
+                            await asyncio.sleep(0.01)
+                
+                except Exception as e:
+                    logger.error(f"❌ 远程API调用异常: {type(e).__name__}: {str(e)}")
+                    logger.error(f"❌ 错误堆栈: {traceback.format_exc()}")
+                    raise
                 
             else:
                 # 使用本地模型
-                logger.info("使用本地模型生成建议")
+                logger.info("🏠 使用本地模型生成建议")
                 
-                # 应用Qwen2聊天模板
-                formatted_prompt = apply_qwen2_chat_template(system_prompt, user_prompt)
-                
-                # ctransformers流式生成
-                for token in llm_model(
-                    formatted_prompt,
-                    max_new_tokens=1024,
-                    temperature=0.7,
-                    top_p=0.9,
-                    stop=["<|im_end|>", "<|endoftext|>"],
-                    stream=True,
-                    reset=False  # 不重置对话历史
-                ):
-                    accumulated_text += token
+                try:
+                    # 应用Qwen2聊天模板
+                    logger.info("📝 应用Qwen2聊天模板...")
+                    formatted_prompt = apply_qwen2_chat_template(system_prompt, user_prompt)
+                    logger.info(f"📝 格式化后的提示词长度: {len(formatted_prompt)} 字符")
+                    logger.debug(f"📝 格式化后的提示词: {formatted_prompt}")
                     
-                    # 发送token数据
-                    yield {
-                        "event": "token",
-                        "data": json.dumps({
-                            "token": token,
-                            "accumulated": accumulated_text
-                        }, ensure_ascii=False)
-                    }
+                    # ctransformers流式生成
+                    logger.info("🔄 开始本地模型流式生成...")
+                    token_count = 0
                     
-                    # 添加小延迟以模拟真实的流式效果
-                    await asyncio.sleep(0.01)
+                    for token in llm_model(
+                        formatted_prompt,
+                        max_new_tokens=1024,
+                        temperature=0.7,
+                        top_p=0.9,
+                        stop=["<|im_end|>", "<|endoftext|>"],
+                        stream=True,
+                        reset=False  # 不重置对话历史
+                    ):
+                        accumulated_text += token
+                        token_count += 1
+                        
+                        # 每100个token记录一次进度
+                        if token_count % 100 == 0:
+                            logger.debug(f"📊 本地模型已生成 {token_count} 个token，当前长度: {len(accumulated_text)}")
+                        
+                        # 发送token数据
+                        yield {
+                            "event": "token",
+                            "data": json.dumps({
+                                "token": token,
+                                "accumulated": accumulated_text
+                            }, ensure_ascii=False)
+                        }
+                        
+                        # 添加小延迟以模拟真实的流式效果
+                        await asyncio.sleep(0.01)
+                    
+                    logger.info(f"📊 本地模型生成完成，总共生成 {token_count} 个token")
+                    
+                except Exception as e:
+                    logger.error(f"❌ 本地模型调用异常: {type(e).__name__}: {str(e)}")
+                    logger.error(f"❌ 错误堆栈: {traceback.format_exc()}")
+                    raise
             
             # 计算处理时间
             processing_time = time.time() - start_time
+            logger.info(f"⏱️ 总处理时间: {processing_time:.2f}秒")
+            logger.info(f"📊 累积文本长度: {len(accumulated_text)} 字符")
             
             # 解析JSON结果
+            logger.info("🔄 开始解析JSON结果...")
             try:
                 # 尝试解析JSON
                 json_text = accumulated_text.strip()
+                logger.debug(f"📝 原始文本: {json_text[:200]}...")
                 
                 # 如果文本包含markdown代码块，提取其中的JSON
                 if "```json" in json_text:
+                    logger.info("📝 检测到markdown代码块，提取JSON...")
                     start_idx = json_text.find("```json") + 7
                     end_idx = json_text.find("```", start_idx)
                     if end_idx > start_idx:
                         json_text = json_text[start_idx:end_idx].strip()
+                        logger.info(f"📝 提取的JSON长度: {len(json_text)} 字符")
                 
+                logger.info("🔄 尝试解析JSON...")
                 result = json.loads(json_text)
+                logger.info(f"✅ JSON解析成功: {result}")
                 
                 # 验证JSON结构符合Schema
                 if 'suggestions' in result and isinstance(result['suggestions'], list):
                     suggestions = result['suggestions']
+                    logger.info(f"✅ 找到 {len(suggestions)} 个建议")
+                    
                     # 验证每个建议的结构
-                    for suggestion in suggestions:
+                    for i, suggestion in enumerate(suggestions):
                         if not all(key in suggestion for key in ['id', 'content', 'confidence']):
-                            raise ValueError("建议格式不完整")
+                            logger.warning(f"⚠️ 建议 {i+1} 格式不完整: {suggestion}")
+                            raise ValueError(f"建议 {i+1} 格式不完整")
+                        logger.debug(f"✅ 建议 {i+1} 格式正确")
                 else:
+                    logger.error("❌ JSON结构不符合预期，缺少suggestions字段或类型错误")
                     raise ValueError("JSON结构不符合预期")
                 
             except (json.JSONDecodeError, ValueError) as e:
-                logger.warning(f"JSON解析失败: {e}, 原始文本: {accumulated_text[:100]}...")
+                logger.warning(f"⚠️ JSON解析失败: {type(e).__name__}: {str(e)}")
+                logger.warning(f"⚠️ 原始文本前100字符: {accumulated_text[:100]}...")
+                logger.warning("⚠️ 创建包含原始文本的响应")
+                
                 # 如果JSON解析失败，创建包含原始文本的响应
                 suggestions = [
                     {
@@ -1017,6 +1141,7 @@ async def generate_suggestions(request: GenerateSuggestionsRequest):
                 ]
             
             # 发送最终结果
+            logger.info("📤 发送最终结果...")
             yield {
                 "event": "complete",
                 "data": json.dumps({
@@ -1027,13 +1152,19 @@ async def generate_suggestions(request: GenerateSuggestionsRequest):
                 }, ensure_ascii=False)
             }
             
+            logger.info("✅ 生成建议完成")
+            
         except Exception as e:
-            logger.error(f"LLM生成失败: {str(e)}")
+            logger.error(f"❌ LLM生成失败: {type(e).__name__}: {str(e)}")
+            logger.error(f"❌ 错误堆栈: {traceback.format_exc()}")
+            
             yield {
                 "event": "error",
                 "data": json.dumps({
                     "error": f"生成失败: {str(e)}",
-                    "service_type": "remote_api" if use_remote_llm else "local_model"
+                    "error_type": type(e).__name__,
+                    "service_type": "remote_api" if use_remote_llm else "local_model",
+                    "traceback": traceback.format_exc()
                 }, ensure_ascii=False)
             }
     
