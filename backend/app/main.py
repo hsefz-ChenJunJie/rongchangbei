@@ -112,26 +112,51 @@ def load_tts_model():
             logger.info(f"找到配置文件: {config_files}")
             logger.info(f"找到模型文件: {model_files}")
             
-            # 直接使用目录路径加载，这是最兼容的方式
+            # 尝试多种加载方式
+            tts_model = None
+            
+            # 方法1：直接使用目录路径加载
             try:
-                logger.info(f"使用目录路径加载TTS模型: {tts_model_path}")
+                logger.info(f"尝试方法1：使用目录路径加载TTS模型: {tts_model_path}")
                 tts_model = TTS(model_path=tts_model_path)
                 logger.info("TTS模型加载成功（使用目录路径）")
             except Exception as e:
-                logger.error(f"目录路径加载失败: {e}")
-                # 如果目录路径失败，尝试使用模型名称
+                logger.warning(f"方法1失败: {e}")
+                
+            # 方法2：如果方法1失败且有配置文件，尝试使用model_type
+            if tts_model is None and config_files:
                 try:
-                    logger.info("尝试使用XTTS模型名称加载")
+                    logger.info("尝试方法2：使用model_type='tts'参数")
+                    tts_model = TTS(model_path=tts_model_path, model_type="tts")
+                    logger.info("TTS模型加载成功（使用model_type参数）")
+                except Exception as e:
+                    logger.warning(f"方法2失败: {e}")
+            
+            # 方法3：如果前面都失败，尝试远程XTTS模型
+            if tts_model is None:
+                try:
+                    logger.info("尝试方法3：使用远程XTTS模型")
                     tts_model = TTS(model_name="tts_models/multilingual/multi-dataset/xtts_v2")
                     logger.info("TTS模型加载成功（使用远程XTTS模型）")
-                except Exception as e2:
-                    logger.error(f"远程XTTS模型加载失败: {e2}")
-                    raise e2
+                except Exception as e:
+                    logger.warning(f"方法3失败: {e}")
+            
+            # 如果所有方法都失败，抛出异常
+            if tts_model is None:
+                raise Exception("所有TTS模型加载方法都失败")
+                
         else:
             # 如果没有本地模型，使用默认的中文TTS模型
             logger.info("未找到本地TTS模型，使用默认中文TTS模型")
-            # 使用一个支持中文的轻量级模型作为回退
-            tts_model = TTS(model_name="tts_models/zh-CN/baker/vits")
+            try:
+                tts_model = TTS(model_name="tts_models/zh-CN/baker/vits")
+                logger.info("TTS模型加载成功（使用默认中文模型）")
+            except Exception as e:
+                logger.warning(f"默认中文模型加载失败: {e}")
+                # 最后的回退：使用最基础的英文模型
+                logger.info("尝试使用基础英文TTS模型")
+                tts_model = TTS(model_name="tts_models/en/ljspeech/tacotron2-DDC")
+                logger.info("TTS模型加载成功（使用基础英文模型）")
             
         logger.info("TTS模型加载成功")
         return True
