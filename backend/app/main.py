@@ -93,6 +93,7 @@ def load_tts_model():
         
         # TTS模型路径配置
         tts_model_path = os.path.join(os.path.dirname(__file__), "..", "models", "tts")
+        config_path = os.path.join(tts_model_path, "config.json")
         
         # 检查是否存在本地TTS模型
         if os.path.exists(tts_model_path) and os.listdir(tts_model_path):
@@ -118,7 +119,7 @@ def load_tts_model():
             # 方法1：直接使用目录路径加载
             try:
                 logger.info(f"尝试方法1：使用目录路径加载TTS模型: {tts_model_path}")
-                tts_model = TTS(model_path=tts_model_path)
+                tts_model = TTS(model_path=tts_model_path, config_path=config_path,)
                 logger.info("TTS模型加载成功（使用目录路径）")
             except Exception as e:
                 logger.warning(f"方法1失败: {e}")
