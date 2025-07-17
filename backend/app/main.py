@@ -11,8 +11,8 @@ import time
 import logging
 import json
 import asyncio
-import aiohttp
 import traceback
+from openai import AsyncOpenAI
 
 # 配置日志
 # 设置为 DEBUG 级别以查看详细调试信息，设置为 INFO 以查看一般信息
@@ -32,9 +32,9 @@ logging.getLogger('asyncio').setLevel(logging.WARNING)
 # 请在这里填写您的远程API服务商信息
 REMOTE_API_CONFIG = {
     # 示例配置 - 请根据您的服务商修改以下信息
-    "api_url": "https://openrouter.ai/api/v1",  # 替换为您的API地址
-    "api_key": "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",  # 替换为您的API密钥
-    "model_name": "qwen/qwen3-32b:free",  # 替换为您要使用的模型名称
+    "api_url": "http://192.168.0.11:1234",  # 替换为您的API地址
+    "api_key": "",  # 替换为您的API密钥
+    "model_name": "qwen_qwen3-32b-mlx",  # 替换为您要使用的模型名称
     "temperature": 0.7,
     "top_p": 0.9,
     "stream": True,
@@ -169,113 +169,66 @@ def load_tts_model():
 
 async def call_remote_llm_api(system_prompt: str, user_prompt: str):
     """
-    调用远程API服务商的LLM API
+    使用OpenAI client调用远程API服务商的LLM API
     返回流式响应生成器
     """
     try:
-        # 构建请求数据
+        # 构建消息
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt}
         ]
         
-        request_data = {
-            "model": REMOTE_API_CONFIG["model_name"],
-            "messages": messages,
-            "temperature": REMOTE_API_CONFIG["temperature"],
-            "top_p": REMOTE_API_CONFIG["top_p"],
-            "stream": REMOTE_API_CONFIG["stream"]
-        }
-        
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {REMOTE_API_CONFIG['api_key']}"
-        }
-        
         logger.info(f"📡 调用远程API: {REMOTE_API_CONFIG['api_url']}")
         logger.info(f"📝 使用模型: {REMOTE_API_CONFIG['model_name']}")
         logger.info(f"💬 系统提示词长度: {len(system_prompt)} 字符")
         logger.info(f"💬 用户提示词长度: {len(user_prompt)} 字符")
-        logger.debug(f"📋 请求数据: {json.dumps(request_data, ensure_ascii=False, indent=2)}")
         
-        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=300)) as session:
-            logger.info("🔄 发送HTTP请求...")
-            async with session.post(
-                REMOTE_API_CONFIG["api_url"], 
-                json=request_data, 
-                headers=headers
-            ) as response:
+        # 创建OpenAI客户端
+        client = AsyncOpenAI(
+            api_key=REMOTE_API_CONFIG["api_key"],
+            base_url=REMOTE_API_CONFIG["api_url"]
+        )
+        
+        # 调用流式API
+        logger.info("🔄 开始调用OpenAI流式API...")
+        stream = await client.chat.completions.create(
+            model=REMOTE_API_CONFIG["model_name"],
+            messages=messages,
+            temperature=REMOTE_API_CONFIG["temperature"],
+            top_p=REMOTE_API_CONFIG["top_p"],
+            stream=True
+        )
+        
+        # 处理流式响应
+        logger.info("🔄 开始处理流式响应...")
+        accumulated_text = ""
+        token_count = 0
+        
+        async for chunk in stream:
+            if chunk.choices and chunk.choices[0].delta.content:
+                token = chunk.choices[0].delta.content
+                accumulated_text += token
+                token_count += 1
                 
-                logger.info(f"📨 收到响应: HTTP {response.status}")
+                # 每100个token记录一次进度
+                if token_count % 100 == 0:
+                    logger.debug(f"📊 已接收 {token_count} 个token，当前长度: {len(accumulated_text)}")
                 
-                if response.status != 200:
-                    error_text = await response.text()
-                    logger.error(f"❌ 远程API调用失败: {response.status}")
-                    logger.error(f"❌ 错误详情: {error_text}")
-                    logger.error(f"❌ 响应头: {dict(response.headers)}")
-                    raise Exception(f"远程API调用失败: {response.status} - {error_text}")
+                # 生成token事件
+                yield {
+                    "event": "token",
+                    "data": json.dumps({
+                        "token": token,
+                        "accumulated": accumulated_text
+                    }, ensure_ascii=False)
+                }
                 
-                # 处理流式响应
-                logger.info("🔄 开始处理流式响应...")
-                accumulated_text = ""
-                token_count = 0
-                
-                async for line in response.content:
-                    line_text = line.decode('utf-8').strip()
-                    
-                    # 跳过空行和非数据行
-                    if not line_text or not line_text.startswith('data: '):
-                        continue
-                    
-                    # 解析SSE数据
-                    data_text = line_text[6:]  # 去掉 "data: " 前缀
-                    
-                    # 检查是否是结束标记
-                    if data_text == '[DONE]':
-                        logger.info("✅ 流式响应完成")
-                        break
-                    
-                    try:
-                        data = json.loads(data_text)
-                        
-                        # 提取token内容
-                        choices = data.get('choices', [])
-                        if choices and 'delta' in choices[0]:
-                            delta = choices[0]['delta']
-                            if 'content' in delta:
-                                token = delta['content']
-                                accumulated_text += token
-                                token_count += 1
-                                
-                                # 每100个token记录一次进度
-                                if token_count % 100 == 0:
-                                    logger.debug(f"📊 已接收 {token_count} 个token，当前长度: {len(accumulated_text)}")
-                                
-                                # 生成token事件
-                                yield {
-                                    "event": "token",
-                                    "data": json.dumps({
-                                        "token": token,
-                                        "accumulated": accumulated_text
-                                    }, ensure_ascii=False)
-                                }
-                                
-                                # 添加小延迟
-                                await asyncio.sleep(0.01)
-                                
-                    except json.JSONDecodeError as e:
-                        logger.warning(f"⚠️ JSON解析失败: {e}, 原始数据: {data_text[:100]}...")
-                        continue
-                
-                logger.info(f"📊 远程API调用完成，总共接收 {token_count} 个token，最终长度: {len(accumulated_text)}")
-                
-    except asyncio.TimeoutError:
-        logger.error("❌ 远程API调用超时")
-        raise Exception("远程API调用超时")
-    except aiohttp.ClientError as e:
-        logger.error(f"❌ 网络连接错误: {type(e).__name__}: {str(e)}")
-        logger.error(f"❌ 错误堆栈: {traceback.format_exc()}")
-        raise Exception(f"网络连接错误: {str(e)}")
+                # 添加小延迟
+                await asyncio.sleep(0.01)
+        
+        logger.info(f"📊 远程API调用完成，总共接收 {token_count} 个token，最终长度: {len(accumulated_text)}")
+        
     except Exception as e:
         logger.error(f"❌ 远程API调用失败: {type(e).__name__}: {str(e)}")
         logger.error(f"❌ 错误堆栈: {traceback.format_exc()}")
@@ -290,11 +243,17 @@ def validate_remote_api_config():
     
     for field in required_fields:
         if not REMOTE_API_CONFIG.get(field) or REMOTE_API_CONFIG[field] in [
-            "https://api.your-provider.com/v1/chat/completions",
+            "http://",
+            "https://api.your-provider.com/v1",
             "your-api-key-here",
             "your-model-name"
         ]:
             return False, f"请配置远程API参数: {field}"
+    
+    # 检查URL格式
+    api_url = REMOTE_API_CONFIG["api_url"]
+    if not api_url.startswith(("http://", "https://")):
+        return False, "api_url必须以http://或https://开头"
     
     return True, "配置有效"
 
