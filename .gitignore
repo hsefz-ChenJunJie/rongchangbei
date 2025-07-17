@@ -106,3 +106,5 @@ checkpoints/
 *.temp
 temp/
 tmp/
+
+AutoSubmit.bat
