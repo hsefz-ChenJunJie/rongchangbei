@@ -4,8 +4,157 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import io
+import os
+import tempfile
+import time
+import logging
+
+# 配置日志
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# 全局模型实例
+stt_model = None
+stt_processor = None
+stt_tokenizer = None
+tts_model = None
+
+def load_stt_model():
+    """
+    加载STT模型，在应用启动时调用
+    支持transformers格式和原生whisper格式
+    """
+    global stt_model, stt_processor, stt_tokenizer
+    try:
+        # 模型路径配置
+        model_path = os.path.join(os.path.dirname(__file__), "..", "models", "stt")
+        
+        # 检查是否存在transformers格式的模型
+        if os.path.exists(model_path) and os.path.isfile(os.path.join(model_path, "config.json")):
+            try:
+                # 尝试加载transformers格式的whisper模型
+                from transformers import WhisperProcessor, WhisperForConditionalGeneration
+                
+                logger.info(f"正在加载本地transformers格式的STT模型: {model_path}")
+                stt_processor = WhisperProcessor.from_pretrained(model_path)
+                stt_model = WhisperForConditionalGeneration.from_pretrained(model_path)
+                stt_tokenizer = stt_processor.tokenizer
+                
+                logger.info("Transformers格式STT模型加载成功")
+                return True
+                
+            except Exception as e:
+                logger.warning(f"Transformers格式模型加载失败: {str(e)}, 尝试原生whisper格式")
+        
+        # 回退到原生whisper格式
+        import whisper
+        
+        # 尝试加载本地whisper模型文件
+        local_model_files = []
+        if os.path.exists(model_path):
+            for file in os.listdir(model_path):
+                if file.endswith(('.pt', '.pth', '.bin')):
+                    local_model_files.append(os.path.join(model_path, file))
+        
+        if local_model_files:
+            # 加载本地whisper模型
+            model_file = local_model_files[0]
+            logger.info(f"正在加载本地whisper格式STT模型: {model_file}")
+            stt_model = whisper.load_model(model_file)
+        else:
+            # 如果没有本地模型，使用whisper默认模型
+            logger.info("未找到本地STT模型，使用whisper默认base模型")
+            stt_model = whisper.load_model("base")
+            
+        logger.info("原生whisper格式STT模型加载成功")
+        return True
+        
+    except ImportError as e:
+        logger.error(f"必要的库未安装: {str(e)}")
+        return False
+    except Exception as e:
+        logger.error(f"STT模型加载失败: {str(e)}")
+        return False
+
+
+def load_tts_model():
+    """
+    加载TTS模型，在应用启动时调用
+    使用Coqui TTS库从本地路径加载模型
+    """
+    global tts_model
+    try:
+        # 导入TTS库
+        from TTS.api import TTS
+        
+        # TTS模型路径配置
+        tts_model_path = os.path.join(os.path.dirname(__file__), "..", "models", "tts")
+        
+        # 检查是否存在本地TTS模型
+        if os.path.exists(tts_model_path) and os.listdir(tts_model_path):
+            # 尝试从本地路径加载模型
+            logger.info(f"正在从本地路径加载TTS模型: {tts_model_path}")
+            
+            # 检查是否有模型配置文件
+            config_files = [f for f in os.listdir(tts_model_path) if f.endswith('.json') and 'config' in f.lower()]
+            model_files = [f for f in os.listdir(tts_model_path) if f.endswith(('.pth', '.pt', '.ckpt'))]
+            
+            if config_files and model_files:
+                # 使用本地模型文件
+                model_file = os.path.join(tts_model_path, model_files[0])
+                config_file = os.path.join(tts_model_path, config_files[0])
+                
+                # 查找speaker文件（如果存在）
+                speaker_files = [f for f in os.listdir(tts_model_path) if 'speaker' in f.lower() and f.endswith('.pth')]
+                speaker_file = os.path.join(tts_model_path, speaker_files[0]) if speaker_files else None
+                
+                logger.info(f"加载模型文件: {model_file}")
+                logger.info(f"加载配置文件: {config_file}")
+                if speaker_file:
+                    logger.info(f"加载说话人文件: {speaker_file}")
+                
+                tts_model = TTS(
+                    model_path=model_file,
+                    config_path=config_file,
+                    speakers_file_path=speaker_file
+                )
+            else:
+                # 如果模型文件不完整，使用目录路径
+                logger.info(f"使用目录路径加载TTS模型: {tts_model_path}")
+                tts_model = TTS(model_path=tts_model_path)
+        else:
+            # 如果没有本地模型，使用默认的中文TTS模型
+            logger.info("未找到本地TTS模型，使用默认中文TTS模型")
+            # 使用一个支持中文的轻量级模型作为回退
+            tts_model = TTS(model_name="tts_models/zh-CN/baker/vits")
+            
+        logger.info("TTS模型加载成功")
+        return True
+        
+    except ImportError:
+        logger.error("TTS库未安装，请运行: pip install TTS")
+        return False
+    except Exception as e:
+        logger.error(f"TTS模型加载失败: {str(e)}")
+        return False
 
 app = FastAPI(title="荣昶杯项目 API", version="1.0.0")
+
+# 应用启动事件
+@app.on_event("startup")
+async def startup_event():
+    """应用启动时执行的事件"""
+    logger.info("正在启动荣昶杯项目 API...")
+    
+    # 加载STT模型
+    stt_success = load_stt_model()
+    if not stt_success:
+        logger.warning("STT模型加载失败，STT功能将不可用")
+    
+    # 加载TTS模型
+    tts_success = load_tts_model()
+    if not tts_success:
+        logger.warning("TTS模型加载失败，TTS功能将不可用")
 
 app.add_middleware(
     CORSMiddleware,
@@ -61,9 +210,132 @@ async def speech_to_text(audio: UploadFile = File(...)):
     语音转文字 API
     
     接收音频文件并返回转写的文本
+    支持transformers格式和原生whisper格式的模型
     """
-    # TODO: 在此处调用STT模型
-    return STTResponse(text="暂未实现", confidence=0.0, processing_time=0.0)
+    global stt_model, stt_processor, stt_tokenizer
+    
+    # 检查模型是否已加载
+    if stt_model is None:
+        raise HTTPException(status_code=503, detail="STT模型未加载，服务不可用")
+    
+    # 记录开始时间
+    start_time = time.time()
+    
+    # 临时文件路径
+    temp_audio_path = None
+    
+    try:
+        # 验证文件类型
+        if not audio.content_type or not any(mime in audio.content_type for mime in ['audio/', 'video/']):
+            raise HTTPException(status_code=400, detail="请上传音频文件")
+        
+        # 读取上传的音频数据
+        audio_data = await audio.read()
+        
+        # 创建临时文件保存音频
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_file:
+            temp_audio_path = temp_file.name
+            temp_file.write(audio_data)
+        
+        # 根据模型类型进行语音识别
+        if stt_processor is not None:
+            # 使用transformers格式的模型
+            transcribed_text, confidence = await transcribe_with_transformers(temp_audio_path)
+        else:
+            # 使用原生whisper格式的模型
+            transcribed_text, confidence = await transcribe_with_whisper(temp_audio_path)
+        
+        # 计算处理时间
+        processing_time = time.time() - start_time
+        
+        logger.info(f"STT处理完成: {transcribed_text[:50]}... (耗时: {processing_time:.2f}s)")
+        
+        return STTResponse(
+            text=transcribed_text,
+            confidence=confidence,
+            processing_time=processing_time
+        )
+        
+    except Exception as e:
+        logger.error(f"STT处理失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"语音识别失败: {str(e)}")
+    
+    finally:
+        # 清理临时文件
+        if temp_audio_path and os.path.exists(temp_audio_path):
+            try:
+                os.unlink(temp_audio_path)
+                logger.debug(f"已清理临时文件: {temp_audio_path}")
+            except Exception as e:
+                logger.warning(f"清理临时文件失败: {e}")
+
+
+async def transcribe_with_transformers(audio_path: str):
+    """
+    使用transformers格式的whisper模型进行语音识别
+    """
+    import torch
+    import librosa
+    
+    # 加载音频文件
+    audio_array, sampling_rate = librosa.load(audio_path, sr=16000)
+    
+    # 预处理音频
+    input_features = stt_processor(
+        audio_array, 
+        sampling_rate=sampling_rate, 
+        return_tensors="pt"
+    ).input_features
+    
+    # 设置中文语言token
+    forced_decoder_ids = stt_processor.get_decoder_prompt_ids(language="chinese", task="transcribe")
+    
+    # 生成转写结果
+    with torch.no_grad():
+        predicted_ids = stt_model.generate(
+            input_features,
+            forced_decoder_ids=forced_decoder_ids,
+            max_length=448,
+            num_beams=5,
+            early_stopping=True
+        )
+    
+    # 解码结果
+    transcribed_text = stt_processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
+    
+    # 简单的置信度估算（transformers模型没有直接的置信度）
+    confidence = 0.85  # 固定值，实际项目中可以基于模型输出计算
+    
+    return transcribed_text.strip(), confidence
+
+
+async def transcribe_with_whisper(audio_path: str):
+    """
+    使用原生whisper模型进行语音识别
+    """
+    # 使用whisper进行语音识别
+    result = stt_model.transcribe(
+        audio_path,
+        language="zh",  # 指定中文
+        task="transcribe"
+    )
+    
+    # 提取识别结果
+    transcribed_text = result.get("text", "").strip()
+    
+    # 计算置信度（基于segments计算平均值）
+    confidence = 0.0
+    if "segments" in result and result["segments"]:
+        confidences = []
+        for segment in result["segments"]:
+            if "avg_logprob" in segment:
+                # 将对数概率转换为置信度（近似）
+                conf = min(1.0, max(0.0, (segment["avg_logprob"] + 1.0)))
+                confidences.append(conf)
+        if confidences:
+            confidence = sum(confidences) / len(confidences)
+    
+    return transcribed_text, confidence
 
 
 @app.post("/api/tts")
@@ -72,17 +344,83 @@ async def text_to_speech(request: TTSRequest):
     文字转语音 API
     
     接收文本并返回音频流
+    使用Coqui TTS模型进行语音合成
     """
-    # TODO: 在此处调用TTS模型
-    # 返回一个空的音频流作为占位符
-    def generate_empty_audio():
-        yield b""
+    global tts_model
     
-    return StreamingResponse(
-        generate_empty_audio(),
-        media_type="audio/wav",
-        headers={"Content-Disposition": "attachment; filename=output.wav"}
-    )
+    # 检查模型是否已加载
+    if tts_model is None:
+        raise HTTPException(status_code=503, detail="TTS模型未加载，服务不可用")
+    
+    # 验证输入
+    if not request.text or not request.text.strip():
+        raise HTTPException(status_code=400, detail="请提供要合成的文本内容")
+    
+    # 记录开始时间
+    start_time = time.time()
+    
+    # 临时文件路径
+    temp_audio_path = None
+    
+    try:
+        # 创建临时文件保存音频
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_file:
+            temp_audio_path = temp_file.name
+        
+        # 使用TTS模型进行语音合成
+        logger.info(f"正在合成语音: {request.text[:50]}...")
+        
+        # 调用TTS模型生成音频
+        tts_model.tts_to_file(
+            text=request.text,
+            file_path=temp_audio_path,
+            speed=request.speed if request.speed else 1.0
+        )
+        
+        # 计算处理时间
+        processing_time = time.time() - start_time
+        logger.info(f"TTS处理完成，耗时: {processing_time:.2f}s")
+        
+        # 读取生成的音频文件
+        def generate_audio():
+            try:
+                with open(temp_audio_path, "rb") as audio_file:
+                    while True:
+                        chunk = audio_file.read(8192)  # 8KB chunks
+                        if not chunk:
+                            break
+                        yield chunk
+            except Exception as e:
+                logger.error(f"读取音频文件失败: {e}")
+                yield b""
+            finally:
+                # 在生成器结束时清理临时文件
+                if temp_audio_path and os.path.exists(temp_audio_path):
+                    try:
+                        os.unlink(temp_audio_path)
+                        logger.debug(f"已清理临时音频文件: {temp_audio_path}")
+                    except Exception as e:
+                        logger.warning(f"清理临时音频文件失败: {e}")
+        
+        # 返回音频流
+        return StreamingResponse(
+            generate_audio(),
+            media_type="audio/wav",
+            headers={
+                "Content-Disposition": "attachment; filename=tts_output.wav",
+                "X-Processing-Time": str(processing_time)
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"TTS处理失败: {str(e)}")
+        # 确保在出错时也清理临时文件
+        if temp_audio_path and os.path.exists(temp_audio_path):
+            try:
+                os.unlink(temp_audio_path)
+            except:
+                pass
+        raise HTTPException(status_code=500, detail=f"语音合成失败: {str(e)}")
 
 
 @app.post("/api/generate_suggestions", response_model=GenerateSuggestionsResponse)
