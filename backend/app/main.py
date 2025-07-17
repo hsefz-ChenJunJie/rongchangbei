@@ -219,10 +219,10 @@ def load_llm_model():
             logger.error(f"LLM模型初始化失败: {error_msg}")
             
             # 检查是否是模型架构不支持的问题
-            if "unknown model architecture" in error_msg.lower() or "qwen3" in error_msg.lower():
-                logger.error("检测到Qwen3架构不被llama-cpp-python支持")
-                logger.error("建议使用支持的模型格式，如Qwen2、Llama、Mistral等")
-                logger.error("或者使用transformers库而非llama-cpp-python")
+            if "unknown model architecture" in error_msg.lower():
+                logger.error("检测到模型架构不被当前llama-cpp-python版本支持")
+                logger.error("建议检查llama-cpp-python版本是否支持该模型架构")
+                logger.error("或者使用transformers库作为替代方案")
                 return False
             
             # 尝试使用更保守的参数
