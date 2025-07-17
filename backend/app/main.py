@@ -140,10 +140,21 @@ def load_tts_model():
         # 直接使用模型名称加载TTS模型
         logger.info("使用模型名称加载TTS模型")
         
-        # 使用XTTS v2多语言模型
+        # 使用XTTS v2多语言模型，按照官方方式加载
         logger.info("正在加载XTTS v2多语言模型...")
-        tts_model = TTS(model_name="tts_models/multilingual/multi-dataset/xtts_v2")
-        logger.info("TTS模型加载成功（使用XTTS v2模型）")
+        
+        # 检测GPU可用性
+        gpu_available = False
+        try:
+            import torch
+            if torch.cuda.is_available():
+                gpu_available = True
+                logger.info("检测到GPU，启用GPU加速")
+        except ImportError:
+            logger.info("未检测到PyTorch或CUDA，使用CPU模式")
+        
+        tts_model = TTS("tts_models/multilingual/multi-dataset/xtts_v2", gpu=gpu_available)
+        logger.info(f"TTS模型加载成功（使用XTTS v2模型，GPU: {gpu_available}）")
             
         logger.info("TTS模型加载成功")
         return True
@@ -620,6 +631,7 @@ class TTSRequest(BaseModel):
     voice: Optional[str] = "default"
     speed: Optional[float] = 1.0
     speaker: Optional[str] = None  # 多话者模型需要的说话人参数
+    speaker_wav: Optional[str] = None  # XTTS模型需要的参考音频文件路径
 
 
 # LLM 数据模型
@@ -780,7 +792,7 @@ async def transcribe_with_whisper(audio_path: str):
 @app.get("/api/tts/speakers")
 async def get_tts_speakers():
     """
-    获取TTS模型可用的说话人列表
+    获取TTS模型可用的说话人列表和参考音频信息
     """
     global tts_model
     
@@ -796,10 +808,21 @@ async def get_tts_speakers():
         elif hasattr(tts_model, 'speaker_manager') and tts_model.speaker_manager:
             speakers = tts_model.speaker_manager.speaker_names
         
+        # 检查默认参考音频文件
+        default_reference_path = os.path.join(os.path.dirname(__file__), "..", "models", "tts", "samples", "zh-cn-sample.wav")
+        reference_audio_available = os.path.exists(default_reference_path)
+        
         return {
             "speakers": speakers,
             "default_speaker": speakers[0] if speakers else None,
-            "is_multi_speaker": len(speakers) > 1
+            "is_multi_speaker": len(speakers) > 1,
+            "reference_audio": {
+                "default_path": "backend/models/tts/samples/zh-cn-sample.wav",
+                "available": reference_audio_available,
+                "absolute_path": default_reference_path
+            },
+            "xtts_support": True,  # 表示支持XTTS模型
+            "usage_note": "XTTS模型需要参考音频文件来克隆声音，如果不提供speaker_wav参数将使用默认参考音频"
         }
     except Exception as e:
         logger.error(f"📋 获取说话人列表失败: {e}")
@@ -807,6 +830,10 @@ async def get_tts_speakers():
             "speakers": [],
             "default_speaker": None,
             "is_multi_speaker": False,
+            "reference_audio": {
+                "available": False,
+                "error": str(e)
+            },
             "error": str(e)
         }
 
@@ -843,49 +870,34 @@ async def text_to_speech(request: TTSRequest):
         # 使用TTS模型进行语音合成
         logger.info(f"🔊 正在合成语音: {request.text[:50]}...")
         
-        # 准备TTS参数
-        tts_kwargs = {
-            "text": request.text,
-            "file_path": temp_audio_path,
-            "speed": request.speed if request.speed else 1.0
-        }
+        # 处理XTTS参考音频文件
+        reference_audio_path = None
+        if request.speaker_wav:
+            # 用户指定了参考音频文件
+            reference_audio_path = request.speaker_wav
+        else:
+            # 使用默认的参考音频文件
+            default_reference_path = os.path.join(os.path.dirname(__file__), "..", "models", "tts", "samples", "zh-cn-sample.wav")
+            if os.path.exists(default_reference_path):
+                reference_audio_path = default_reference_path
+                logger.info(f"🎵 使用默认参考音频: {reference_audio_path}")
+            else:
+                logger.warning(f"⚠️ 默认参考音频文件不存在: {default_reference_path}")
         
-        # 检查是否为多话者模型并添加说话人参数
-        try:
-            # 尝试获取模型的说话人信息
-            if hasattr(tts_model, 'speakers') and tts_model.speakers:
-                # 多话者模型
-                if request.speaker:
-                    # 用户指定了说话人
-                    if request.speaker in tts_model.speakers:
-                        tts_kwargs["speaker"] = request.speaker
-                        logger.info(f"🎤 使用指定说话人: {request.speaker}")
-                    else:
-                        logger.warning(f"⚠️ 指定的说话人 '{request.speaker}' 不存在，使用默认说话人")
-                        tts_kwargs["speaker"] = tts_model.speakers[0]
-                else:
-                    # 用户未指定说话人，使用第一个可用的说话人
-                    tts_kwargs["speaker"] = tts_model.speakers[0]
-                    logger.info(f"🎤 使用默认说话人: {tts_model.speakers[0]}")
-            elif hasattr(tts_model, 'speaker_manager') and tts_model.speaker_manager:
-                # 另一种多话者模型结构
-                speakers = tts_model.speaker_manager.speaker_names
-                if speakers:
-                    if request.speaker and request.speaker in speakers:
-                        tts_kwargs["speaker"] = request.speaker
-                        logger.info(f"🎤 使用指定说话人: {request.speaker}")
-                    else:
-                        tts_kwargs["speaker"] = speakers[0]
-                        logger.info(f"🎤 使用默认说话人: {speakers[0]}")
-        except Exception as e:
-            logger.warning(f"⚠️ 检查说话人信息时出错: {e}")
+        # 检查参考音频文件是否存在
+        if not reference_audio_path or not os.path.exists(reference_audio_path):
+            raise HTTPException(status_code=400, detail="XTTS模型需要参考音频文件，但未找到可用的参考音频")
         
-        # 记录最终的TTS参数
-        logger.debug(f"📋 TTS调用参数: {tts_kwargs}")
+        logger.info(f"🎵 使用参考音频文件: {reference_audio_path}")
         
-        # 调用TTS模型生成音频
+        # 按照官方API方式调用TTS模型
         logger.info("🔄 开始TTS模型音频生成...")
-        tts_model.tts_to_file(**tts_kwargs)
+        tts_model.tts_to_file(
+            text=request.text,
+            file_path=temp_audio_path,
+            speaker_wav=reference_audio_path,
+            language="zh-cn"  # 使用中文语言
+        )
         
         # 计算处理时间
         processing_time = time.time() - start_time
