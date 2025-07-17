@@ -404,7 +404,11 @@ def load_llm_model():
         logger.info(f"硬件配置: CPU核心={cpu_count}, 内存={memory_gb:.1f}GB, 线程={threads}, 上下文={context_length}, GPU={gpu}")
         
         # 加载模型
+        logger.info("🔄 开始加载本地LLM模型...")
+        model_loaded = False
+        
         try:
+            logger.info("📋 尝试方法1：使用标准参数加载模型")
             llm_model = AutoModelForCausalLM.from_pretrained(
                 llm_model_path,
                 model_type="qwen",  # 指定模型类型
@@ -414,12 +418,15 @@ def load_llm_model():
                 stream=True,  # 启用流式输出
                 local_files_only=True  # 只使用本地文件
             )
+            model_loaded = True
+            logger.info("✅ 方法1成功：标准参数加载完成")
+            
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"LLM模型初始化失败: {error_msg}")
+            logger.warning(f"⚠️ 方法1失败: {error_msg}")
             
             # 尝试使用更保守的参数
-            logger.info("尝试使用更保守的参数重新加载LLM模型")
+            logger.info("📋 尝试方法2：使用保守参数重新加载LLM模型")
             try:
                 llm_model = AutoModelForCausalLM.from_pretrained(
                     llm_model_path,
@@ -430,10 +437,14 @@ def load_llm_model():
                     stream=True,
                     local_files_only=True
                 )
+                model_loaded = True
+                logger.info("✅ 方法2成功：保守参数加载完成")
+                
             except Exception as e2:
-                logger.error(f"保守参数也失败: {str(e2)}")
+                logger.warning(f"⚠️ 方法2失败: {str(e2)}")
+                
                 # 尝试自动检测模型类型
-                logger.info("尝试自动检测模型类型")
+                logger.info("📋 尝试方法3：自动检测模型类型")
                 try:
                     llm_model = AutoModelForCausalLM.from_pretrained(
                         llm_model_path,
@@ -443,12 +454,22 @@ def load_llm_model():
                         stream=True,
                         local_files_only=True
                     )
+                    model_loaded = True
+                    logger.info("✅ 方法3成功：自动检测加载完成")
+                    
                 except Exception as e3:
-                    logger.error(f"自动检测也失败: {str(e3)}")
+                    logger.error(f"❌ 方法3失败: {str(e3)}")
+                    logger.error("❌ 所有本地模型加载方法都失败，将切换到远程API")
         
-        logger.info("本地LLM模型加载成功")
-        use_remote_llm = False
-        return True
+        # 检查模型是否成功加载
+        if model_loaded and llm_model is not None:
+            logger.info("✅ 本地LLM模型加载成功")
+            use_remote_llm = False
+            return True
+        else:
+            logger.error("❌ 本地LLM模型加载完全失败")
+            # 抛出异常以触发远程API回退
+            raise Exception("所有本地模型加载方法都失败")
         
     except ImportError:
         logger.warning("ctransformers库未安装，尝试使用远程API")
@@ -841,7 +862,7 @@ async def get_tts_speakers():
             "is_multi_speaker": len(speakers) > 1
         }
     except Exception as e:
-        logger.error(f"获取说话人列表失败: {e}")
+        logger.error(f"📋 获取说话人列表失败: {e}")
         return {
             "speakers": [],
             "default_speaker": None,
@@ -880,7 +901,7 @@ async def text_to_speech(request: TTSRequest):
             temp_audio_path = temp_file.name
         
         # 使用TTS模型进行语音合成
-        logger.info(f"正在合成语音: {request.text[:50]}...")
+        logger.info(f"🔊 正在合成语音: {request.text[:50]}...")
         
         # 准备TTS参数
         tts_kwargs = {
@@ -898,28 +919,32 @@ async def text_to_speech(request: TTSRequest):
                     # 用户指定了说话人
                     if request.speaker in tts_model.speakers:
                         tts_kwargs["speaker"] = request.speaker
-                        logger.info(f"使用指定说话人: {request.speaker}")
+                        logger.info(f"🎤 使用指定说话人: {request.speaker}")
                     else:
-                        logger.warning(f"指定的说话人 '{request.speaker}' 不存在，使用默认说话人")
+                        logger.warning(f"⚠️ 指定的说话人 '{request.speaker}' 不存在，使用默认说话人")
                         tts_kwargs["speaker"] = tts_model.speakers[0]
                 else:
                     # 用户未指定说话人，使用第一个可用的说话人
                     tts_kwargs["speaker"] = tts_model.speakers[0]
-                    logger.info(f"使用默认说话人: {tts_model.speakers[0]}")
+                    logger.info(f"🎤 使用默认说话人: {tts_model.speakers[0]}")
             elif hasattr(tts_model, 'speaker_manager') and tts_model.speaker_manager:
                 # 另一种多话者模型结构
                 speakers = tts_model.speaker_manager.speaker_names
                 if speakers:
                     if request.speaker and request.speaker in speakers:
                         tts_kwargs["speaker"] = request.speaker
-                        logger.info(f"使用指定说话人: {request.speaker}")
+                        logger.info(f"🎤 使用指定说话人: {request.speaker}")
                     else:
                         tts_kwargs["speaker"] = speakers[0]
-                        logger.info(f"使用默认说话人: {speakers[0]}")
+                        logger.info(f"🎤 使用默认说话人: {speakers[0]}")
         except Exception as e:
-            logger.warning(f"检查说话人信息时出错: {e}")
+            logger.warning(f"⚠️ 检查说话人信息时出错: {e}")
+        
+        # 记录最终的TTS参数
+        logger.debug(f"📋 TTS调用参数: {tts_kwargs}")
         
         # 调用TTS模型生成音频
+        logger.info("🔄 开始TTS模型音频生成...")
         tts_model.tts_to_file(**tts_kwargs)
         
         # 计算处理时间
