@@ -593,6 +593,7 @@ class TTSRequest(BaseModel):
     text: str
     voice: Optional[str] = "default"
     speed: Optional[float] = 1.0
+    speaker: Optional[str] = None  # 多话者模型需要的说话人参数
 
 
 # LLM 数据模型
@@ -750,6 +751,40 @@ async def transcribe_with_whisper(audio_path: str):
     return transcribed_text, confidence
 
 
+@app.get("/api/tts/speakers")
+async def get_tts_speakers():
+    """
+    获取TTS模型可用的说话人列表
+    """
+    global tts_model
+    
+    if tts_model is None:
+        raise HTTPException(status_code=503, detail="TTS模型未加载，服务不可用")
+    
+    try:
+        speakers = []
+        
+        # 检查不同的说话人属性
+        if hasattr(tts_model, 'speakers') and tts_model.speakers:
+            speakers = list(tts_model.speakers)
+        elif hasattr(tts_model, 'speaker_manager') and tts_model.speaker_manager:
+            speakers = tts_model.speaker_manager.speaker_names
+        
+        return {
+            "speakers": speakers,
+            "default_speaker": speakers[0] if speakers else None,
+            "is_multi_speaker": len(speakers) > 1
+        }
+    except Exception as e:
+        logger.error(f"获取说话人列表失败: {e}")
+        return {
+            "speakers": [],
+            "default_speaker": None,
+            "is_multi_speaker": False,
+            "error": str(e)
+        }
+
+
 @app.post("/api/tts")
 async def text_to_speech(request: TTSRequest):
     """
@@ -782,12 +817,45 @@ async def text_to_speech(request: TTSRequest):
         # 使用TTS模型进行语音合成
         logger.info(f"正在合成语音: {request.text[:50]}...")
         
+        # 准备TTS参数
+        tts_kwargs = {
+            "text": request.text,
+            "file_path": temp_audio_path,
+            "speed": request.speed if request.speed else 1.0
+        }
+        
+        # 检查是否为多话者模型并添加说话人参数
+        try:
+            # 尝试获取模型的说话人信息
+            if hasattr(tts_model, 'speakers') and tts_model.speakers:
+                # 多话者模型
+                if request.speaker:
+                    # 用户指定了说话人
+                    if request.speaker in tts_model.speakers:
+                        tts_kwargs["speaker"] = request.speaker
+                        logger.info(f"使用指定说话人: {request.speaker}")
+                    else:
+                        logger.warning(f"指定的说话人 '{request.speaker}' 不存在，使用默认说话人")
+                        tts_kwargs["speaker"] = tts_model.speakers[0]
+                else:
+                    # 用户未指定说话人，使用第一个可用的说话人
+                    tts_kwargs["speaker"] = tts_model.speakers[0]
+                    logger.info(f"使用默认说话人: {tts_model.speakers[0]}")
+            elif hasattr(tts_model, 'speaker_manager') and tts_model.speaker_manager:
+                # 另一种多话者模型结构
+                speakers = tts_model.speaker_manager.speaker_names
+                if speakers:
+                    if request.speaker and request.speaker in speakers:
+                        tts_kwargs["speaker"] = request.speaker
+                        logger.info(f"使用指定说话人: {request.speaker}")
+                    else:
+                        tts_kwargs["speaker"] = speakers[0]
+                        logger.info(f"使用默认说话人: {speakers[0]}")
+        except Exception as e:
+            logger.warning(f"检查说话人信息时出错: {e}")
+        
         # 调用TTS模型生成音频
-        tts_model.tts_to_file(
-            text=request.text,
-            file_path=temp_audio_path,
-            speed=request.speed if request.speed else 1.0
-        )
+        tts_model.tts_to_file(**tts_kwargs)
         
         # 计算处理时间
         processing_time = time.time() - start_time
