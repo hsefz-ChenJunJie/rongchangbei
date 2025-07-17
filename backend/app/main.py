@@ -99,23 +99,22 @@ def load_tts_model():
             # 尝试从本地路径加载模型
             logger.info(f"正在从本地路径加载TTS模型: {tts_model_path}")
             
-            # 检查是否有模型配置文件
+            # 检查模型文件
             config_files = [f for f in os.listdir(tts_model_path) if f.endswith('.json') and 'config' in f.lower()]
-            model_files = [f for f in os.listdir(tts_model_path) if f.endswith(('.pth', '.pt', '.ckpt'))]
+            # 排除speakers文件，只选择真正的模型文件
+            model_files = [f for f in os.listdir(tts_model_path) 
+                          if f.endswith(('.pth', '.pt', '.ckpt')) and 'speaker' not in f.lower()]
+            
+            logger.info(f"找到配置文件: {config_files}")
+            logger.info(f"找到模型文件: {model_files}")
             
             if config_files and model_files:
                 # 使用本地模型文件
                 model_file = os.path.join(tts_model_path, model_files[0])
                 config_file = os.path.join(tts_model_path, config_files[0])
                 
-                # 查找speaker文件（如果存在）
-                speaker_files = [f for f in os.listdir(tts_model_path) if 'speaker' in f.lower() and f.endswith('.pth')]
-                speaker_file = os.path.join(tts_model_path, speaker_files[0]) if speaker_files else None
-                
                 logger.info(f"加载模型文件: {model_file}")
                 logger.info(f"加载配置文件: {config_file}")
-                if speaker_file:
-                    logger.info(f"加载说话人文件: {speaker_file}")
                 
                 # 尝试不同的初始化方式
                 try:
@@ -124,12 +123,16 @@ def load_tts_model():
                         model_path=model_file,
                         config_path=config_file
                     )
-                    logger.info("TTS模型加载成功（不包含说话人文件）")
+                    logger.info("TTS模型加载成功（使用具体文件路径）")
                 except Exception as e:
-                    logger.warning(f"标准方式加载失败: {e}")
+                    logger.warning(f"具体文件路径加载失败: {e}")
                     # 如果失败，尝试使用目录路径
-                    tts_model = TTS(model_path=tts_model_path)
-                    logger.info("TTS模型加载成功（使用目录路径）")
+                    try:
+                        tts_model = TTS(model_path=tts_model_path)
+                        logger.info("TTS模型加载成功（使用目录路径）")
+                    except Exception as e2:
+                        logger.error(f"目录路径加载也失败: {e2}")
+                        raise e2
             else:
                 # 如果模型文件不完整，使用目录路径
                 logger.info(f"使用目录路径加载TTS模型: {tts_model_path}")
@@ -206,16 +209,35 @@ def load_llm_model():
         logger.info(f"硬件配置: CPU核心={cpu_count}, 内存={memory_gb:.1f}GB, 线程={n_threads}, 上下文={n_ctx}, GPU层={n_gpu_layers}")
         
         # 加载模型
-        llm_model = Llama(
-            model_path=llm_model_path,
-            n_ctx=n_ctx,
-            n_threads=n_threads,
-            n_gpu_layers=n_gpu_layers,
-            verbose=False,  # 减少输出
-            use_mmap=True,  # 使用内存映射减少内存使用
-            use_mlock=False,  # 不锁定内存
-            n_batch=512,  # 批处理大小
-        )
+        try:
+            llm_model = Llama(
+                model_path=llm_model_path,
+                n_ctx=n_ctx,
+                n_threads=n_threads,
+                n_gpu_layers=n_gpu_layers,
+                verbose=False,  # 减少输出
+                use_mmap=True,  # 使用内存映射减少内存使用
+                use_mlock=False,  # 不锁定内存
+                n_batch=512,  # 批处理大小
+            )
+        except Exception as e:
+            logger.error(f"LLM模型初始化失败: {str(e)}")
+            # 尝试使用更保守的参数
+            logger.info("尝试使用更保守的参数重新加载LLM模型")
+            try:
+                llm_model = Llama(
+                    model_path=llm_model_path,
+                    n_ctx=2048,  # 减少上下文窗口
+                    n_threads=2,  # 减少线程数
+                    n_gpu_layers=0,  # 禁用GPU
+                    verbose=True,  # 启用详细输出以便调试
+                    use_mmap=True,
+                    use_mlock=False,
+                    n_batch=256,  # 减少批处理大小
+                )
+            except Exception as e2:
+                logger.error(f"保守参数也失败: {str(e2)}")
+                raise e2
         
         logger.info("LLM模型加载成功")
         return True
