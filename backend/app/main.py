@@ -538,6 +538,11 @@ async def startup_event():
     logger.info("🚀 正在启动荣昶杯项目 API...")
     logger.info("=" * 50)
     
+    # 初始化状态变量
+    stt_success = False
+    tts_success = False
+    llm_success = False
+    
     # 加载STT模型
     if MODEL_LOAD_CONFIG["load_stt"]:
         logger.info("🔄 开始加载STT模型...")
@@ -574,10 +579,26 @@ async def startup_event():
     # 启动总结
     logger.info("=" * 50)
     logger.info("📊 启动状态总结:")
-    logger.info(f"   STT: {'✅ 可用' if stt_success else '❌ 不可用'}")
-    logger.info(f"   TTS: {'✅ 可用' if tts_success else '❌ 不可用'}")
-    logger.info(f"   LLM: {'✅ 可用' if llm_success else '❌ 不可用'}")
-    logger.info(f"   服务模式: {'🌐 远程API' if use_remote_llm else '🏠 本地模型'}")
+    
+    # STT状态
+    if MODEL_LOAD_CONFIG["load_stt"]:
+        logger.info(f"   STT: {'✅ 可用' if stt_success else '❌ 不可用'}")
+    else:
+        logger.info("   STT: ⏭️ 已禁用")
+    
+    # TTS状态
+    if MODEL_LOAD_CONFIG["load_tts"]:
+        logger.info(f"   TTS: {'✅ 可用' if tts_success else '❌ 不可用'}")
+    else:
+        logger.info("   TTS: ⏭️ 已禁用")
+    
+    # LLM状态
+    if MODEL_LOAD_CONFIG["load_llm"]:
+        logger.info(f"   LLM: {'✅ 可用' if llm_success else '❌ 不可用'}")
+        logger.info(f"   服务模式: {'🌐 远程API' if use_remote_llm else '🏠 本地模型'}")
+    else:
+        logger.info("   LLM: ⏭️ 已禁用")
+    
     logger.info("🎉 荣昶杯项目 API 启动完成!")
     logger.info("=" * 50)
 
