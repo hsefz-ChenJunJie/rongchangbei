@@ -1,0 +1,57 @@
+[gd_scene load_steps=5 format=3 uid="uid://dgyloqo3b2meu"]
+
+[ext_resource type="FontFile" uid="uid://bmai4ga2nqrvj" path="res://YanShiChunFengKai-2.ttf" id="1_nkug2"]
+[ext_resource type="PackedScene" uid="uid://ccmej2ta7xfh7" path="res://base.tscn" id="1_x2hje"]
+[ext_resource type="Script" uid="uid://mgndxm8yyb03" path="res://settings_change_bg_button.gd" id="3_3ykye"]
+
+[sub_resource type="Theme" id="Theme_3ykye"]
+default_font = ExtResource("1_nkug2")
+
+[node name="Control" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = SubResource("Theme_3ykye")
+
+[node name="Base" parent="." instance=ExtResource("1_x2hje")]
+layout_mode = 1
+
+[node name="Panel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 32.0
+offset_top = 128.0
+offset_right = -32.0
+offset_bottom = -32.0
+
+[node name="IPInput" type="LineEdit" parent="Panel"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 32.0
+offset_top = 64.0
+offset_right = -32.0
+offset_bottom = -992.0
+
+[node name="ChangeBgButton" type="Button" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 64.0
+offset_top = 1176.0
+offset_right = -64.0
+offset_bottom = -64.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 50
+text = "Change Background"
+script = ExtResource("3_3ykye")
+
+[connection signal="pressed" from="ChangeBgButton" to="ChangeBgButton" method="_on_pressed"]
