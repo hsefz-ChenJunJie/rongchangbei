@@ -256,14 +256,25 @@ def load_llm_model():
         return False
 
 
+def load_system_prompt() -> str:
+    """
+    从llm.md文件加载系统提示词
+    """
+    try:
+        system_prompt_path = os.path.join(os.path.dirname(__file__), "..", "llm.md")
+        with open(system_prompt_path, 'r', encoding='utf-8') as f:
+            return f.read().strip()
+    except Exception as e:
+        logger.error(f"加载系统提示词失败: {e}")
+        # 回退到默认系统提示词
+        return "你是一个顶级的、富有同情心和高情商的沟通助手，专门为一个有语言障碍的用户提供支持。\n你的核心任务是：在用户需要时，根据对方的谈话内容和用户的基本意图，从多种角度考虑问题，生成多种风格的、高质量的回答建议，帮助用户流畅、自信地进行交流。\n**你的行为准则:**\n1.  **多样性**: 永远提供多种不同语气和风格的建议（例如：简洁直接、礼貌委婉、幽默友好、提出反问等）。\n2.  **同理心**: 你的回答建议应始终保持积极、尊重和支持的态度。"
+
+
 def build_structured_prompt(request: 'GenerateSuggestionsRequest') -> str:
     """
-    根据请求内容构建结构化的高质量Prompt
+    根据请求内容构建结构化的用户Prompt
     """
     prompt_parts = []
-    
-    # 基础角色设定
-    prompt_parts.append("你是一个专业的对话建议助手，能够根据具体的对话情境和用户需求，生成高质量的回答建议。")
     
     # 处理对话情景
     if request.scenario_context and request.scenario_context.strip():
@@ -281,41 +292,49 @@ def build_structured_prompt(request: 'GenerateSuggestionsRequest') -> str:
     if request.modification_suggestion and len(request.modification_suggestion) > 0:
         modifications = [mod.strip() for mod in request.modification_suggestion if mod.strip()]
         if modifications:
-            prompt_parts.append(f"修改建议：{' '.join(modifications)}")
+            prompt_parts.append("严格遵循以下修改意见：")
+            prompt_parts.append(' '.join(modifications))
     
     # 生成要求
     suggestion_count = request.suggestion_count or 3
     prompt_parts.append(f"请生成{suggestion_count}条高质量的回答建议。")
     
-    # 输出格式要求
-    prompt_parts.append("请严格按照以下JSON格式输出，不要添加任何额外的文字说明：")
-    prompt_parts.append(json.dumps({
-        "suggestions": [
-            {
-                "id": 1,
-                "content": "建议内容1",
-                "confidence": 0.85
-            },
-            {
-                "id": 2,
-                "content": "建议内容2",
-                "confidence": 0.80
-            }
-        ]
-    }, ensure_ascii=False, indent=2))
-    
     return '\n\n'.join(prompt_parts)
 
 
-def apply_qwen2_chat_template(prompt: str) -> str:
+def get_json_schema() -> dict:
     """
-    应用Qwen2模型的聊天模板
+    获取JSON Schema用于强制格式化输出
+    """
+    return {
+        "type": "object",
+        "properties": {
+            "suggestions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "id": {"type": "integer"},
+                        "content": {"type": "string"},
+                        "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+                    },
+                    "required": ["id", "content", "confidence"]
+                }
+            }
+        },
+        "required": ["suggestions"]
+    }
+
+
+def apply_qwen2_chat_template(system_prompt: str, user_prompt: str) -> str:
+    """
+    应用Qwen2模型的聊天模板，分离系统提示词和用户提示词
     """
     # Qwen2的聊天模板格式
     chat_template = f"""<|im_start|>system
-你是一个有用的AI助手。<|im_end|>
+{system_prompt}<|im_end|>
 <|im_start|>user
-{prompt}<|im_end|>
+{user_prompt}<|im_end|>
 <|im_start|>assistant
 """
     
@@ -625,11 +644,17 @@ async def generate_suggestions(request: GenerateSuggestionsRequest):
     if llm_model is None:
         raise HTTPException(status_code=503, detail="LLM模型未加载，服务不可用")
     
-    # 构建结构化的Prompt
-    structured_prompt = build_structured_prompt(request)
+    # 加载系统提示词
+    system_prompt = load_system_prompt()
+    
+    # 构建结构化的用户Prompt
+    user_prompt = build_structured_prompt(request)
     
     # 应用Qwen2聊天模板
-    formatted_prompt = apply_qwen2_chat_template(structured_prompt)
+    formatted_prompt = apply_qwen2_chat_template(system_prompt, user_prompt)
+    
+    # 获取JSON Schema
+    json_schema = get_json_schema()
     
     logger.info(f"开始生成建议，prompt长度: {len(formatted_prompt)}")
     
@@ -638,7 +663,7 @@ async def generate_suggestions(request: GenerateSuggestionsRequest):
         try:
             start_time = time.time()
             
-            # 使用llama-cpp-python进行流式生成
+            # 使用llama-cpp-python进行流式生成，启用JSON Mode
             stream = llm_model(
                 formatted_prompt,
                 max_tokens=1024,
@@ -646,7 +671,9 @@ async def generate_suggestions(request: GenerateSuggestionsRequest):
                 top_p=0.9,
                 stop=["<|im_end|>", "<|endoftext|>"],
                 stream=True,
-                echo=False
+                echo=False,
+                response_format={"type": "json_object"},  # 启用JSON Mode
+                json_schema=json_schema  # 使用JSON Schema
             )
             
             # 累积生成的文本
@@ -675,34 +702,27 @@ async def generate_suggestions(request: GenerateSuggestionsRequest):
             # 计算处理时间
             processing_time = time.time() - start_time
             
-            # 尝试解析生成的JSON结果
+            # 解析JSON结果（使用JSON Mode后应该更可靠）
             try:
-                # 提取JSON部分（去掉可能的前后缀）
+                # 使用JSON Mode后，输出应该已经是有效的JSON
                 json_text = accumulated_text.strip()
-                if json_text.startswith('```json'):
-                    json_text = json_text[7:]
-                if json_text.endswith('```'):
-                    json_text = json_text[:-3]
-                json_text = json_text.strip()
                 
                 # 尝试解析JSON
                 result = json.loads(json_text)
                 
-                # 验证JSON结构
+                # 验证JSON结构符合Schema
                 if 'suggestions' in result and isinstance(result['suggestions'], list):
                     suggestions = result['suggestions']
+                    # 验证每个建议的结构
+                    for suggestion in suggestions:
+                        if not all(key in suggestion for key in ['id', 'content', 'confidence']):
+                            raise ValueError("建议格式不完整")
                 else:
-                    # 如果JSON格式不正确，创建默认响应
-                    suggestions = [
-                        {
-                            "id": 1,
-                            "content": accumulated_text[:200] + "..." if len(accumulated_text) > 200 else accumulated_text,
-                            "confidence": 0.75
-                        }
-                    ]
+                    raise ValueError("JSON结构不符合预期")
                 
-            except json.JSONDecodeError:
-                # 如果无法解析JSON，创建包含原始文本的响应
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.warning(f"JSON解析失败: {e}, 原始文本: {accumulated_text[:100]}...")
+                # 如果JSON Mode失败，创建包含原始文本的响应
                 suggestions = [
                     {
                         "id": 1,
