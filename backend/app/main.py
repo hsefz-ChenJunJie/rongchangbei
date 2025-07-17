@@ -126,7 +126,7 @@ def load_tts_model():
             # 如果没有本地模型，使用默认的中文TTS模型
             logger.info("未找到本地TTS模型，使用默认中文TTS模型")
             # 使用一个支持中文的轻量级模型作为回退
-            tts_model = TTS(model_name="tts_models/zh-CN/baker/tacotron2-DDC-GST")
+            tts_model = TTS(model_name="tts_models/zh-CN/baker/vits")
             
         logger.info("TTS模型加载成功")
         return True
