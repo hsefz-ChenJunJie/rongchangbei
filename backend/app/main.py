@@ -28,6 +28,14 @@ logger = logging.getLogger(__name__)
 logging.getLogger('aiohttp').setLevel(logging.WARNING)
 logging.getLogger('asyncio').setLevel(logging.WARNING)
 
+# ==================== 模型加载开关配置 ====================
+# 控制是否加载各种模型
+MODEL_LOAD_CONFIG = {
+    "load_stt": True,   # 是否加载STT模型
+    "load_tts": False,   # 是否加载TTS模型
+    "load_llm": True    # 是否加载LLM模型
+}
+
 # ==================== 远程API服务商配置 ====================
 # 请在这里填写您的远程API服务商信息
 REMOTE_API_CONFIG = {
@@ -531,28 +539,37 @@ async def startup_event():
     logger.info("=" * 50)
     
     # 加载STT模型
-    logger.info("🔄 开始加载STT模型...")
-    stt_success = load_stt_model()
-    if not stt_success:
-        logger.warning("⚠️ STT模型加载失败，STT功能将不可用")
+    if MODEL_LOAD_CONFIG["load_stt"]:
+        logger.info("🔄 开始加载STT模型...")
+        stt_success = load_stt_model()
+        if not stt_success:
+            logger.warning("⚠️ STT模型加载失败，STT功能将不可用")
+        else:
+            logger.info("✅ STT模型加载成功")
     else:
-        logger.info("✅ STT模型加载成功")
+        logger.info("⏭️ STT模型加载已禁用")
     
     # 加载TTS模型
-    logger.info("🔄 开始加载TTS模型...")
-    tts_success = load_tts_model()
-    if not tts_success:
-        logger.warning("⚠️ TTS模型加载失败，TTS功能将不可用")
+    if MODEL_LOAD_CONFIG["load_tts"]:
+        logger.info("🔄 开始加载TTS模型...")
+        tts_success = load_tts_model()
+        if not tts_success:
+            logger.warning("⚠️ TTS模型加载失败，TTS功能将不可用")
+        else:
+            logger.info("✅ TTS模型加载成功")
     else:
-        logger.info("✅ TTS模型加载成功")
+        logger.info("⏭️ TTS模型加载已禁用")
     
     # 加载LLM模型
-    logger.info("🔄 开始加载LLM模型...")
-    llm_success = load_llm_model()
-    if not llm_success:
-        logger.warning("⚠️ LLM模型加载失败，LLM功能将不可用")
+    if MODEL_LOAD_CONFIG["load_llm"]:
+        logger.info("🔄 开始加载LLM模型...")
+        llm_success = load_llm_model()
+        if not llm_success:
+            logger.warning("⚠️ LLM模型加载失败，LLM功能将不可用")
+        else:
+            logger.info("✅ LLM模型加载成功")
     else:
-        logger.info("✅ LLM模型加载成功")
+        logger.info("⏭️ LLM模型加载已禁用")
     
     # 启动总结
     logger.info("=" * 50)
@@ -623,6 +640,10 @@ async def speech_to_text(audio: UploadFile = File(...)):
     支持transformers格式和原生whisper格式的模型
     """
     global stt_model, stt_processor, stt_tokenizer
+    
+    # 检查STT功能是否启用
+    if not MODEL_LOAD_CONFIG["load_stt"]:
+        raise HTTPException(status_code=503, detail="STT功能已禁用")
     
     # 检查模型是否已加载
     if stt_model is None:
@@ -755,6 +776,10 @@ async def get_tts_speakers():
     """
     global tts_model
     
+    # 检查TTS功能是否启用
+    if not MODEL_LOAD_CONFIG["load_tts"]:
+        raise HTTPException(status_code=503, detail="TTS功能已禁用")
+    
     if tts_model is None:
         raise HTTPException(status_code=503, detail="TTS模型未加载，服务不可用")
     
@@ -806,6 +831,10 @@ async def text_to_speech(request: TTSRequest):
     使用Coqui TTS模型进行语音合成
     """
     global tts_model
+    
+    # 检查TTS功能是否启用
+    if not MODEL_LOAD_CONFIG["load_tts"]:
+        raise HTTPException(status_code=503, detail="TTS功能已禁用")
     
     # 检查模型是否已加载
     if tts_model is None:
@@ -916,6 +945,11 @@ async def generate_suggestions(request: GenerateSuggestionsRequest):
     
     logger.info("🚀 开始处理生成建议请求")
     logger.info(f"📋 请求参数: {request.dict()}")
+    
+    # 检查LLM功能是否启用
+    if not MODEL_LOAD_CONFIG["load_llm"]:
+        logger.error("❌ LLM功能已禁用")
+        raise HTTPException(status_code=503, detail="LLM功能已禁用")
     
     # 检查是否有可用的LLM服务
     if not use_remote_llm and llm_model is None:
