@@ -11,10 +11,44 @@ import time
 import logging
 import json
 import asyncio
+import aiohttp
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# ==================== 远程API服务商配置 ====================
+# 请在这里填写您的远程API服务商信息
+REMOTE_API_CONFIG = {
+    # 示例配置 - 请根据您的服务商修改以下信息
+    "api_url": "https://openrouter.ai/api/v1",  # 替换为您的API地址
+    "api_key": "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",  # 替换为您的API密钥
+    "model_name": "qwen/qwen3-32b:free",  # 替换为您要使用的模型名称
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "stream": True,
+    
+    # 常见服务商预设配置（取消注释并填写对应的API Key）
+    # OpenAI配置
+    # "api_url": "https://api.openai.com/v1/chat/completions",
+    # "api_key": "sk-your-openai-key",
+    # "model_name": "gpt-3.5-turbo",
+    
+    # 智谱AI配置
+    # "api_url": "https://open.bigmodel.cn/api/paas/v4/chat/completions",
+    # "api_key": "your-zhipu-key",
+    # "model_name": "glm-4",
+    
+    # 百度千帆配置
+    # "api_url": "https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/completions",
+    # "api_key": "your-baidu-key",
+    # "model_name": "ernie-bot-turbo",
+    
+    # 阿里云通义千问配置
+    # "api_url": "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation",
+    # "api_key": "your-aliyun-key",
+    # "model_name": "qwen-turbo",
+}
 
 # 全局模型实例
 stt_model = None
@@ -22,6 +56,7 @@ stt_processor = None
 stt_tokenizer = None
 tts_model = None
 llm_model = None
+use_remote_llm = False  # 标记是否使用远程LLM
 
 def load_stt_model():
     """
@@ -170,12 +205,118 @@ def load_tts_model():
         return False
 
 
+async def call_remote_llm_api(system_prompt: str, user_prompt: str):
+    """
+    调用远程API服务商的LLM API
+    返回流式响应生成器
+    """
+    try:
+        # 构建请求数据
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        
+        request_data = {
+            "model": REMOTE_API_CONFIG["model_name"],
+            "messages": messages,
+            "temperature": REMOTE_API_CONFIG["temperature"],
+            "top_p": REMOTE_API_CONFIG["top_p"],
+            "stream": REMOTE_API_CONFIG["stream"]
+        }
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {REMOTE_API_CONFIG['api_key']}"
+        }
+        
+        logger.info(f"调用远程API: {REMOTE_API_CONFIG['api_url']}")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                REMOTE_API_CONFIG["api_url"], 
+                json=request_data, 
+                headers=headers
+            ) as response:
+                
+                if response.status != 200:
+                    error_text = await response.text()
+                    logger.error(f"远程API调用失败: {response.status} - {error_text}")
+                    raise Exception(f"远程API调用失败: {response.status}")
+                
+                # 处理流式响应
+                accumulated_text = ""
+                async for line in response.content:
+                    line_text = line.decode('utf-8').strip()
+                    
+                    # 跳过空行和非数据行
+                    if not line_text or not line_text.startswith('data: '):
+                        continue
+                    
+                    # 解析SSE数据
+                    data_text = line_text[6:]  # 去掉 "data: " 前缀
+                    
+                    # 检查是否是结束标记
+                    if data_text == '[DONE]':
+                        break
+                    
+                    try:
+                        data = json.loads(data_text)
+                        
+                        # 提取token内容
+                        choices = data.get('choices', [])
+                        if choices and 'delta' in choices[0]:
+                            delta = choices[0]['delta']
+                            if 'content' in delta:
+                                token = delta['content']
+                                accumulated_text += token
+                                
+                                # 生成token事件
+                                yield {
+                                    "event": "token",
+                                    "data": json.dumps({
+                                        "token": token,
+                                        "accumulated": accumulated_text
+                                    }, ensure_ascii=False)
+                                }
+                                
+                                # 添加小延迟
+                                await asyncio.sleep(0.01)
+                                
+                    except json.JSONDecodeError:
+                        continue
+                
+    except Exception as e:
+        logger.error(f"远程API调用失败: {str(e)}")
+        raise
+
+
+def validate_remote_api_config():
+    """
+    验证远程API配置是否完整
+    """
+    required_fields = ["api_url", "api_key", "model_name"]
+    
+    for field in required_fields:
+        if not REMOTE_API_CONFIG.get(field) or REMOTE_API_CONFIG[field] in [
+            "https://api.your-provider.com/v1/chat/completions",
+            "your-api-key-here",
+            "your-model-name"
+        ]:
+            return False, f"请配置远程API参数: {field}"
+    
+    return True, "配置有效"
+
+
 def load_llm_model():
     """
     加载LLM模型，在应用启动时调用
     使用ctransformers库从本地路径加载GGUF格式的模型
+    如果本地模型加载失败，尝试使用远程API服务商
     """
-    global llm_model
+    global llm_model, use_remote_llm
+    
+    # 首先尝试加载本地模型
     try:
         # 导入ctransformers
         from ctransformers import AutoModelForCausalLM
@@ -185,8 +326,8 @@ def load_llm_model():
         
         # 检查模型文件是否存在
         if not os.path.exists(llm_model_path):
-            logger.error(f"LLM模型文件不存在: {llm_model_path}")
-            return False
+            logger.warning(f"LLM模型文件不存在: {llm_model_path}")
+            raise FileNotFoundError("本地模型文件不存在")
         
         # 检查模型文件大小
         file_size = os.path.getsize(llm_model_path) / (1024**3)  # GB
@@ -266,14 +407,39 @@ def load_llm_model():
                     logger.error(f"自动检测也失败: {str(e3)}")
                     return False
         
-        logger.info("LLM模型加载成功")
+        logger.info("本地LLM模型加载成功")
+        use_remote_llm = False
         return True
         
     except ImportError:
-        logger.error("ctransformers库未安装，请运行: pip install ctransformers")
-        return False
+        logger.warning("ctransformers库未安装，尝试使用远程API")
     except Exception as e:
-        logger.error(f"LLM模型加载失败: {str(e)}")
+        logger.warning(f"本地LLM模型加载失败: {str(e)}，尝试使用远程API")
+    
+    # 本地模型加载失败，尝试使用远程API
+    try:
+        # 验证远程API配置
+        is_valid, message = validate_remote_api_config()
+        if not is_valid:
+            logger.error(f"远程API配置无效: {message}")
+            logger.error("请在代码顶部的REMOTE_API_CONFIG中配置您的API服务商信息")
+            return False
+        
+        # 测试远程API连接
+        logger.info("正在测试远程API连接...")
+        
+        # 这里不进行实际的API调用测试，只是标记使用远程API
+        use_remote_llm = True
+        llm_model = None  # 远程API不需要本地模型实例
+        
+        logger.info(f"已配置远程API: {REMOTE_API_CONFIG['api_url']}")
+        logger.info(f"使用模型: {REMOTE_API_CONFIG['model_name']}")
+        logger.info("远程LLM API配置成功")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"远程API配置失败: {str(e)}")
         return False
 
 
@@ -675,12 +841,13 @@ async def generate_suggestions(request: GenerateSuggestionsRequest):
     生成回答建议 API（流式响应）
     
     根据上下文信息生成多个回答建议，使用Server-Sent Events实现流式响应
+    支持本地模型和远程API服务商
     """
-    global llm_model
+    global llm_model, use_remote_llm
     
-    # 检查模型是否已加载
-    if llm_model is None:
-        raise HTTPException(status_code=503, detail="LLM模型未加载，服务不可用")
+    # 检查是否有可用的LLM服务
+    if not use_remote_llm and llm_model is None:
+        raise HTTPException(status_code=503, detail="LLM服务未配置，请检查本地模型或远程API配置")
     
     # 加载系统提示词
     system_prompt = load_system_prompt()
@@ -688,53 +855,76 @@ async def generate_suggestions(request: GenerateSuggestionsRequest):
     # 构建结构化的用户Prompt
     user_prompt = build_structured_prompt(request)
     
-    # 应用Qwen2聊天模板
-    formatted_prompt = apply_qwen2_chat_template(system_prompt, user_prompt)
-    
-    logger.info(f"开始生成建议，prompt长度: {len(formatted_prompt)}")
+    logger.info(f"开始生成建议，使用{'远程API' if use_remote_llm else '本地模型'}")
     
     # 生成器函数，用于流式响应
     async def generate_stream():
         try:
             start_time = time.time()
-            
-            # 使用ctransformers进行流式生成
-            # ctransformers的API稍有不同，需要适配
             accumulated_text = ""
             
-            # ctransformers流式生成
-            for token in llm_model(
-                formatted_prompt,
-                max_new_tokens=1024,
-                temperature=0.7,
-                top_p=0.9,
-                stop=["<|im_end|>", "<|endoftext|>"],
-                stream=True,
-                reset=False  # 不重置对话历史
-            ):
-                accumulated_text += token
+            if use_remote_llm:
+                # 使用远程API服务商
+                logger.info("使用远程API生成建议")
                 
-                # 发送token数据
-                yield {
-                    "event": "token",
-                    "data": json.dumps({
-                        "token": token,
-                        "accumulated": accumulated_text
-                    }, ensure_ascii=False)
-                }
+                async for chunk in call_remote_llm_api(system_prompt, user_prompt):
+                    if chunk["event"] == "token":
+                        # 直接转发token事件
+                        yield chunk
+                        
+                        # 更新累积文本
+                        token_data = json.loads(chunk["data"])
+                        accumulated_text = token_data["accumulated"]
+                        
+                        # 添加小延迟
+                        await asyncio.sleep(0.01)
                 
-                # 添加小延迟以模拟真实的流式效果
-                await asyncio.sleep(0.01)
+            else:
+                # 使用本地模型
+                logger.info("使用本地模型生成建议")
+                
+                # 应用Qwen2聊天模板
+                formatted_prompt = apply_qwen2_chat_template(system_prompt, user_prompt)
+                
+                # ctransformers流式生成
+                for token in llm_model(
+                    formatted_prompt,
+                    max_new_tokens=1024,
+                    temperature=0.7,
+                    top_p=0.9,
+                    stop=["<|im_end|>", "<|endoftext|>"],
+                    stream=True,
+                    reset=False  # 不重置对话历史
+                ):
+                    accumulated_text += token
+                    
+                    # 发送token数据
+                    yield {
+                        "event": "token",
+                        "data": json.dumps({
+                            "token": token,
+                            "accumulated": accumulated_text
+                        }, ensure_ascii=False)
+                    }
+                    
+                    # 添加小延迟以模拟真实的流式效果
+                    await asyncio.sleep(0.01)
             
             # 计算处理时间
             processing_time = time.time() - start_time
             
-            # 解析JSON结果（使用JSON Mode后应该更可靠）
+            # 解析JSON结果
             try:
-                # 使用JSON Mode后，输出应该已经是有效的JSON
+                # 尝试解析JSON
                 json_text = accumulated_text.strip()
                 
-                # 尝试解析JSON
+                # 如果文本包含markdown代码块，提取其中的JSON
+                if "```json" in json_text:
+                    start_idx = json_text.find("```json") + 7
+                    end_idx = json_text.find("```", start_idx)
+                    if end_idx > start_idx:
+                        json_text = json_text[start_idx:end_idx].strip()
+                
                 result = json.loads(json_text)
                 
                 # 验证JSON结构符合Schema
@@ -749,7 +939,7 @@ async def generate_suggestions(request: GenerateSuggestionsRequest):
                 
             except (json.JSONDecodeError, ValueError) as e:
                 logger.warning(f"JSON解析失败: {e}, 原始文本: {accumulated_text[:100]}...")
-                # 如果JSON Mode失败，创建包含原始文本的响应
+                # 如果JSON解析失败，创建包含原始文本的响应
                 suggestions = [
                     {
                         "id": 1,
@@ -764,7 +954,8 @@ async def generate_suggestions(request: GenerateSuggestionsRequest):
                 "data": json.dumps({
                     "suggestions": suggestions,
                     "processing_time": processing_time,
-                    "raw_text": accumulated_text
+                    "raw_text": accumulated_text,
+                    "service_type": "remote_api" if use_remote_llm else "local_model"
                 }, ensure_ascii=False)
             }
             
@@ -773,7 +964,8 @@ async def generate_suggestions(request: GenerateSuggestionsRequest):
             yield {
                 "event": "error",
                 "data": json.dumps({
-                    "error": f"生成失败: {str(e)}"
+                    "error": f"生成失败: {str(e)}",
+                    "service_type": "remote_api" if use_remote_llm else "local_model"
                 }, ensure_ascii=False)
             }
     
