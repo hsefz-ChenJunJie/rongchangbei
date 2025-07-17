@@ -1,6 +1,7 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import io
@@ -8,6 +9,8 @@ import os
 import tempfile
 import time
 import logging
+import json
+import asyncio
 
 # 配置日志
 logging.basicConfig(level=logging.INFO)
@@ -18,6 +21,7 @@ stt_model = None
 stt_processor = None
 stt_tokenizer = None
 tts_model = None
+llm_model = None
 
 def load_stt_model():
     """
@@ -113,11 +117,19 @@ def load_tts_model():
                 if speaker_file:
                     logger.info(f"加载说话人文件: {speaker_file}")
                 
-                tts_model = TTS(
-                    model_path=model_file,
-                    config_path=config_file,
-                    speakers_file_path=speaker_file
-                )
+                # 尝试不同的初始化方式
+                try:
+                    # 先尝试最简单的方式
+                    tts_model = TTS(
+                        model_path=model_file,
+                        config_path=config_file
+                    )
+                    logger.info("TTS模型加载成功（不包含说话人文件）")
+                except Exception as e:
+                    logger.warning(f"标准方式加载失败: {e}")
+                    # 如果失败，尝试使用目录路径
+                    tts_model = TTS(model_path=tts_model_path)
+                    logger.info("TTS模型加载成功（使用目录路径）")
             else:
                 # 如果模型文件不完整，使用目录路径
                 logger.info(f"使用目录路径加载TTS模型: {tts_model_path}")
@@ -138,6 +150,150 @@ def load_tts_model():
         logger.error(f"TTS模型加载失败: {str(e)}")
         return False
 
+
+def load_llm_model():
+    """
+    加载LLM模型，在应用启动时调用
+    使用llama-cpp-python库从本地路径加载GGUF格式的模型
+    """
+    global llm_model
+    try:
+        # 导入llama-cpp-python
+        from llama_cpp import Llama
+        
+        # LLM模型路径配置
+        llm_model_path = os.path.join(os.path.dirname(__file__), "..", "models", "llm", "Qwen3-4B-Q4_0.gguf")
+        
+        # 检查模型文件是否存在
+        if not os.path.exists(llm_model_path):
+            logger.error(f"LLM模型文件不存在: {llm_model_path}")
+            return False
+        
+        logger.info(f"正在加载LLM模型: {llm_model_path}")
+        
+        # 智能配置硬件参数
+        import psutil
+        import platform
+        
+        # 获取系统信息
+        cpu_count = psutil.cpu_count(logical=False)  # 物理核心数
+        memory_gb = psutil.virtual_memory().total / (1024**3)  # 总内存GB
+        
+        # 智能配置参数
+        n_ctx = 4096  # 上下文窗口大小
+        n_threads = min(cpu_count, 8)  # 线程数不超过8
+        
+        # GPU卸载层数配置（如果有GPU）
+        n_gpu_layers = 0
+        try:
+            import torch
+            if torch.cuda.is_available():
+                # 如果有CUDA，尝试卸载一些层到GPU
+                gpu_memory_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+                if gpu_memory_gb > 6:  # 如果GPU内存大于6GB
+                    n_gpu_layers = 35  # 卸载35层到GPU
+                elif gpu_memory_gb > 4:  # 如果GPU内存大于4GB
+                    n_gpu_layers = 20  # 卸载20层到GPU
+                logger.info(f"检测到GPU，将卸载 {n_gpu_layers} 层到GPU")
+        except ImportError:
+            logger.info("未检测到PyTorch或CUDA，使用CPU模式")
+        
+        # 根据内存调整上下文窗口
+        if memory_gb < 8:
+            n_ctx = 2048  # 内存不足8GB时减少上下文窗口
+            logger.info(f"内存较小({memory_gb:.1f}GB)，调整上下文窗口为{n_ctx}")
+        
+        logger.info(f"硬件配置: CPU核心={cpu_count}, 内存={memory_gb:.1f}GB, 线程={n_threads}, 上下文={n_ctx}, GPU层={n_gpu_layers}")
+        
+        # 加载模型
+        llm_model = Llama(
+            model_path=llm_model_path,
+            n_ctx=n_ctx,
+            n_threads=n_threads,
+            n_gpu_layers=n_gpu_layers,
+            verbose=False,  # 减少输出
+            use_mmap=True,  # 使用内存映射减少内存使用
+            use_mlock=False,  # 不锁定内存
+            n_batch=512,  # 批处理大小
+        )
+        
+        logger.info("LLM模型加载成功")
+        return True
+        
+    except ImportError:
+        logger.error("llama-cpp-python库未安装，请运行: pip install llama-cpp-python")
+        return False
+    except Exception as e:
+        logger.error(f"LLM模型加载失败: {str(e)}")
+        return False
+
+
+def build_structured_prompt(request: 'GenerateSuggestionsRequest') -> str:
+    """
+    根据请求内容构建结构化的高质量Prompt
+    """
+    prompt_parts = []
+    
+    # 基础角色设定
+    prompt_parts.append("你是一个专业的对话建议助手，能够根据具体的对话情境和用户需求，生成高质量的回答建议。")
+    
+    # 处理对话情景
+    if request.scenario_context and request.scenario_context.strip():
+        prompt_parts.append(f"对话情景：{request.scenario_context.strip()}")
+    
+    # 处理目标对话内容
+    if request.target_dialogue and request.target_dialogue.strip():
+        prompt_parts.append(f"对话内容：{request.target_dialogue.strip()}")
+    
+    # 处理用户意见
+    if request.user_opinion and request.user_opinion.strip():
+        prompt_parts.append(f"用户意见：{request.user_opinion.strip()}")
+    
+    # 处理修改建议
+    if request.modification_suggestion and len(request.modification_suggestion) > 0:
+        modifications = [mod.strip() for mod in request.modification_suggestion if mod.strip()]
+        if modifications:
+            prompt_parts.append(f"修改建议：{' '.join(modifications)}")
+    
+    # 生成要求
+    suggestion_count = request.suggestion_count or 3
+    prompt_parts.append(f"请生成{suggestion_count}条高质量的回答建议。")
+    
+    # 输出格式要求
+    prompt_parts.append("请严格按照以下JSON格式输出，不要添加任何额外的文字说明：")
+    prompt_parts.append(json.dumps({
+        "suggestions": [
+            {
+                "id": 1,
+                "content": "建议内容1",
+                "confidence": 0.85
+            },
+            {
+                "id": 2,
+                "content": "建议内容2",
+                "confidence": 0.80
+            }
+        ]
+    }, ensure_ascii=False, indent=2))
+    
+    return '\n\n'.join(prompt_parts)
+
+
+def apply_qwen2_chat_template(prompt: str) -> str:
+    """
+    应用Qwen2模型的聊天模板
+    """
+    # Qwen2的聊天模板格式
+    chat_template = f"""<|im_start|>system
+你是一个有用的AI助手。<|im_end|>
+<|im_start|>user
+{prompt}<|im_end|>
+<|im_start|>assistant
+"""
+    
+    return chat_template
+
+
 app = FastAPI(title="荣昶杯项目 API", version="1.0.0")
 
 # 应用启动事件
@@ -155,6 +311,11 @@ async def startup_event():
     tts_success = load_tts_model()
     if not tts_success:
         logger.warning("TTS模型加载失败，TTS功能将不可用")
+    
+    # 加载LLM模型
+    llm_success = load_llm_model()
+    if not llm_success:
+        logger.warning("LLM模型加载失败，LLM功能将不可用")
 
 app.add_middleware(
     CORSMiddleware,
@@ -423,28 +584,126 @@ async def text_to_speech(request: TTSRequest):
         raise HTTPException(status_code=500, detail=f"语音合成失败: {str(e)}")
 
 
-@app.post("/api/generate_suggestions", response_model=GenerateSuggestionsResponse)
+@app.post("/api/generate_suggestions")
 async def generate_suggestions(request: GenerateSuggestionsRequest):
     """
-    生成回答建议 API
+    生成回答建议 API（流式响应）
     
-    根据上下文信息生成多个回答建议
+    根据上下文信息生成多个回答建议，使用Server-Sent Events实现流式响应
     """
-    # TODO: 在此处调用LLM模型
-    # 根据所有输入的有效字段，动态地、智能地组合成一个结构化的Prompt
-    # 解析LLM返回的结果，提取出建议列表
+    global llm_model
     
-    # 暂时返回示例数据
-    suggestions = [
-        Suggestion(id=1, content="建议1：暂未实现", confidence=0.8),
-        Suggestion(id=2, content="建议2：暂未实现", confidence=0.7),
-        Suggestion(id=3, content="建议3：暂未实现", confidence=0.6)
-    ]
+    # 检查模型是否已加载
+    if llm_model is None:
+        raise HTTPException(status_code=503, detail="LLM模型未加载，服务不可用")
     
-    return GenerateSuggestionsResponse(
-        suggestions=suggestions,
-        processing_time=0.0
-    )
+    # 构建结构化的Prompt
+    structured_prompt = build_structured_prompt(request)
+    
+    # 应用Qwen2聊天模板
+    formatted_prompt = apply_qwen2_chat_template(structured_prompt)
+    
+    logger.info(f"开始生成建议，prompt长度: {len(formatted_prompt)}")
+    
+    # 生成器函数，用于流式响应
+    async def generate_stream():
+        try:
+            start_time = time.time()
+            
+            # 使用llama-cpp-python进行流式生成
+            stream = llm_model(
+                formatted_prompt,
+                max_tokens=1024,
+                temperature=0.7,
+                top_p=0.9,
+                stop=["<|im_end|>", "<|endoftext|>"],
+                stream=True,
+                echo=False
+            )
+            
+            # 累积生成的文本
+            accumulated_text = ""
+            
+            # 流式发送token
+            for chunk in stream:
+                if 'choices' in chunk and len(chunk['choices']) > 0:
+                    choice = chunk['choices'][0]
+                    if 'delta' in choice and 'content' in choice['delta']:
+                        token = choice['delta']['content']
+                        accumulated_text += token
+                        
+                        # 发送token数据
+                        yield {
+                            "event": "token",
+                            "data": json.dumps({
+                                "token": token,
+                                "accumulated": accumulated_text
+                            }, ensure_ascii=False)
+                        }
+                        
+                        # 添加小延迟以模拟真实的流式效果
+                        await asyncio.sleep(0.01)
+            
+            # 计算处理时间
+            processing_time = time.time() - start_time
+            
+            # 尝试解析生成的JSON结果
+            try:
+                # 提取JSON部分（去掉可能的前后缀）
+                json_text = accumulated_text.strip()
+                if json_text.startswith('```json'):
+                    json_text = json_text[7:]
+                if json_text.endswith('```'):
+                    json_text = json_text[:-3]
+                json_text = json_text.strip()
+                
+                # 尝试解析JSON
+                result = json.loads(json_text)
+                
+                # 验证JSON结构
+                if 'suggestions' in result and isinstance(result['suggestions'], list):
+                    suggestions = result['suggestions']
+                else:
+                    # 如果JSON格式不正确，创建默认响应
+                    suggestions = [
+                        {
+                            "id": 1,
+                            "content": accumulated_text[:200] + "..." if len(accumulated_text) > 200 else accumulated_text,
+                            "confidence": 0.75
+                        }
+                    ]
+                
+            except json.JSONDecodeError:
+                # 如果无法解析JSON，创建包含原始文本的响应
+                suggestions = [
+                    {
+                        "id": 1,
+                        "content": accumulated_text[:200] + "..." if len(accumulated_text) > 200 else accumulated_text,
+                        "confidence": 0.75
+                    }
+                ]
+            
+            # 发送最终结果
+            yield {
+                "event": "complete",
+                "data": json.dumps({
+                    "suggestions": suggestions,
+                    "processing_time": processing_time,
+                    "raw_text": accumulated_text
+                }, ensure_ascii=False)
+            }
+            
+        except Exception as e:
+            logger.error(f"LLM生成失败: {str(e)}")
+            yield {
+                "event": "error",
+                "data": json.dumps({
+                    "error": f"生成失败: {str(e)}"
+                }, ensure_ascii=False)
+            }
+    
+    # 返回Server-Sent Events响应
+    return EventSourceResponse(generate_stream())
 
 
 if __name__ == "__main__":
