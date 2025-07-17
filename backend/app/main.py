@@ -175,6 +175,32 @@ def load_tts_model():
         return False
 
 
+def filter_special_tokens(text: str) -> str:
+    """
+    过滤掉模型输出中的特殊标记
+    """
+    # 定义需要过滤的特殊标记
+    special_tokens = [
+        '<think>',
+        '</think>',
+        '<|im_start|>',
+        '<|im_end|>',
+        '<|system|>',
+        '<|user|>',
+        '<|assistant|>',
+        '<|end|>',
+        '<thinking>',
+        '</thinking>'
+    ]
+    
+    # 过滤掉特殊标记
+    filtered_text = text
+    for token in special_tokens:
+        filtered_text = filtered_text.replace(token, '')
+    
+    return filtered_text
+
+
 async def call_remote_llm_api(system_prompt: str, user_prompt: str):
     """
     使用OpenAI client调用远程API服务商的LLM API
@@ -215,25 +241,34 @@ async def call_remote_llm_api(system_prompt: str, user_prompt: str):
         
         async for chunk in stream:
             if chunk.choices and chunk.choices[0].delta.content:
-                token = chunk.choices[0].delta.content
-                accumulated_text += token
-                token_count += 1
+                raw_token = chunk.choices[0].delta.content
                 
-                # 每100个token记录一次进度
-                if token_count % 100 == 0:
-                    logger.debug(f"📊 已接收 {token_count} 个token，当前长度: {len(accumulated_text)}")
+                # 过滤掉特殊标记
+                filtered_token = filter_special_tokens(raw_token)
                 
-                # 生成token事件
-                yield {
-                    "event": "token",
-                    "data": json.dumps({
-                        "token": token,
-                        "accumulated": accumulated_text
-                    }, ensure_ascii=False)
-                }
-                
-                # 添加小延迟
-                await asyncio.sleep(0.01)
+                # 只有当过滤后的token不为空时才处理
+                if filtered_token:
+                    accumulated_text += filtered_token
+                    token_count += 1
+                    
+                    # 每100个token记录一次进度
+                    if token_count % 100 == 0:
+                        logger.debug(f"📊 已接收 {token_count} 个token，当前长度: {len(accumulated_text)}")
+                    
+                    # 生成token事件
+                    yield {
+                        "event": "token",
+                        "data": json.dumps({
+                            "token": filtered_token,
+                            "accumulated": accumulated_text
+                        }, ensure_ascii=False)
+                    }
+                    
+                    # 添加小延迟
+                    await asyncio.sleep(0.01)
+                else:
+                    # 如果是特殊标记，记录但不发送事件
+                    logger.debug(f"🔽 过滤掉特殊标记: {raw_token}")
         
         logger.info(f"📊 远程API调用完成，总共接收 {token_count} 个token，最终长度: {len(accumulated_text)}")
         
@@ -1041,7 +1076,7 @@ async def generate_suggestions(request: GenerateSuggestionsRequest):
                     logger.info("🔄 开始本地模型流式生成...")
                     token_count = 0
                     
-                    for token in llm_model(
+                    for raw_token in llm_model(
                         formatted_prompt,
                         max_new_tokens=1024,
                         temperature=0.7,
@@ -1050,24 +1085,32 @@ async def generate_suggestions(request: GenerateSuggestionsRequest):
                         stream=True,
                         reset=False  # 不重置对话历史
                     ):
-                        accumulated_text += token
-                        token_count += 1
+                        # 过滤掉特殊标记
+                        filtered_token = filter_special_tokens(raw_token)
                         
-                        # 每100个token记录一次进度
-                        if token_count % 100 == 0:
-                            logger.debug(f"📊 本地模型已生成 {token_count} 个token，当前长度: {len(accumulated_text)}")
-                        
-                        # 发送token数据
-                        yield {
-                            "event": "token",
-                            "data": json.dumps({
-                                "token": token,
-                                "accumulated": accumulated_text
-                            }, ensure_ascii=False)
-                        }
-                        
-                        # 添加小延迟以模拟真实的流式效果
-                        await asyncio.sleep(0.01)
+                        # 只有当过滤后的token不为空时才处理
+                        if filtered_token:
+                            accumulated_text += filtered_token
+                            token_count += 1
+                            
+                            # 每100个token记录一次进度
+                            if token_count % 100 == 0:
+                                logger.debug(f"📊 本地模型已生成 {token_count} 个token，当前长度: {len(accumulated_text)}")
+                            
+                            # 发送token数据
+                            yield {
+                                "event": "token",
+                                "data": json.dumps({
+                                    "token": filtered_token,
+                                    "accumulated": accumulated_text
+                                }, ensure_ascii=False)
+                            }
+                            
+                            # 添加小延迟以模拟真实的流式效果
+                            await asyncio.sleep(0.01)
+                        else:
+                            # 如果是特殊标记，记录但不发送事件
+                            logger.debug(f"🔽 过滤掉特殊标记: {raw_token}")
                     
                     logger.info(f"📊 本地模型生成完成，总共生成 {token_count} 个token")
                     
