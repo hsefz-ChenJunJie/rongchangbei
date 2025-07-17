@@ -29,21 +29,39 @@ func _on_file_selected(path):
 	_save_image_path(path)
 	# 发出信号通知背景已更改
 	background_changed.emit(path)
-	SceneManager.push_scene("res://settings.tscn")
+	get_tree().change_scene_to_file("res://settings.tscn")
 
 # 保存图片路径到配置文件
 func _save_image_path(path):
-	var config = {
-		"bg": path
-	}
+	var config_path = "user://config.json"
+	var config = {}
 	
-	# Godot 4 使用 FileAccess 替代 File
-	var file = FileAccess.open("user://config.json", FileAccess.WRITE)
-	if file != null:
-		file.store_string(JSON.stringify(config))
-		file = null  # 在 Godot 4 中不需要显式 close，但可以置 null
+	# 1. 尝试读取现有配置
+	if FileAccess.file_exists(config_path):
+		var file = FileAccess.open(config_path, FileAccess.READ)
+		if file != null:
+			var json = JSON.new()
+			var parse_result = json.parse(file.get_as_text())
+			file = null
+			
+			if parse_result == OK:
+				config = json.get_data()
+			else:
+				push_error("JSON 解析错误: " + json.get_error_message())
+		else:
+			push_error("无法打开配置文件读取: " + str(FileAccess.get_open_error()))
+	
+	# 2. 更新背景路径
+	config["bg"] = path
+	
+	# 3. 保存更新后的配置
+	var save_file = FileAccess.open(config_path, FileAccess.WRITE)
+	if save_file != null:
+		save_file.store_string(JSON.stringify(config))
+		save_file = null
+		print("配置已保存")
 	else:
-		push_error("Failed to open config file for writing: " + str(FileAccess.get_open_error()))
+		push_error("无法打开配置文件写入: " + str(FileAccess.get_open_error()))
 
 # 请求安卓权限
 func _request_android_permissions():

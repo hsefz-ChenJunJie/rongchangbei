@@ -1,11 +1,11 @@
-[gd_scene load_steps=5 format=3 uid="uid://dgyloqo3b2meu"]
+[gd_scene load_steps=7 format=3 uid="uid://dgyloqo3b2meu"]
 
-[ext_resource type="FontFile" uid="uid://bmai4ga2nqrvj" path="res://YanShiChunFengKai-2.ttf" id="1_nkug2"]
+[ext_resource type="Theme" uid="uid://cieb7ta71pkeo" path="res://ControlTheme.tres" id="1_cj1lu"]
 [ext_resource type="PackedScene" uid="uid://ccmej2ta7xfh7" path="res://base.tscn" id="1_x2hje"]
 [ext_resource type="Script" uid="uid://mgndxm8yyb03" path="res://settings_change_bg_button.gd" id="3_3ykye"]
-
-[sub_resource type="Theme" id="Theme_3ykye"]
-default_font = ExtResource("1_nkug2")
+[ext_resource type="Script" uid="uid://ce4ex7kidqhnn" path="res://settings_test_accessibility_button.gd" id="3_gc0em"]
+[ext_resource type="Script" uid="uid://on182wnv0g1j" path="res://settings_tree.gd" id="4_71mqq"]
+[ext_resource type="Script" uid="uid://hc0103v51b2h" path="res://settings_save_config.gd" id="5_cj1lu"]
 
 [node name="Control" type="Control"]
 layout_mode = 3
@@ -14,10 +14,12 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-theme = SubResource("Theme_3ykye")
+theme = ExtResource("1_cj1lu")
 
 [node name="Base" parent="." instance=ExtResource("1_x2hje")]
 layout_mode = 1
+offset_bottom = 0.0
+grow_vertical = 1
 
 [node name="Panel" type="Panel" parent="."]
 layout_mode = 1
@@ -27,25 +29,93 @@ anchor_bottom = 1.0
 offset_left = 32.0
 offset_top = 128.0
 offset_right = -32.0
-offset_bottom = -32.0
+offset_bottom = -336.0
 
 [node name="IPInput" type="LineEdit" parent="Panel"]
 layout_mode = 1
 anchors_preset = -1
 anchor_right = 1.0
-anchor_bottom = 1.0
 offset_left = 32.0
-offset_top = 64.0
+offset_top = 80.0
+offset_right = -31.9999
+offset_bottom = 144.0
+theme_override_font_sizes/font_size = 36
+placeholder_text = "Enter Your OrangePi Ip"
+
+[node name="PortInput" type="LineEdit" parent="Panel"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+offset_left = 32.0
+offset_top = 176.0
+offset_right = -240.0
+offset_bottom = 240.0
+theme_override_font_sizes/font_size = 36
+text = "8000"
+placeholder_text = "Enter OrangePi port"
+
+[node name="TestAccessibilityButton" type="Button" parent="Panel"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+offset_left = 448.0
+offset_top = 176.0
+offset_right = -31.9999
+offset_bottom = 240.0
+text = "Test Accessibility"
+script = ExtResource("3_gc0em")
+
+[node name="ResultLabel" type="RichTextLabel" parent="Panel"]
+layout_mode = 1
+anchors_preset = -1
+anchor_left = -0.049
+anchor_top = -0.084
+anchor_right = 1.049
+anchor_bottom = -0.084
+offset_left = 64.144
+offset_top = 383.68
+offset_right = -64.144
+offset_bottom = 447.68
+theme_override_font_sizes/bold_italics_font_size = 28
+theme_override_font_sizes/italics_font_size = 24
+theme_override_font_sizes/mono_font_size = 24
+theme_override_font_sizes/normal_font_size = 24
+theme_override_font_sizes/bold_font_size = 28
+bbcode_enabled = true
+
+[node name="CheckButton" type="CheckButton" parent="Panel"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+offset_left = 32.0
+offset_top = 24.0
+offset_right = -432.0
+offset_bottom = 52.0
+scale = Vector2(1.47, 1.47)
+button_pressed = true
+text = "开发人员模式"
+
+[node name="Tree" type="Tree" parent="Panel"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 32.0
+offset_top = 352.0
 offset_right = -32.0
-offset_bottom = -992.0
+offset_bottom = 1152.0
+grow_horizontal = 2
+theme_override_font_sizes/font_size = 36
+column_titles_visible = true
+script = ExtResource("4_71mqq")
 
 [node name="ChangeBgButton" type="Button" parent="."]
 layout_mode = 1
-anchors_preset = 15
+anchors_preset = -1
+anchor_top = 0.967
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = 64.0
-offset_top = 1176.0
+offset_top = -104.56
 offset_right = -64.0
 offset_bottom = -64.0
 grow_horizontal = 2
@@ -54,4 +124,24 @@ theme_override_font_sizes/font_size = 50
 text = "Change Background"
 script = ExtResource("3_3ykye")
 
+[node name="SaveConfig" type="Button" parent="."]
+layout_mode = 1
+anchors_preset = -1
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 64.0
+offset_top = -288.0
+offset_right = -64.0
+offset_bottom = -192.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 50
+text = "Save Config"
+script = ExtResource("5_cj1lu")
+
+[connection signal="pressed" from="Panel/TestAccessibilityButton" to="Panel/TestAccessibilityButton" method="_on_pressed"]
+[connection signal="item_edited" from="Panel/Tree" to="Panel/Tree" method="_on_item_edited"]
 [connection signal="pressed" from="ChangeBgButton" to="ChangeBgButton" method="_on_pressed"]
+[connection signal="pressed" from="SaveConfig" to="SaveConfig" method="_on_pressed"]
+[connection signal="ready" from="SaveConfig" to="SaveConfig" method="_on_ready"]

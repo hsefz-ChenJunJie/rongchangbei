@@ -1,0 +1,126 @@
+[gd_scene load_steps=5 format=3 uid="uid://8jysn4e5t86m"]
+
+[ext_resource type="PackedScene" uid="uid://ccmej2ta7xfh7" path="res://base.tscn" id="1_1tt3r"]
+[ext_resource type="Theme" uid="uid://cieb7ta71pkeo" path="res://ControlTheme.tres" id="1_n86ok"]
+[ext_resource type="Script" uid="uid://bfktylxevj2yw" path="res://record_control.gd" id="3_buvxa"]
+
+[sub_resource type="SystemFont" id="SystemFont_or2g1"]
+
+[node name="Control" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("1_n86ok")
+
+[node name="Base" parent="." instance=ExtResource("1_1tt3r")]
+layout_mode = 1
+offset_bottom = 0.0
+grow_vertical = 1
+
+[node name="Panel" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+anchor_bottom = 0.005
+offset_left = 32.0
+offset_top = 128.0
+offset_right = -32.0
+offset_bottom = 1639.6
+
+[node name="LineEdit" type="LineEdit" parent="Panel"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 256.0
+offset_top = 32.0
+offset_right = -32.0
+offset_bottom = 96.0
+grow_horizontal = 2
+
+[node name="Label1" type="Label" parent="Panel"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 32.0
+offset_top = 32.0
+offset_right = -432.0
+offset_bottom = 96.0
+grow_horizontal = 2
+theme_override_font_sizes/font_size = 36
+text = "场景预设"
+vertical_alignment = 1
+
+[node name="Label2" type="Label" parent="Panel"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 32.0
+offset_top = 128.0
+offset_right = -368.0
+offset_bottom = 192.0
+grow_horizontal = 2
+theme_override_font_sizes/font_size = 36
+text = "对话上下文"
+vertical_alignment = 1
+
+[node name="ToggleRecording" type="Button" parent="Panel"]
+layout_mode = 1
+anchors_preset = -1
+anchor_right = 1.0
+offset_left = 288.0
+offset_top = 128.0
+offset_right = -196.0
+offset_bottom = 192.0
+theme_override_fonts/font = SubResource("SystemFont_or2g1")
+theme_override_font_sizes/font_size = 24
+text = "自动检测"
+
+[node name="ContextEdit" type="TextEdit" parent="Panel"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 32.0
+offset_top = 216.0
+offset_right = -24.0
+offset_bottom = 464.0
+grow_horizontal = 2
+
+[node name="RecordStateLabel" type="RichTextLabel" parent="Panel"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 496.0
+offset_top = 160.0
+offset_right = -24.0
+offset_bottom = 192.0
+grow_horizontal = 2
+bbcode_enabled = true
+text = "[color=cyan]未开始录音[/color]"
+horizontal_alignment = 1
+vertical_alignment = 2
+
+[node name="RecogStatus" type="Label" parent="Panel"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 32.0
+offset_top = 488.0
+offset_right = -24.0
+offset_bottom = 512.0
+grow_horizontal = 2
+theme_override_font_sizes/font_size = 20
+text = "No recording found."
+
+[node name="RecordControl" type="Control" parent="Panel"]
+visible = false
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("3_buvxa")
+
+[node name="Timer" type="Timer" parent="Panel/RecordControl"]
+
+[connection signal="pressed" from="Panel/ToggleRecording" to="Panel/RecordControl" method="_on_record_button_pressed"]

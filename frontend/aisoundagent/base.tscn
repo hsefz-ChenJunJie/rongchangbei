@@ -1,6 +1,6 @@
-[gd_scene load_steps=10 format=3 uid="uid://ccmej2ta7xfh7"]
+[gd_scene load_steps=9 format=3 uid="uid://ccmej2ta7xfh7"]
 
-[ext_resource type="FontFile" uid="uid://bmai4ga2nqrvj" path="res://YanShiChunFengKai-2.ttf" id="1_3vi8l"]
+[ext_resource type="Theme" uid="uid://cieb7ta71pkeo" path="res://ControlTheme.tres" id="1_42dj3"]
 [ext_resource type="Texture2D" uid="uid://v5jh4ith1ubb" path="res://wpy1 - 副本.jpg" id="2_8rhti"]
 [ext_resource type="Texture2D" uid="uid://co333k25yb6cs" path="res://SVG/outline/chevron-left.svg" id="3_21bcp"]
 [ext_resource type="Script" uid="uid://wcu4cqpihknu" path="res://base_texture_rect.gd" id="3_42dj3"]
@@ -8,26 +8,23 @@
 [ext_resource type="Texture2D" uid="uid://cjtyy2e8rsdh0" path="res://SVG/outline/gear-2.svg" id="5_42dj3"]
 [ext_resource type="Script" uid="uid://cqv8ijud4qq8k" path="res://base_settings.gd" id="6_tpea4"]
 
-[sub_resource type="Theme" id="Theme_ohhpf"]
-default_font = ExtResource("1_3vi8l")
-
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_56f15"]
 bg_color = Color(0.632918, 0.731637, 0.791331, 0.411765)
 
 [node name="Base" type="Control"]
 layout_mode = 3
-anchors_preset = 15
+anchors_preset = 10
 anchor_right = 1.0
-anchor_bottom = 1.0
+offset_bottom = 1280.0
 grow_horizontal = 2
 grow_vertical = 2
-theme = SubResource("Theme_ohhpf")
+theme = ExtResource("1_42dj3")
 
 [node name="MarginContainer" type="MarginContainer" parent="."]
 layout_mode = 1
-anchors_preset = 15
+anchors_preset = -1
 anchor_right = 1.0
-anchor_bottom = 1.0
+offset_bottom = 1680.0
 grow_horizontal = 2
 grow_vertical = 2
 
@@ -41,17 +38,23 @@ script = ExtResource("3_42dj3")
 [node name="Panel" type="Panel" parent="."]
 layout_mode = 2
 anchor_right = 1.0
-anchor_bottom = 1.0
 offset_left = 32.0
 offset_top = 32.0
 offset_right = -32.0
-offset_bottom = -1184.0
+offset_bottom = 96.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_56f15")
 
 [node name="TitleContainer" type="MarginContainer" parent="Panel"]
-layout_mode = 0
-offset_right = 656.0
-offset_bottom = 64.0
+layout_mode = 1
+anchors_preset = -1
+anchor_left = -0.049
+anchor_top = -0.5
+anchor_right = 1.049
+anchor_bottom = -0.5
+offset_left = 32.144
+offset_top = 32.0
+offset_right = -32.144
+offset_bottom = 96.0
 
 [node name="Label" type="Label" parent="Panel/TitleContainer"]
 layout_mode = 2

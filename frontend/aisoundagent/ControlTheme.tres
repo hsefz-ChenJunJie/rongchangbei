@@ -1,0 +1,6 @@
+[gd_resource type="Theme" load_steps=2 format=3 uid="uid://cieb7ta71pkeo"]
+
+[ext_resource type="FontFile" uid="uid://bmai4ga2nqrvj" path="res://YanShiChunFengKai-2.ttf" id="1_kita3"]
+
+[resource]
+default_font = ExtResource("1_kita3")
