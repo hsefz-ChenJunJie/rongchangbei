@@ -4,8 +4,67 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import io
+import os
+import tempfile
+import time
+import logging
+
+# 配置日志
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# 全局模型实例
+stt_model = None
+
+def load_stt_model():
+    """
+    加载STT模型，在应用启动时调用
+    """
+    global stt_model
+    try:
+        # 导入必要的库
+        import whisper
+        
+        # 模型路径配置
+        model_path = os.path.join(os.path.dirname(__file__), "..", "models", "stt")
+        
+        # 尝试加载本地模型文件
+        local_model_files = []
+        if os.path.exists(model_path):
+            for file in os.listdir(model_path):
+                if file.endswith(('.pt', '.pth', '.bin')):
+                    local_model_files.append(os.path.join(model_path, file))
+        
+        if local_model_files:
+            # 加载本地模型
+            model_file = local_model_files[0]  # 使用第一个找到的模型文件
+            logger.info(f"正在加载本地STT模型: {model_file}")
+            stt_model = whisper.load_model(model_file)
+        else:
+            # 如果没有本地模型，使用whisper默认模型
+            logger.info("未找到本地STT模型，使用whisper默认base模型")
+            stt_model = whisper.load_model("base")
+            
+        logger.info("STT模型加载成功")
+        return True
+        
+    except ImportError:
+        logger.error("whisper库未安装，请运行: pip install openai-whisper")
+        return False
+    except Exception as e:
+        logger.error(f"STT模型加载失败: {str(e)}")
+        return False
 
 app = FastAPI(title="荣昶杯项目 API", version="1.0.0")
+
+# 应用启动事件
+@app.on_event("startup")
+async def startup_event():
+    """应用启动时执行的事件"""
+    logger.info("正在启动荣昶杯项目 API...")
+    success = load_stt_model()
+    if not success:
+        logger.warning("STT模型加载失败，STT功能将不可用")
 
 app.add_middleware(
     CORSMiddleware,
@@ -62,8 +121,76 @@ async def speech_to_text(audio: UploadFile = File(...)):
     
     接收音频文件并返回转写的文本
     """
-    # TODO: 在此处调用STT模型
-    return STTResponse(text="暂未实现", confidence=0.0, processing_time=0.0)
+    global stt_model
+    
+    # 检查模型是否已加载
+    if stt_model is None:
+        raise HTTPException(status_code=503, detail="STT模型未加载，服务不可用")
+    
+    # 记录开始时间
+    start_time = time.time()
+    
+    # 临时文件路径
+    temp_audio_path = None
+    
+    try:
+        # 验证文件类型
+        if not audio.content_type or not any(mime in audio.content_type for mime in ['audio/', 'video/']):
+            raise HTTPException(status_code=400, detail="请上传音频文件")
+        
+        # 读取上传的音频数据
+        audio_data = await audio.read()
+        
+        # 创建临时文件保存音频
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_file:
+            temp_audio_path = temp_file.name
+            temp_file.write(audio_data)
+        
+        # 使用whisper进行语音识别
+        result = stt_model.transcribe(
+            temp_audio_path,
+            language="zh",  # 指定中文
+            task="transcribe"
+        )
+        
+        # 提取识别结果
+        transcribed_text = result.get("text", "").strip()
+        
+        # 计算处理时间
+        processing_time = time.time() - start_time
+        
+        # 计算置信度（whisper不直接提供，这里基于segments计算平均值）
+        confidence = 0.0
+        if "segments" in result and result["segments"]:
+            confidences = []
+            for segment in result["segments"]:
+                if "avg_logprob" in segment:
+                    # 将对数概率转换为置信度（近似）
+                    conf = min(1.0, max(0.0, (segment["avg_logprob"] + 1.0)))
+                    confidences.append(conf)
+            if confidences:
+                confidence = sum(confidences) / len(confidences)
+        
+        logger.info(f"STT处理完成: {transcribed_text[:50]}... (耗时: {processing_time:.2f}s)")
+        
+        return STTResponse(
+            text=transcribed_text,
+            confidence=confidence,
+            processing_time=processing_time
+        )
+        
+    except Exception as e:
+        logger.error(f"STT处理失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"语音识别失败: {str(e)}")
+    
+    finally:
+        # 清理临时文件
+        if temp_audio_path and os.path.exists(temp_audio_path):
+            try:
+                os.unlink(temp_audio_path)
+                logger.debug(f"已清理临时文件: {temp_audio_path}")
+            except Exception as e:
+                logger.warning(f"清理临时文件失败: {e}")
 
 
 @app.post("/api/tts")
