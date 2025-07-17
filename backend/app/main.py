@@ -140,17 +140,10 @@ def load_tts_model():
         # 直接使用模型名称加载TTS模型
         logger.info("使用模型名称加载TTS模型")
         
-        try:
-            # 优先使用中文TTS模型
-            logger.info("正在加载中文TTS模型...")
-            tts_model = TTS(model_name="tts_models/zh-CN/baker/vits")
-            logger.info("TTS模型加载成功（使用中文模型）")
-        except Exception as e:
-            logger.warning(f"中文模型加载失败: {e}")
-            # 回退到英文模型
-            logger.info("尝试使用英文TTS模型")
-            tts_model = TTS(model_name="tts_models/en/ljspeech/tacotron2-DDC")
-            logger.info("TTS模型加载成功（使用英文模型）")
+        # 使用XTTS v2多语言模型
+        logger.info("正在加载XTTS v2多语言模型...")
+        tts_model = TTS(model_name="tts_models/multilingual/multi-dataset/xtts_v2")
+        logger.info("TTS模型加载成功（使用XTTS v2模型）")
             
         logger.info("TTS模型加载成功")
         return True
