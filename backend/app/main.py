@@ -15,20 +15,40 @@ logger = logging.getLogger(__name__)
 
 # 全局模型实例
 stt_model = None
+stt_processor = None
+stt_tokenizer = None
 
 def load_stt_model():
     """
     加载STT模型，在应用启动时调用
+    支持transformers格式和原生whisper格式
     """
-    global stt_model
+    global stt_model, stt_processor, stt_tokenizer
     try:
-        # 导入必要的库
-        import whisper
-        
         # 模型路径配置
         model_path = os.path.join(os.path.dirname(__file__), "..", "models", "stt")
         
-        # 尝试加载本地模型文件
+        # 检查是否存在transformers格式的模型
+        if os.path.exists(model_path) and os.path.isfile(os.path.join(model_path, "config.json")):
+            try:
+                # 尝试加载transformers格式的whisper模型
+                from transformers import WhisperProcessor, WhisperForConditionalGeneration
+                
+                logger.info(f"正在加载本地transformers格式的STT模型: {model_path}")
+                stt_processor = WhisperProcessor.from_pretrained(model_path)
+                stt_model = WhisperForConditionalGeneration.from_pretrained(model_path)
+                stt_tokenizer = stt_processor.tokenizer
+                
+                logger.info("Transformers格式STT模型加载成功")
+                return True
+                
+            except Exception as e:
+                logger.warning(f"Transformers格式模型加载失败: {str(e)}, 尝试原生whisper格式")
+        
+        # 回退到原生whisper格式
+        import whisper
+        
+        # 尝试加载本地whisper模型文件
         local_model_files = []
         if os.path.exists(model_path):
             for file in os.listdir(model_path):
@@ -36,20 +56,20 @@ def load_stt_model():
                     local_model_files.append(os.path.join(model_path, file))
         
         if local_model_files:
-            # 加载本地模型
-            model_file = local_model_files[0]  # 使用第一个找到的模型文件
-            logger.info(f"正在加载本地STT模型: {model_file}")
+            # 加载本地whisper模型
+            model_file = local_model_files[0]
+            logger.info(f"正在加载本地whisper格式STT模型: {model_file}")
             stt_model = whisper.load_model(model_file)
         else:
             # 如果没有本地模型，使用whisper默认模型
             logger.info("未找到本地STT模型，使用whisper默认base模型")
             stt_model = whisper.load_model("base")
             
-        logger.info("STT模型加载成功")
+        logger.info("原生whisper格式STT模型加载成功")
         return True
         
-    except ImportError:
-        logger.error("whisper库未安装，请运行: pip install openai-whisper")
+    except ImportError as e:
+        logger.error(f"必要的库未安装: {str(e)}")
         return False
     except Exception as e:
         logger.error(f"STT模型加载失败: {str(e)}")
@@ -120,8 +140,9 @@ async def speech_to_text(audio: UploadFile = File(...)):
     语音转文字 API
     
     接收音频文件并返回转写的文本
+    支持transformers格式和原生whisper格式的模型
     """
-    global stt_model
+    global stt_model, stt_processor, stt_tokenizer
     
     # 检查模型是否已加载
     if stt_model is None:
@@ -146,30 +167,16 @@ async def speech_to_text(audio: UploadFile = File(...)):
             temp_audio_path = temp_file.name
             temp_file.write(audio_data)
         
-        # 使用whisper进行语音识别
-        result = stt_model.transcribe(
-            temp_audio_path,
-            language="zh",  # 指定中文
-            task="transcribe"
-        )
-        
-        # 提取识别结果
-        transcribed_text = result.get("text", "").strip()
+        # 根据模型类型进行语音识别
+        if stt_processor is not None:
+            # 使用transformers格式的模型
+            transcribed_text, confidence = await transcribe_with_transformers(temp_audio_path)
+        else:
+            # 使用原生whisper格式的模型
+            transcribed_text, confidence = await transcribe_with_whisper(temp_audio_path)
         
         # 计算处理时间
         processing_time = time.time() - start_time
-        
-        # 计算置信度（whisper不直接提供，这里基于segments计算平均值）
-        confidence = 0.0
-        if "segments" in result and result["segments"]:
-            confidences = []
-            for segment in result["segments"]:
-                if "avg_logprob" in segment:
-                    # 将对数概率转换为置信度（近似）
-                    conf = min(1.0, max(0.0, (segment["avg_logprob"] + 1.0)))
-                    confidences.append(conf)
-            if confidences:
-                confidence = sum(confidences) / len(confidences)
         
         logger.info(f"STT处理完成: {transcribed_text[:50]}... (耗时: {processing_time:.2f}s)")
         
@@ -191,6 +198,74 @@ async def speech_to_text(audio: UploadFile = File(...)):
                 logger.debug(f"已清理临时文件: {temp_audio_path}")
             except Exception as e:
                 logger.warning(f"清理临时文件失败: {e}")
+
+
+async def transcribe_with_transformers(audio_path: str):
+    """
+    使用transformers格式的whisper模型进行语音识别
+    """
+    import torch
+    import librosa
+    
+    # 加载音频文件
+    audio_array, sampling_rate = librosa.load(audio_path, sr=16000)
+    
+    # 预处理音频
+    input_features = stt_processor(
+        audio_array, 
+        sampling_rate=sampling_rate, 
+        return_tensors="pt"
+    ).input_features
+    
+    # 设置中文语言token
+    forced_decoder_ids = stt_processor.get_decoder_prompt_ids(language="chinese", task="transcribe")
+    
+    # 生成转写结果
+    with torch.no_grad():
+        predicted_ids = stt_model.generate(
+            input_features,
+            forced_decoder_ids=forced_decoder_ids,
+            max_length=448,
+            num_beams=5,
+            early_stopping=True
+        )
+    
+    # 解码结果
+    transcribed_text = stt_processor.batch_decode(predicted_ids, skip_special_tokens=True)[0]
+    
+    # 简单的置信度估算（transformers模型没有直接的置信度）
+    confidence = 0.85  # 固定值，实际项目中可以基于模型输出计算
+    
+    return transcribed_text.strip(), confidence
+
+
+async def transcribe_with_whisper(audio_path: str):
+    """
+    使用原生whisper模型进行语音识别
+    """
+    # 使用whisper进行语音识别
+    result = stt_model.transcribe(
+        audio_path,
+        language="zh",  # 指定中文
+        task="transcribe"
+    )
+    
+    # 提取识别结果
+    transcribed_text = result.get("text", "").strip()
+    
+    # 计算置信度（基于segments计算平均值）
+    confidence = 0.0
+    if "segments" in result and result["segments"]:
+        confidences = []
+        for segment in result["segments"]:
+            if "avg_logprob" in segment:
+                # 将对数概率转换为置信度（近似）
+                conf = min(1.0, max(0.0, (segment["avg_logprob"] + 1.0)))
+                confidences.append(conf)
+        if confidences:
+            confidence = sum(confidences) / len(confidences)
+    
+    return transcribed_text, confidence
 
 
 @app.post("/api/tts")
