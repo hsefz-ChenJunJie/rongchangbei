@@ -445,7 +445,6 @@ def load_llm_model():
                     )
                 except Exception as e3:
                     logger.error(f"自动检测也失败: {str(e3)}")
-                    return False
         
         logger.info("本地LLM模型加载成功")
         use_remote_llm = False
