@@ -99,44 +99,34 @@ def load_tts_model():
             # 尝试从本地路径加载模型
             logger.info(f"正在从本地路径加载TTS模型: {tts_model_path}")
             
+            # 列出所有文件便于调试
+            all_files = os.listdir(tts_model_path)
+            logger.info(f"TTS模型目录中的所有文件: {all_files}")
+            
             # 检查模型文件
-            config_files = [f for f in os.listdir(tts_model_path) if f.endswith('.json') and 'config' in f.lower()]
+            config_files = [f for f in all_files if f.endswith('.json') and 'config' in f.lower()]
             # 排除speakers文件，只选择真正的模型文件
-            model_files = [f for f in os.listdir(tts_model_path) 
+            model_files = [f for f in all_files 
                           if f.endswith(('.pth', '.pt', '.ckpt')) and 'speaker' not in f.lower()]
             
             logger.info(f"找到配置文件: {config_files}")
             logger.info(f"找到模型文件: {model_files}")
             
-            if config_files and model_files:
-                # 使用本地模型文件
-                model_file = os.path.join(tts_model_path, model_files[0])
-                config_file = os.path.join(tts_model_path, config_files[0])
-                
-                logger.info(f"加载模型文件: {model_file}")
-                logger.info(f"加载配置文件: {config_file}")
-                
-                # 尝试不同的初始化方式
-                try:
-                    # 先尝试最简单的方式
-                    tts_model = TTS(
-                        model_path=model_file,
-                        config_path=config_file
-                    )
-                    logger.info("TTS模型加载成功（使用具体文件路径）")
-                except Exception as e:
-                    logger.warning(f"具体文件路径加载失败: {e}")
-                    # 如果失败，尝试使用目录路径
-                    try:
-                        tts_model = TTS(model_path=tts_model_path)
-                        logger.info("TTS模型加载成功（使用目录路径）")
-                    except Exception as e2:
-                        logger.error(f"目录路径加载也失败: {e2}")
-                        raise e2
-            else:
-                # 如果模型文件不完整，使用目录路径
+            # 直接使用目录路径加载，这是最兼容的方式
+            try:
                 logger.info(f"使用目录路径加载TTS模型: {tts_model_path}")
                 tts_model = TTS(model_path=tts_model_path)
+                logger.info("TTS模型加载成功（使用目录路径）")
+            except Exception as e:
+                logger.error(f"目录路径加载失败: {e}")
+                # 如果目录路径失败，尝试使用模型名称
+                try:
+                    logger.info("尝试使用XTTS模型名称加载")
+                    tts_model = TTS(model_name="tts_models/multilingual/multi-dataset/xtts_v2")
+                    logger.info("TTS模型加载成功（使用远程XTTS模型）")
+                except Exception as e2:
+                    logger.error(f"远程XTTS模型加载失败: {e2}")
+                    raise e2
         else:
             # 如果没有本地模型，使用默认的中文TTS模型
             logger.info("未找到本地TTS模型，使用默认中文TTS模型")
@@ -171,6 +161,10 @@ def load_llm_model():
         if not os.path.exists(llm_model_path):
             logger.error(f"LLM模型文件不存在: {llm_model_path}")
             return False
+        
+        # 检查模型文件大小
+        file_size = os.path.getsize(llm_model_path) / (1024**3)  # GB
+        logger.info(f"LLM模型文件大小: {file_size:.2f}GB")
         
         logger.info(f"正在加载LLM模型: {llm_model_path}")
         
@@ -221,7 +215,16 @@ def load_llm_model():
                 n_batch=512,  # 批处理大小
             )
         except Exception as e:
-            logger.error(f"LLM模型初始化失败: {str(e)}")
+            error_msg = str(e)
+            logger.error(f"LLM模型初始化失败: {error_msg}")
+            
+            # 检查是否是模型架构不支持的问题
+            if "unknown model architecture" in error_msg.lower() or "qwen3" in error_msg.lower():
+                logger.error("检测到Qwen3架构不被llama-cpp-python支持")
+                logger.error("建议使用支持的模型格式，如Qwen2、Llama、Mistral等")
+                logger.error("或者使用transformers库而非llama-cpp-python")
+                return False
+            
             # 尝试使用更保守的参数
             logger.info("尝试使用更保守的参数重新加载LLM模型")
             try:
@@ -237,6 +240,9 @@ def load_llm_model():
                 )
             except Exception as e2:
                 logger.error(f"保守参数也失败: {str(e2)}")
+                if "unknown model architecture" in str(e2).lower():
+                    logger.error("模型架构不支持，需要更换兼容的模型文件")
+                    return False
                 raise e2
         
         logger.info("LLM模型加载成功")
