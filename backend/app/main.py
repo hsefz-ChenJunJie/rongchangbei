@@ -32,7 +32,7 @@ logging.getLogger('asyncio').setLevel(logging.WARNING)
 # 请在这里填写您的远程API服务商信息
 REMOTE_API_CONFIG = {
     # 示例配置 - 请根据您的服务商修改以下信息
-    "api_url": "http://192.168.0.11:1234",  # 替换为您的API地址
+    "api_url": "http://192.168.0.11:1234/v1",  # 替换为您的API地址
     "api_key": "unused",  # 替换为您的API密钥
     "model_name": "qwen_qwen3-32b-mlx",  # 替换为您要使用的模型名称
     "temperature": 0.7,
