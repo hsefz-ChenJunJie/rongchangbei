@@ -11,6 +11,9 @@ const API_BASE_URL = 'http://localhost:8000';
 const elements = {
     // 步骤1
     scenarioContext: document.getElementById('scenarioContext'),
+    permissionPanel: document.getElementById('permissionPanel'),
+    recordingPanel: document.getElementById('recordingPanel'),
+    requestPermissionBtn: document.getElementById('requestPermissionBtn'),
     recordBtn: document.getElementById('recordBtn'),
     stopRecordBtn: document.getElementById('stopRecordBtn'),
     recordingStatus: document.getElementById('recordingStatus'),
@@ -44,6 +47,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // 事件监听器初始化
 function initializeEventListeners() {
     // 录音相关
+    elements.requestPermissionBtn.addEventListener('click', requestMicrophonePermission);
     elements.recordBtn.addEventListener('click', startRecording);
     elements.stopRecordBtn.addEventListener('click', stopRecording);
     
@@ -63,12 +67,156 @@ function initializeEventListeners() {
 // 检查麦克风权限
 async function checkMicrophonePermission() {
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        stream.getTracks().forEach(track => track.stop());
-        showStatus('麦克风权限已获取，可以开始录音', 'success');
+        // 首先检查权限状态（如果浏览器支持）
+        if (navigator.permissions) {
+            const permission = await navigator.permissions.query({ name: 'microphone' });
+            
+            switch (permission.state) {
+                case 'granted':
+                    await testMicrophoneAccess();
+                    showPermissionGranted();
+                    return;
+                case 'denied':
+                    showPermissionDenied();
+                    return;
+                case 'prompt':
+                    showPermissionPrompt();
+                    return;
+            }
+        }
+        
+        // 如果浏览器不支持权限查询，直接尝试获取权限
+        await testMicrophoneAccess();
+        showPermissionGranted();
+        
     } catch (error) {
-        showStatus('无法获取麦克风权限，请检查浏览器设置', 'error');
-        elements.recordBtn.disabled = true;
+        console.log('权限检查失败:', error);
+        showPermissionPrompt();
+    }
+}
+
+// 测试麦克风访问
+async function testMicrophoneAccess() {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream.getTracks().forEach(track => track.stop());
+    return true;
+}
+
+// 申请麦克风权限
+async function requestMicrophonePermission() {
+    try {
+        elements.requestPermissionBtn.disabled = true;
+        elements.requestPermissionBtn.textContent = '🔄 申请中...';
+        
+        showStatus('正在申请麦克风权限，请在浏览器弹窗中选择"允许"', 'processing');
+        
+        // 尝试获取麦克风权限
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: {
+                sampleRate: 16000,
+                channelCount: 1,
+                echoCancellation: true,
+                noiseSuppression: true
+            }
+        });
+        
+        // 立即停止流，我们只是为了获取权限
+        stream.getTracks().forEach(track => track.stop());
+        
+        showPermissionGranted();
+        showStatus('麦克风权限申请成功！现在可以开始录音了', 'success');
+        
+    } catch (error) {
+        console.error('权限申请失败:', error);
+        
+        if (error.name === 'NotAllowedError') {
+            showPermissionDenied();
+            showStatus('麦克风权限被拒绝，请在浏览器设置中手动开启', 'error');
+        } else if (error.name === 'NotFoundError') {
+            showPermissionDenied();
+            showStatus('未检测到麦克风设备，请检查设备连接', 'error');
+        } else {
+            showPermissionPrompt();
+            showStatus('权限申请失败: ' + error.message, 'error');
+        }
+    } finally {
+        elements.requestPermissionBtn.disabled = false;
+        elements.requestPermissionBtn.textContent = '📋 申请录音权限';
+    }
+}
+
+// 显示权限已授予状态
+function showPermissionGranted() {
+    elements.permissionPanel.style.display = 'none';
+    elements.recordingPanel.style.display = 'block';
+    elements.recordBtn.disabled = false;
+    
+    // 更新权限面板样式（如果显示的话）
+    const permissionNotice = elements.permissionPanel.querySelector('.permission-notice');
+    if (permissionNotice) {
+        permissionNotice.className = 'permission-notice permission-granted';
+        permissionNotice.innerHTML = `
+            <h4>✅ 麦克风权限已获取</h4>
+            <p>现在可以使用录音功能了！</p>
+        `;
+    }
+}
+
+// 显示权限被拒绝状态
+function showPermissionDenied() {
+    elements.permissionPanel.style.display = 'block';
+    elements.recordingPanel.style.display = 'none';
+    elements.recordBtn.disabled = true;
+    
+    const permissionNotice = elements.permissionPanel.querySelector('.permission-notice');
+    permissionNotice.className = 'permission-notice permission-denied';
+    permissionNotice.innerHTML = `
+        <h4>❌ 麦克风权限被拒绝</h4>
+        <p>录音功能需要麦克风权限。请按以下步骤手动开启：</p>
+        <div class="help-text">
+            <strong>Chrome/Edge浏览器：</strong><br>
+            1. 点击地址栏左侧的锁图标或麦克风图标<br>
+            2. 选择"始终允许此网站使用麦克风"<br>
+            3. 刷新页面<br><br>
+            <strong>Firefox浏览器：</strong><br>
+            1. 点击地址栏左侧的盾牌图标<br>
+            2. 在弹出菜单中允许麦克风权限<br>
+            3. 刷新页面
+        </div>
+        <button id="retryPermissionBtn" class="btn">🔄 重新检查权限</button>
+    `;
+    
+    // 添加重试按钮事件
+    const retryBtn = document.getElementById('retryPermissionBtn');
+    if (retryBtn) {
+        retryBtn.addEventListener('click', checkMicrophonePermission);
+    }
+}
+
+// 显示需要权限申请状态
+function showPermissionPrompt() {
+    elements.permissionPanel.style.display = 'block';
+    elements.recordingPanel.style.display = 'none';
+    elements.recordBtn.disabled = true;
+    
+    const permissionNotice = elements.permissionPanel.querySelector('.permission-notice');
+    permissionNotice.className = 'permission-notice';
+    permissionNotice.innerHTML = `
+        <h4>🎤 需要麦克风权限</h4>
+        <p>为了使用录音功能，需要获取您的麦克风权限。点击下面的按钮将弹出权限申请窗口。</p>
+        <div class="help-text">
+            <strong>温馨提示：</strong><br>
+            • 我们只在录音时使用麦克风，不会在后台监听<br>
+            • 录音数据仅用于语音识别，不会被保存或传输给第三方<br>
+            • 您可以随时在浏览器设置中撤销权限
+        </div>
+        <button id="requestPermissionBtn" class="btn">📋 申请录音权限</button>
+    `;
+    
+    // 重新绑定事件（因为元素被重新创建）
+    const newRequestBtn = document.getElementById('requestPermissionBtn');
+    if (newRequestBtn) {
+        newRequestBtn.addEventListener('click', requestMicrophonePermission);
     }
 }
 
@@ -189,7 +337,11 @@ async function generateSuggestions() {
         elements.generateLoading.style.display = 'inline-block';
         showStatus('正在生成建议...', 'processing');
         
-        await callGenerateSuggestionsAPI(request);
+        const result = await callGenerateSuggestionsAPI(request);
+        if (result && result.suggestions) {
+            displaySuggestions(result.suggestions);
+            showStatus(`建议生成完成 (处理时间: ${result.processing_time?.toFixed(2)}s)`, 'success');
+        }
         
     } catch (error) {
         console.error('生成建议失败:', error);
@@ -200,7 +352,7 @@ async function generateSuggestions() {
     }
 }
 
-// 调用生成建议API（流式响应）
+// 调用生成建议API（非流式响应）
 async function callGenerateSuggestionsAPI(request) {
     try {
         const response = await fetch(`${API_BASE_URL}/api/generate_suggestions`, {
@@ -215,47 +367,15 @@ async function callGenerateSuggestionsAPI(request) {
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let suggestions = [];
-        
         elements.suggestionsContainer.innerHTML = '<p>正在生成建议...</p>';
         
-        while (true) {
-            const { done, value } = await reader.read();
-            
-            if (done) break;
-            
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop(); // 保留最后的不完整行
-            
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    const data = line.slice(6);
-                    
-                    if (data === '[DONE]') {
-                        continue;
-                    }
-                    
-                    try {
-                        const event = JSON.parse(data);
-                        
-                        if (event.type === 'complete') {
-                            suggestions = event.data.suggestions || [];
-                            displaySuggestions(suggestions);
-                            showStatus(`建议生成完成 (处理时间: ${event.data.processing_time?.toFixed(2)}s)`, 'success');
-                        }
-                    } catch (e) {
-                        console.warn('解析SSE数据失败:', e);
-                    }
-                }
-            }
-        }
+        const result = await response.json();
         
-        if (suggestions.length === 0) {
+        if (result.suggestions && result.suggestions.length > 0) {
+            return result;
+        } else {
             elements.suggestionsContainer.innerHTML = '<p style="color: #666;">未能生成有效建议，请检查输入内容</p>';
+            return null;
         }
         
     } catch (error) {
@@ -328,7 +448,11 @@ async function regenerateSuggestions() {
         elements.regenerateBtn.disabled = true;
         showStatus('正在重新生成建议...', 'processing');
         
-        await callGenerateSuggestionsAPI(request);
+        const result = await callGenerateSuggestionsAPI(request);
+        if (result && result.suggestions) {
+            displaySuggestions(result.suggestions);
+            showStatus(`建议重新生成完成 (处理时间: ${result.processing_time?.toFixed(2)}s)`, 'success');
+        }
         
     } catch (error) {
         console.error('重新生成失败:', error);

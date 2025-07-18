@@ -223,6 +223,62 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+
+        .permission-notice {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 15px;
+        }
+
+        .permission-notice h4 {
+            color: #856404;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+        }
+
+        .permission-notice p {
+            color: #856404;
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+
+        .permission-denied {
+            background: #f8d7da;
+            border-color: #dc3545;
+        }
+
+        .permission-denied h4,
+        .permission-denied p {
+            color: #721c24;
+        }
+
+        .permission-granted {
+            background: #d1f2eb;
+            border-color: #28a745;
+        }
+
+        .permission-granted h4,
+        .permission-granted p {
+            color: #155724;
+        }
+
+        .help-text {
+            background: #e7f3ff;
+            border: 1px solid #b8daff;
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 10px;
+            font-size: 14px;
+            color: #004085;
+            line-height: 1.5;
+        }
+
+        .help-text strong {
+            color: #002752;
+        }
     </style>
 </head>
 <body>
@@ -246,8 +302,17 @@
                 </div>
 
                 <div class="input-group">
-                    <button id="recordBtn" class="btn btn-record">🎤 开始录音</button>
-                    <button id="stopRecordBtn" class="btn" disabled>⏹️ 停止录音</button>
+                    <div id="permissionPanel" style="display: none;">
+                        <div class="permission-notice">
+                            <h4>🎤 需要麦克风权限</h4>
+                            <p>为了使用录音功能，需要获取您的麦克风权限。请点击下面的按钮申请权限。</p>
+                            <button id="requestPermissionBtn" class="btn">📋 申请录音权限</button>
+                        </div>
+                    </div>
+                    <div id="recordingPanel">
+                        <button id="recordBtn" class="btn btn-record">🎤 开始录音</button>
+                        <button id="stopRecordBtn" class="btn" disabled>⏹️ 停止录音</button>
+                    </div>
                     <div id="recordingStatus" class="status-message" style="display: none;"></div>
                 </div>
 
