@@ -1,7 +1,6 @@
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from sse_starlette.sse import EventSourceResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import io
@@ -45,7 +44,7 @@ REMOTE_API_CONFIG = {
     "model_name": "qwen/qwen3-8b",  # 替换为您要使用的模型名称
     "temperature": 0.7,
     "top_p": 0.9,
-    "stream": True,
+    "stream": False,
     
     # 常见服务商预设配置（取消注释并填写对应的API Key）
     # OpenAI配置
@@ -201,10 +200,10 @@ def filter_special_tokens(text: str) -> str:
     return filtered_text
 
 
-async def call_remote_llm_api(system_prompt: str, user_prompt: str):
+async def call_remote_llm_api(system_prompt: str, user_prompt: str) -> str:
     """
     使用OpenAI client调用远程API服务商的LLM API
-    返回流式响应生成器
+    返回完整的响应文本
     """
     try:
         # 构建消息
@@ -224,53 +223,28 @@ async def call_remote_llm_api(system_prompt: str, user_prompt: str):
             base_url=REMOTE_API_CONFIG["api_url"]
         )
         
-        # 调用流式API
-        logger.info("🔄 开始调用OpenAI流式API...")
-        stream = await client.chat.completions.create(
+        # 调用非流式API
+        logger.info("🔄 开始调用OpenAI非流式API...")
+        response = await client.chat.completions.create(
             model=REMOTE_API_CONFIG["model_name"],
             messages=messages,
             temperature=REMOTE_API_CONFIG["temperature"],
             top_p=REMOTE_API_CONFIG["top_p"],
-            stream=True
+            stream=False
         )
         
-        # 处理流式响应
-        logger.info("🔄 开始处理流式响应...")
-        accumulated_text = ""
-        token_count = 0
-        
-        async for chunk in stream:
-            if chunk.choices and chunk.choices[0].delta.content:
-                raw_token = chunk.choices[0].delta.content
-                
-                # 过滤掉特殊标记
-                filtered_token = filter_special_tokens(raw_token)
-                
-                # 只有当过滤后的token不为空时才处理
-                if filtered_token:
-                    accumulated_text += filtered_token
-                    token_count += 1
-                    
-                    # 每100个token记录一次进度
-                    if token_count % 100 == 0:
-                        logger.debug(f"📊 已接收 {token_count} 个token，当前长度: {len(accumulated_text)}")
-                    
-                    # 生成token事件
-                    yield {
-                        "event": "token",
-                        "data": json.dumps({
-                            "token": filtered_token,
-                            "accumulated": accumulated_text
-                        }, ensure_ascii=False)
-                    }
-                    
-                    # 添加小延迟
-                    await asyncio.sleep(0.01)
-                else:
-                    # 如果是特殊标记，记录但不发送事件
-                    logger.debug(f"🔽 过滤掉特殊标记: {raw_token}")
-        
-        logger.info(f"📊 远程API调用完成，总共接收 {token_count} 个token，最终长度: {len(accumulated_text)}")
+        # 提取响应内容
+        if response.choices and response.choices[0].message.content:
+            content = response.choices[0].message.content
+            
+            # 过滤掉特殊标记
+            filtered_content = filter_special_tokens(content)
+            
+            logger.info(f"📊 远程API调用完成，响应长度: {len(filtered_content)} 字符")
+            return filtered_content
+        else:
+            logger.warning("⚠️ API响应为空")
+            return ""
         
     except Exception as e:
         logger.error(f"❌ 远程API调用失败: {type(e).__name__}: {str(e)}")
@@ -989,12 +963,12 @@ async def text_to_speech(request: TTSRequest):
         raise HTTPException(status_code=500, detail=f"语音合成失败: {str(e)}")
 
 
-@app.post("/api/generate_suggestions")
+@app.post("/api/generate_suggestions", response_model=GenerateSuggestionsResponse)
 async def generate_suggestions(request: GenerateSuggestionsRequest):
     """
-    生成回答建议 API（流式响应）
+    生成回答建议 API
     
-    根据上下文信息生成多个回答建议，使用Server-Sent Events实现流式响应
+    根据上下文信息生成多个回答建议，返回完整的JSON响应
     支持本地模型和远程API服务商
     """
     global llm_model, use_remote_llm
@@ -1032,177 +1006,111 @@ async def generate_suggestions(request: GenerateSuggestionsRequest):
         logger.error(f"❌ 错误堆栈: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"请求预处理失败: {str(e)}")
     
-    # 生成器函数，用于流式响应
-    async def generate_stream():
+    try:
+        start_time = time.time()
+        accumulated_text = ""
+        logger.info("🔄 开始生成建议...")
+        
+        if use_remote_llm:
+            # 使用远程API服务商
+            logger.info("🌐 使用远程API生成建议")
+            accumulated_text = await call_remote_llm_api(system_prompt, user_prompt)
+            
+        else:
+            # 使用本地模型
+            logger.info("🏠 使用本地模型生成建议")
+            
+            # 应用Qwen2聊天模板
+            logger.info("📝 应用Qwen2聊天模板...")
+            formatted_prompt = apply_qwen2_chat_template(system_prompt, user_prompt)
+            logger.info(f"📝 格式化后的提示词长度: {len(formatted_prompt)} 字符")
+            logger.debug(f"📝 格式化后的提示词: {formatted_prompt}")
+            
+            # ctransformers非流式生成
+            logger.info("🔄 开始本地模型非流式生成...")
+            raw_text = llm_model(
+                formatted_prompt,
+                max_new_tokens=1024,
+                temperature=0.7,
+                top_p=0.9,
+                stop=["<|im_end|>", "<|endoftext|>"],
+                stream=False,
+                reset=False  # 不重置对话历史
+            )
+            
+            # 过滤掉特殊标记
+            accumulated_text = filter_special_tokens(raw_text)
+            logger.info(f"📊 本地模型生成完成，响应长度: {len(accumulated_text)} 字符")
+        
+        # 计算处理时间
+        processing_time = time.time() - start_time
+        logger.info(f"⏱️ 总处理时间: {processing_time:.2f}秒")
+        
+        # 解析JSON结果
+        logger.info("🔄 开始解析JSON结果...")
+        suggestions = []
+        
         try:
-            start_time = time.time()
-            accumulated_text = ""
-            logger.info("🔄 开始生成流式响应...")
+            # 尝试解析JSON
+            json_text = accumulated_text.strip()
+            logger.debug(f"📝 原始文本: {json_text[:200]}...")
             
-            if use_remote_llm:
-                # 使用远程API服务商
-                logger.info("🌐 使用远程API生成建议")
+            # 如果文本包含markdown代码块，提取其中的JSON
+            if "```json" in json_text:
+                logger.info("📝 检测到markdown代码块，提取JSON...")
+                start_idx = json_text.find("```json") + 7
+                end_idx = json_text.find("```", start_idx)
+                if end_idx > start_idx:
+                    json_text = json_text[start_idx:end_idx].strip()
+                    logger.info(f"📝 提取的JSON长度: {len(json_text)} 字符")
+            
+            logger.info("🔄 尝试解析JSON...")
+            result = json.loads(json_text)
+            logger.info(f"✅ JSON解析成功: {result}")
+            
+            # 验证JSON结构符合Schema
+            if 'suggestions' in result and isinstance(result['suggestions'], list):
+                suggestions = result['suggestions']
+                logger.info(f"✅ 找到 {len(suggestions)} 个建议")
                 
-                try:
-                    async for chunk in call_remote_llm_api(system_prompt, user_prompt):
-                        if chunk["event"] == "token":
-                            # 直接转发token事件
-                            yield chunk
-                            
-                            # 更新累积文本
-                            token_data = json.loads(chunk["data"])
-                            accumulated_text = token_data["accumulated"]
-                            
-                            # 添加小延迟
-                            await asyncio.sleep(0.01)
-                
-                except Exception as e:
-                    logger.error(f"❌ 远程API调用异常: {type(e).__name__}: {str(e)}")
-                    logger.error(f"❌ 错误堆栈: {traceback.format_exc()}")
-                    raise
-                
+                # 验证每个建议的结构
+                for i, suggestion in enumerate(suggestions):
+                    if not all(key in suggestion for key in ['id', 'content', 'confidence']):
+                        logger.warning(f"⚠️ 建议 {i+1} 格式不完整: {suggestion}")
+                        raise ValueError(f"建议 {i+1} 格式不完整")
+                    logger.debug(f"✅ 建议 {i+1} 格式正确")
             else:
-                # 使用本地模型
-                logger.info("🏠 使用本地模型生成建议")
-                
-                try:
-                    # 应用Qwen2聊天模板
-                    logger.info("📝 应用Qwen2聊天模板...")
-                    formatted_prompt = apply_qwen2_chat_template(system_prompt, user_prompt)
-                    logger.info(f"📝 格式化后的提示词长度: {len(formatted_prompt)} 字符")
-                    logger.debug(f"📝 格式化后的提示词: {formatted_prompt}")
-                    
-                    # ctransformers流式生成
-                    logger.info("🔄 开始本地模型流式生成...")
-                    token_count = 0
-                    
-                    for raw_token in llm_model(
-                        formatted_prompt,
-                        max_new_tokens=1024,
-                        temperature=0.7,
-                        top_p=0.9,
-                        stop=["<|im_end|>", "<|endoftext|>"],
-                        stream=True,
-                        reset=False  # 不重置对话历史
-                    ):
-                        # 过滤掉特殊标记
-                        filtered_token = filter_special_tokens(raw_token)
-                        
-                        # 只有当过滤后的token不为空时才处理
-                        if filtered_token:
-                            accumulated_text += filtered_token
-                            token_count += 1
-                            
-                            # 每100个token记录一次进度
-                            if token_count % 100 == 0:
-                                logger.debug(f"📊 本地模型已生成 {token_count} 个token，当前长度: {len(accumulated_text)}")
-                            
-                            # 发送token数据
-                            yield {
-                                "event": "token",
-                                "data": json.dumps({
-                                    "token": filtered_token,
-                                    "accumulated": accumulated_text
-                                }, ensure_ascii=False)
-                            }
-                            
-                            # 添加小延迟以模拟真实的流式效果
-                            await asyncio.sleep(0.01)
-                        else:
-                            # 如果是特殊标记，记录但不发送事件
-                            logger.debug(f"🔽 过滤掉特殊标记: {raw_token}")
-                    
-                    logger.info(f"📊 本地模型生成完成，总共生成 {token_count} 个token")
-                    
-                except Exception as e:
-                    logger.error(f"❌ 本地模型调用异常: {type(e).__name__}: {str(e)}")
-                    logger.error(f"❌ 错误堆栈: {traceback.format_exc()}")
-                    raise
+                logger.error("❌ JSON结构不符合预期，缺少suggestions字段或类型错误")
+                raise ValueError("JSON结构不符合预期")
             
-            # 计算处理时间
-            processing_time = time.time() - start_time
-            logger.info(f"⏱️ 总处理时间: {processing_time:.2f}秒")
-            logger.info(f"📊 累积文本长度: {len(accumulated_text)} 字符")
+        except (json.JSONDecodeError, ValueError) as e:
+            logger.warning(f"⚠️ JSON解析失败: {type(e).__name__}: {str(e)}")
+            logger.warning(f"⚠️ 原始文本前100字符: {accumulated_text[:100]}...")
+            logger.warning("⚠️ 创建包含原始文本的响应")
             
-            # 解析JSON结果
-            logger.info("🔄 开始解析JSON结果...")
-            try:
-                # 尝试解析JSON
-                json_text = accumulated_text.strip()
-                logger.debug(f"📝 原始文本: {json_text[:200]}...")
-                
-                # 如果文本包含markdown代码块，提取其中的JSON
-                if "```json" in json_text:
-                    logger.info("📝 检测到markdown代码块，提取JSON...")
-                    start_idx = json_text.find("```json") + 7
-                    end_idx = json_text.find("```", start_idx)
-                    if end_idx > start_idx:
-                        json_text = json_text[start_idx:end_idx].strip()
-                        logger.info(f"📝 提取的JSON长度: {len(json_text)} 字符")
-                
-                logger.info("🔄 尝试解析JSON...")
-                result = json.loads(json_text)
-                logger.info(f"✅ JSON解析成功: {result}")
-                
-                # 验证JSON结构符合Schema
-                if 'suggestions' in result and isinstance(result['suggestions'], list):
-                    suggestions = result['suggestions']
-                    logger.info(f"✅ 找到 {len(suggestions)} 个建议")
-                    
-                    # 验证每个建议的结构
-                    for i, suggestion in enumerate(suggestions):
-                        if not all(key in suggestion for key in ['id', 'content', 'confidence']):
-                            logger.warning(f"⚠️ 建议 {i+1} 格式不完整: {suggestion}")
-                            raise ValueError(f"建议 {i+1} 格式不完整")
-                        logger.debug(f"✅ 建议 {i+1} 格式正确")
-                else:
-                    logger.error("❌ JSON结构不符合预期，缺少suggestions字段或类型错误")
-                    raise ValueError("JSON结构不符合预期")
-                
-            except (json.JSONDecodeError, ValueError) as e:
-                logger.warning(f"⚠️ JSON解析失败: {type(e).__name__}: {str(e)}")
-                logger.warning(f"⚠️ 原始文本前100字符: {accumulated_text[:100]}...")
-                logger.warning("⚠️ 创建包含原始文本的响应")
-                
-                # 如果JSON解析失败，创建包含原始文本的响应
-                suggestions = [
-                    {
-                        "id": 1,
-                        "content": accumulated_text[:200] + "..." if len(accumulated_text) > 200 else accumulated_text,
-                        "confidence": 0.75
-                    }
-                ]
-            
-            # 发送最终结果
-            logger.info("📤 发送最终结果...")
-            yield {
-                "event": "complete",
-                "data": json.dumps({
-                    "suggestions": suggestions,
-                    "processing_time": processing_time,
-                    "raw_text": accumulated_text,
-                    "service_type": "remote_api" if use_remote_llm else "local_model"
-                }, ensure_ascii=False)
-            }
-            
-            logger.info("✅ 生成建议完成")
-            
-        except Exception as e:
-            logger.error(f"❌ LLM生成失败: {type(e).__name__}: {str(e)}")
-            logger.error(f"❌ 错误堆栈: {traceback.format_exc()}")
-            
-            yield {
-                "event": "error",
-                "data": json.dumps({
-                    "error": f"生成失败: {str(e)}",
-                    "error_type": type(e).__name__,
-                    "service_type": "remote_api" if use_remote_llm else "local_model",
-                    "traceback": traceback.format_exc()
-                }, ensure_ascii=False)
-            }
-    
-    # 返回Server-Sent Events响应
-    return EventSourceResponse(generate_stream())
+            # 如果JSON解析失败，创建包含原始文本的响应
+            suggestions = [
+                {
+                    "id": 1,
+                    "content": accumulated_text[:200] + "..." if len(accumulated_text) > 200 else accumulated_text,
+                    "confidence": 0.75
+                }
+            ]
+        
+        # 返回最终结果
+        logger.info("✅ 生成建议完成")
+        return GenerateSuggestionsResponse(
+            suggestions=[Suggestion(**s) for s in suggestions],
+            processing_time=processing_time
+        )
+        
+    except Exception as e:
+        logger.error(f"❌ LLM生成失败: {type(e).__name__}: {str(e)}")
+        logger.error(f"❌ 错误堆栈: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=500, 
+            detail=f"生成建议失败: {str(e)}"
+        )
 
 
 if __name__ == "__main__":
