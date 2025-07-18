@@ -189,15 +189,173 @@ def filter_special_tokens(text: str) -> str:
         '<|assistant|>',
         '<|end|>',
         '<thinking>',
-        '</thinking>'
+        '</thinking>',
+        '<thought>',
+        '</thought>',
+        '<reflection>',
+        '</reflection>'
     ]
     
     # 过滤掉特殊标记
     filtered_text = text
+    
+    # 首先移除思考内容块（包含开始和结束标记之间的所有内容）
+    import re
+    thinking_patterns = [
+        r'<thinking>.*?</thinking>',
+        r'<think>.*?</think>',
+        r'<thought>.*?</thought>',
+        r'<reflection>.*?</reflection>',
+        # 处理可能的换行情况
+        r'<thinking>\s*\n.*?\n\s*</thinking>',
+        r'<think>\s*\n.*?\n\s*</think>',
+    ]
+    
+    for pattern in thinking_patterns:
+        filtered_text = re.sub(pattern, '', filtered_text, flags=re.DOTALL | re.IGNORECASE)
+    
+    # 然后过滤剩余的特殊标记
     for token in special_tokens:
         filtered_text = filtered_text.replace(token, '')
     
-    return filtered_text
+    # 清理多余的空行和空格
+    lines = filtered_text.split('\n')
+    cleaned_lines = []
+    for line in lines:
+        cleaned_line = line.strip()
+        if cleaned_line:  # 只保留非空行
+            cleaned_lines.append(cleaned_line)
+    
+    return '\n'.join(cleaned_lines)
+
+
+def extract_json_from_text(text: str) -> str:
+    """
+    从包含思考内容的文本中提取JSON
+    支持多种JSON格式和位置
+    """
+    import re
+    
+    logger.debug(f"🔍 开始从文本中提取JSON，原始长度: {len(text)} 字符")
+    
+    # 首先尝试提取markdown代码块中的JSON
+    json_patterns = [
+        # ```json ... ```
+        r'```json\s*\n(.*?)\n```',
+        r'```json\s*(.*?)```',
+        # ```JSON ... ```
+        r'```JSON\s*\n(.*?)\n```',
+        r'```JSON\s*(.*?)```',
+        # ``` ... ``` (如果包含"suggestions")
+        r'```\s*\n(.*?suggestions.*?)\n```',
+        r'```\s*(.*?suggestions.*?)```',
+    ]
+    
+    for pattern in json_patterns:
+        matches = re.findall(pattern, text, re.DOTALL | re.IGNORECASE)
+        for match in matches:
+            json_candidate = match.strip()
+            if json_candidate and ('suggestions' in json_candidate.lower() or '{' in json_candidate):
+                logger.info(f"📝 在代码块中找到JSON候选: {json_candidate[:100]}...")
+                if validate_json_candidate(json_candidate):
+                    return json_candidate
+    
+    # 寻找JSON对象开始和结束标记
+    brace_patterns = [
+        # 寻找以 { 开始, } 结束的完整JSON对象
+        r'\{[^{}]*"suggestions"[^{}]*\[[^\]]*\][^{}]*\}',
+        # 更复杂的嵌套JSON
+        r'\{(?:[^{}]|\{[^{}]*\})*"suggestions"(?:[^{}]|\{[^{}]*\})*\}',
+    ]
+    
+    for pattern in brace_patterns:
+        matches = re.findall(pattern, text, re.DOTALL | re.IGNORECASE)
+        for match in matches:
+            json_candidate = match.strip()
+            logger.info(f"📝 在文本中找到JSON候选: {json_candidate[:100]}...")
+            if validate_json_candidate(json_candidate):
+                return json_candidate
+    
+    # 尝试寻找JSON开始位置并提取到结尾
+    json_start_patterns = [
+        r'(\{[^{}]*"suggestions".*)',  # 从{开始包含suggestions的部分
+        r'.*?(\{.*?"suggestions".*?\}.*?)(?:\n|$)',  # 包含suggestions的行
+    ]
+    
+    for pattern in json_start_patterns:
+        matches = re.findall(pattern, text, re.DOTALL | re.IGNORECASE)
+        for match in matches:
+            json_candidate = match.strip()
+            # 尝试平衡大括号
+            json_candidate = balance_braces(json_candidate)
+            if json_candidate and validate_json_candidate(json_candidate):
+                logger.info(f"📝 提取并平衡大括号后的JSON: {json_candidate[:100]}...")
+                return json_candidate
+    
+    # 最后尝试：寻找任何看起来像JSON的内容
+    lines = text.split('\n')
+    for i, line in enumerate(lines):
+        line = line.strip()
+        if line.startswith('{') and ('suggestions' in line.lower() or 'content' in line.lower()):
+            # 尝试从这行开始提取多行JSON
+            json_candidate = '\n'.join(lines[i:])
+            json_candidate = balance_braces(json_candidate)
+            if json_candidate and validate_json_candidate(json_candidate):
+                logger.info(f"📝 从第{i+1}行开始提取JSON: {json_candidate[:100]}...")
+                return json_candidate
+    
+    logger.warning("⚠️ 未能从文本中提取有效的JSON")
+    return text.strip()
+
+
+def balance_braces(text: str) -> str:
+    """
+    平衡大括号，确保JSON格式正确
+    """
+    if not text.strip():
+        return text
+    
+    # 找到第一个 {
+    start_idx = text.find('{')
+    if start_idx == -1:
+        return text
+    
+    brace_count = 0
+    end_idx = start_idx
+    
+    for i in range(start_idx, len(text)):
+        if text[i] == '{':
+            brace_count += 1
+        elif text[i] == '}':
+            brace_count -= 1
+            if brace_count == 0:
+                end_idx = i
+                break
+    
+    if brace_count == 0:
+        return text[start_idx:end_idx + 1]
+    else:
+        # 如果大括号不平衡，尝试修复
+        return text[start_idx:] + '}' * brace_count
+
+
+def validate_json_candidate(json_text: str) -> bool:
+    """
+    验证JSON候选文本是否有效
+    """
+    try:
+        parsed = json.loads(json_text)
+        # 检查是否包含我们需要的结构
+        if isinstance(parsed, dict) and 'suggestions' in parsed:
+            suggestions = parsed['suggestions']
+            if isinstance(suggestions, list) and len(suggestions) > 0:
+                # 检查第一个建议的结构
+                first_suggestion = suggestions[0]
+                if isinstance(first_suggestion, dict) and 'content' in first_suggestion:
+                    return True
+        return False
+    except (json.JSONDecodeError, TypeError, KeyError):
+        return False
 
 
 async def call_remote_llm_api(system_prompt: str, user_prompt: str) -> str:
@@ -1051,18 +1209,10 @@ async def generate_suggestions(request: GenerateSuggestionsRequest):
         suggestions = []
         
         try:
-            # 尝试解析JSON
-            json_text = accumulated_text.strip()
-            logger.debug(f"📝 原始文本: {json_text[:200]}...")
-            
-            # 如果文本包含markdown代码块，提取其中的JSON
-            if "```json" in json_text:
-                logger.info("📝 检测到markdown代码块，提取JSON...")
-                start_idx = json_text.find("```json") + 7
-                end_idx = json_text.find("```", start_idx)
-                if end_idx > start_idx:
-                    json_text = json_text[start_idx:end_idx].strip()
-                    logger.info(f"📝 提取的JSON长度: {len(json_text)} 字符")
+            # 使用强健的JSON提取函数
+            logger.debug(f"📝 原始文本: {accumulated_text[:200]}...")
+            json_text = extract_json_from_text(accumulated_text)
+            logger.info(f"📝 提取的JSON长度: {len(json_text)} 字符")
             
             logger.info("🔄 尝试解析JSON...")
             result = json.loads(json_text)
@@ -1085,15 +1235,36 @@ async def generate_suggestions(request: GenerateSuggestionsRequest):
             
         except (json.JSONDecodeError, ValueError) as e:
             logger.warning(f"⚠️ JSON解析失败: {type(e).__name__}: {str(e)}")
-            logger.warning(f"⚠️ 原始文本前100字符: {accumulated_text[:100]}...")
+            logger.warning(f"⚠️ 原始文本前200字符: {accumulated_text[:200]}...")
+            logger.warning(f"⚠️ 提取的JSON文本: {json_text[:200] if 'json_text' in locals() else 'N/A'}...")
             logger.warning("⚠️ 创建包含原始文本的响应")
             
-            # 如果JSON解析失败，创建包含原始文本的响应
+            # 尝试从原始文本中提取有意义的内容作为建议
+            content_text = accumulated_text.strip()
+            
+            # 如果文本太长，尝试找到关键部分
+            if len(content_text) > 500:
+                # 寻找可能的建议内容
+                lines = content_text.split('\n')
+                meaningful_lines = []
+                for line in lines:
+                    line = line.strip()
+                    if line and not line.startswith(('思考', '分析', '考虑', '<', '```', '#')):
+                        meaningful_lines.append(line)
+                        if len('\n'.join(meaningful_lines)) > 300:
+                            break
+                
+                if meaningful_lines:
+                    content_text = '\n'.join(meaningful_lines)
+                else:
+                    content_text = content_text[:300] + "..."
+            
+            # 如果JSON解析失败，创建包含提取内容的响应
             suggestions = [
                 {
                     "id": 1,
-                    "content": accumulated_text[:200] + "..." if len(accumulated_text) > 200 else accumulated_text,
-                    "confidence": 0.75
+                    "content": content_text,
+                    "confidence": 0.60
                 }
             ]
         
