@@ -32,7 +32,7 @@ logging.getLogger('asyncio').setLevel(logging.WARNING)
 # 控制是否加载各种模型
 MODEL_LOAD_CONFIG = {
     "load_stt": True,   # 是否加载STT模型
-    "load_tts": False,   # 是否加载TTS模型
+    "load_tts": True,   # 是否加载TTS模型
     "load_llm": True    # 是否加载LLM模型
 }
 
@@ -42,7 +42,7 @@ REMOTE_API_CONFIG = {
     # 示例配置 - 请根据您的服务商修改以下信息
     "api_url": "http://192.168.0.11:1234/v1",  # 替换为您的API地址
     "api_key": "unused",  # 替换为您的API密钥
-    "model_name": "qwen_qwen3-32b-mlx",  # 替换为您要使用的模型名称
+    "model_name": "qwen/qwen3-8b",  # 替换为您要使用的模型名称
     "temperature": 0.7,
     "top_p": 0.9,
     "stream": True,
