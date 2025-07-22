@@ -3,6 +3,7 @@ extends Button
 @onready var ip_input: LineEdit = $"../Panel/IPInput"
 @onready var port_input: LineEdit = $"../Panel/PortInput"
 @onready var tree: Tree = $"../Panel/Tree"
+@onready var interval_input: LineEdit = $"../Panel2/IntervalInput"
 
 
 func _on_pressed() -> void:
@@ -27,6 +28,7 @@ func _on_pressed() -> void:
 	# 2. 更新背景路径
 	config["ip"] = ip_input.text
 	config["port"] = port_input.text
+	config["interval"] = int(interval_input.text)
 	
 	var treeroot = tree.get_root()
 	for child_of_root in treeroot.get_children():
@@ -65,6 +67,7 @@ func _on_ready() -> void:
 				if config.has("ip") and config.has("port"):
 					ip_input.text = config["ip"]
 					port_input.text = config['port']
+					interval_input.text = str(config["interval"])
 			else:
 				push_error("JSON 解析错误: " + json.get_error_message())
 		else:

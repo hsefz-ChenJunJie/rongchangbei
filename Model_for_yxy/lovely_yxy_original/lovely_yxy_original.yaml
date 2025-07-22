@@ -1,0 +1,26 @@
+# Ultralytics YOLO 🚀, AGPL-3.0 license
+
+# Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
+path: ../lovely_yxy_original  # dataset root dir
+train: images/train  # train images (relative to 'path') 77 images
+val: images/train  # val images (relative to 'path') 77 images
+test:  # test images (optional)
+
+# Classes
+names:
+  0: yxy
+  1: jcj
+  2: zjn
+  3: placeholder1
+  4: placeholder2
+  5: placeholder3
+  6: placeholder4
+  7: placeholder5
+  8: placeholder6
+  9: placeholder7
+  10: placeholder8
+  11: placeholder9
+  12: placeholder10
+
+
+

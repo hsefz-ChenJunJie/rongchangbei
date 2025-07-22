@@ -1,0 +1,60 @@
+[gd_scene load_steps=3 format=3 uid="uid://db324mypllwod"]
+
+[ext_resource type="Script" uid="uid://qg1p0wvv1obk" path="res://test_audio_scene.gd" id="1_afji8"]
+
+[sub_resource type="AudioStreamMicrophone" id="AudioStreamMicrophone_ylwyu"]
+
+[node name="TestAudioScene" type="Node2D"]
+script = ExtResource("1_afji8")
+
+[node name="UI" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="RecordButton" type="Button" parent="UI"]
+layout_mode = 0
+offset_top = 24.0
+offset_right = 24.0
+offset_bottom = 48.0
+
+[node name="PlayButton" type="Button" parent="UI"]
+layout_mode = 0
+offset_left = 24.0
+offset_top = 48.0
+offset_right = 48.0
+offset_bottom = 72.0
+
+[node name="SaveButton" type="Button" parent="UI"]
+layout_mode = 0
+offset_left = 48.0
+offset_top = 72.0
+offset_right = 72.0
+offset_bottom = 96.0
+
+[node name="StatusLabel" type="Label" parent="UI"]
+layout_mode = 0
+offset_left = 88.0
+offset_top = 96.0
+offset_right = 128.0
+offset_bottom = 116.0
+
+[node name="VolumeMeter" type="TextureRect" parent="UI"]
+layout_mode = 0
+offset_left = 272.0
+offset_top = 8.0
+offset_right = 312.0
+offset_bottom = 48.0
+
+[node name="Audio" type="Node" parent="."]
+
+[node name="MicPlayer" type="AudioStreamPlayer" parent="Audio"]
+stream = SubResource("AudioStreamMicrophone_ylwyu")
+bus = &"RecordBus"
+
+[node name="PlaybackPlayer" type="AudioStreamPlayer" parent="Audio"]
+
+[connection signal="pressed" from="UI/RecordButton" to="." method="_on_RecordButton_pressed"]
+[connection signal="pressed" from="UI/PlayButton" to="." method="_on_PlayButton_pressed"]
+[connection signal="pressed" from="UI/SaveButton" to="." method="_on_SaveButton_pressed"]

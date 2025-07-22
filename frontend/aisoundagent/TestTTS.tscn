@@ -1,6 +1,5 @@
-[gd_scene load_steps=3 format=3 uid="uid://ciblf6dw47nsd"]
+[gd_scene load_steps=2 format=3 uid="uid://ciblf6dw47nsd"]
 
-[ext_resource type="Script" uid="uid://gfjlrpp3umrk" path="res://test_tts.gd" id="1_17xuf"]
 [ext_resource type="PackedScene" uid="uid://ccmej2ta7xfh7" path="res://base.tscn" id="1_lat11"]
 
 [node name="Control" type="Control"]
@@ -10,9 +9,6 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1_17xuf")
 
 [node name="Base" parent="." instance=ExtResource("1_lat11")]
 layout_mode = 1
-offset_bottom = 1680.0
-grow_vertical = 1

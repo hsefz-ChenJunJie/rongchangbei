@@ -78,20 +78,21 @@ func generate_suggestions():
 	# request()会返回一个错误码，如果是OK则表示请求已成功发出
 	var error = http_request.request(api_url, headers, HTTPClient.METHOD_POST, body_json_string)
 	if error != OK:
-		print("An error occurred in the HTTP request.")
+		print("[LLM LOG] An error occurred in the HTTP request.")
 
 
 # 当HTTP请求完成时，此函数会被自动调用
 func _on_request_completed(result, response_code, headers, body):
 	if result != HTTPRequest.RESULT_SUCCESS:
-		print("Request failed!")
+		print("[LLM LOG] Request failed!")
 		return
 
-	print("Response Code: ", response_code)
+	print("[LLM LOG] Response Code: ", response_code)
 
 	if response_code == 200:
 		# 将返回的body（原始字节数据）解析为字符串
 		var response_body_string = body.get_string_from_utf8()
+		print("\n\n[LLM LOG] Response:\n",response_body_string,"\n\n\n")
 		
 		# --- 修改开始 ---
 		# 按行分割响应体
@@ -106,9 +107,9 @@ func _on_request_completed(result, response_code, headers, body):
 				break # 假设我们只需要第一个data事件
 
 		if json_string.is_empty():
-			print("No 'data:' field found in the SSE response.")
-			print("Response Body: ", response_body_string)
-			return
+			print("[LLM LOG] No 'data:' field found in the SSE response.")
+			print("[LLM LOG] Using all string")
+			json_string = response_body_string
 		# --- 修改结束 ---
 
 		# 解析提取出来的JSON字符串
@@ -119,7 +120,7 @@ func _on_request_completed(result, response_code, headers, body):
 			# 例如: ["suggestion1", "suggestion2", "suggestion3"]
 			if json.has("suggestions"):
 				var suggestions_array = json["suggestions"]
-				print("Suggestions: ", suggestions_array)
+				print("[LLM LOG] Suggestions: ", suggestions_array)
 				var suggestion_list: Array[String] = []
 				for i in suggestions_array:
 					# 确保suggestions_array中的元素的"content"键存在
@@ -130,15 +131,15 @@ func _on_request_completed(result, response_code, headers, body):
 				_create_suggestion_buttons(suggestion_list)
 				
 			else:
-				print("JSON response does not contain 'suggestions' key.")
-				print("Parsed JSON: ", json)
+				print("[LLM LOG] JSON response does not contain 'suggestions' key.")
+				print("[LLM LOG] Parsed JSON: ", json)
 		else:
-			print("Failed to parse JSON response.")
-			print("Extracted JSON String: ", json_string)
-			print("Original Response Body: ", response_body_string)
+			print("[LLM LOG] Failed to parse JSON response.")
+			print("[LLM LOG] Extracted JSON String: ", json_string)
+			print("[LLM LOG] Original Response Body: ", response_body_string)
 	else:
-		print("Request failed with response code: ", response_code)
-		print("Response Body: ", body.get_string_from_utf8())
+		print("[LLM LOG] Request failed with response code: ", response_code)
+		print("[LLM LOG] Response Body: ", body.get_string_from_utf8())
 
 
 # 【新增】根据字符串数组在VBoxContainer中创建按钮
@@ -168,8 +169,14 @@ func _create_suggestion_buttons(suggestions: Array[String]):
 
 # 【可选】当任何一个建议按钮被点击时，此函数会被调用
 func _on_suggestion_button_pressed(button_text: String):
-	print("Suggestion button pressed with text: ", button_text)
+	print("[LLM Suggestion Button LOG] Suggestion button pressed with text: ", button_text)
 	brief_input.text = button_text
 
 func _on_timer_timeout() -> void:
+	generate_suggestions()
+
+
+
+
+func _on_trigger_button_pressed() -> void:
 	generate_suggestions()

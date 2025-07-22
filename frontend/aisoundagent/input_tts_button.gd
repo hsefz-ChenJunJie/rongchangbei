@@ -6,11 +6,11 @@ extends Button
 @onready var text_edit: TextEdit = $"../TextEdit"
 # 2. TTS_Request: 用于发送文本转语音请求
 @onready var tts_request: HTTPRequest = $TTS_Request
-# 3. Speakers_Request: 用于获取可用说话人列表
+# 3. Speakers_Request: 用于获取可用说话人列表 (现在用于检查API状态)
 @onready var speakers_request: HTTPRequest = $Speaker_Request
 # 4. AudioStreamPlayer: 用于播放合成的音频
 @onready var audio_player: AudioStreamPlayer = $"../../Panel/RecordControl/AudioStreamPlayer"
-# 5. SpeakerSelector: 用于显示和选择说话人 (这是一个 OptionButton 节点)
+# 5. SpeakerSelector: 用于显示和选择说话人 (现在仅用于显示状态)
 @onready var speaker_selector: OptionButton = $OptionButton
 
 
@@ -29,9 +29,9 @@ func _ready():
 	speakers_request.request_completed.connect(_on_speakers_request_completed)
 	tts_request.request_completed.connect(_on_tts_request_completed)
 	
-	# 加载外部配置并获取说话人列表
+	# 加载外部配置并获取API状态
 	load_api_config()
-	fetch_speaker_list()
+	check_api_status()
 	
 
 func load_api_config():
@@ -70,10 +70,10 @@ func load_api_config():
 		push_error("解析 config.json 失败: " + json.get_error_message())
 
 
-# 1. 获取可用的说话人列表
-func fetch_speaker_list():
+# [MODIFIED] 1. 函数名修改，功能变为检查API状态
+func check_api_status():
 	if speakers_request.is_processing():
-		print("正在获取说话人列表，请稍候...")
+		print("正在检查API状态，请稍候...")
 		return
 		
 	var url
@@ -85,64 +85,47 @@ func fetch_speaker_list():
 	# 发送 GET 请求
 	var error = speakers_request.request(url, [], HTTPClient.METHOD_GET)
 	if error != OK:
-		print("启动获取说话人列表请求时发生错误: ", error)
+		print("启动API状态检查请求时发生错误: ", error)
 
-# 2. 当获取说话人列表的请求完成时调用
+# [MODIFIED] 2. 完全重写此函数以适应新的API响应
 func _on_speakers_request_completed(result, response_code, headers, body):
+	# 首先处理请求失败的情况
 	if result != HTTPRequest.RESULT_SUCCESS or response_code != 200:
-		print("获取说话人列表失败! 状态码: ", response_code)
-		print("错误信息: ", body.get_string_from_utf8())
+		print("检查API状态失败! 状态码: ", response_code)
+		if body: print("错误信息: ", body.get_string_from_utf8())
 		speaker_selector.clear()
-		speaker_selector.add_item("获取列表失败")
+		speaker_selector.add_item("API连接失败")
 		speaker_selector.disabled = true
-		#self.disabled = true # 禁用合成按钮
+		self.disabled = true # 禁用合成按钮
 		return
 	
-	print(body.get_string_from_utf8())
 	# 解析返回的JSON
 	var json = JSON.new()
 	var parse_error = json.parse(body.get_string_from_utf8())
 	if parse_error != OK:
-		print("解析说话人列表JSON失败: ", json.get_error_message())
+		print("解析API状态JSON失败: ", json.get_error_message())
+		speaker_selector.clear()
+		speaker_selector.add_item("解析响应失败")
+		speaker_selector.disabled = true
+		self.disabled = true
 		return
 		
 	var data = json.get_data()
-	if not data is Dictionary or not data.has("speakers"):
-		print("返回的说话人JSON格式不正确。原始数据: ", data)
-		return
-		
-	var speaker_list: Array = data["speakers"]
-	
-	# 清空并检查说话人列表
-	speaker_selector.clear()
-	if speaker_list.is_empty():
-		print("警告: API返回的说话人列表为空。")
-		speaker_selector.add_item("无可用说话人")
-		speaker_selector.disabled = true
-		#self.disabled = true # 列表为空时禁用合成按钮
-		return
-	
-	# 如果之前被禁用了，现在重新启用
-	speaker_selector.disabled = false
-	self.disabled = false
-	
-	# 填充 OptionButton
-	for speaker_name in speaker_list:
-		speaker_selector.add_item(speaker_name)
-	
-	# 安全地获取和设置默认说话人
-	var default_speaker = data.get("default_speaker") # 使用 .get() 防止键不存在的错误
-	
-	if default_speaker != null:
-		var default_index = speaker_list.find(default_speaker)
-		if default_index != -1:
-			speaker_selector.select(default_index)
-		else:
-			speaker_selector.select(0) # 如果默认值不在列表中，选择第一个
+	# 检查API是否为预期的XTTS模式
+	if data is Dictionary and data.get("xtts_support") == true:
+		print("API状态检查成功: XTTS模型已就绪，将使用默认参考音频。")
+		# 更新UI以反映XTTS状态
+		speaker_selector.clear()
+		speaker_selector.add_item("默认声音 (XTTS)")
+		speaker_selector.disabled = true # 因为没有其他选项，所以禁用选择器
+		self.disabled = false # API可用，启用合成按钮
 	else:
-		speaker_selector.select(0) # 如果没有提供默认值，选择第一个
-	
-	print("说话人列表已成功加载并更新。")
+		print("API不支持XTTS或返回格式不正确。")
+		print("收到的数据: ", data)
+		speaker_selector.clear()
+		speaker_selector.add_item("不支持XTTS")
+		speaker_selector.disabled = true
+		self.disabled = true
 
 
 # 3. 当“合成语音”按钮被按下时调用
@@ -156,30 +139,25 @@ func _on_button_pressed():
 		print("正在处理上一个请求，请稍候...")
 		return
 		
-	# 增加检查，防止在没有有效说话人时发送请求
-	if speaker_selector.is_disabled() or speaker_selector.item_count == 0:
-		TtsManager.speak(text_to_speak)
+	# [MODIFIED] 简化了检查逻辑，现在只依赖合成按钮自身的状态
+	if self.is_disabled():
+		print("合成功能当前不可用 (API未就绪)。")
 		return
 
 	send_tts_request(text_to_speak)
-	
 
 
-# 4. 准备并发送语音合成 API 请求
+# [MODIFIED] 4. 准备并发送语音合成 API 请求 (简化版)
 func send_tts_request(text: String):
-	var selected_speaker = speaker_selector.get_item_text(speaker_selector.selected)
-	print("正在请求语音合成: '%s' (说话人: %s)" % [text, selected_speaker])
+	# [MODIFIED] 不再需要获取选择的说话人
+	print("正在请求语音合成: '%s' (使用默认XTTS声音)" % text)
 	
 	# 创建请求头
 	var headers = ["Content-Type: application/json"]
 	
-	# 创建请求体 (根据新版API文档)
+	# [MODIFIED] 创建请求体，现在只需要text字段
 	var body_dict = {
-		"text": text,
-		"speaker": selected_speaker
-		# "voice" 字段在文档中存在但作用不明，这里我们优先使用更明确的 "speaker" 字段。
-		# 如果API需要，可以取消下面这行的注释:
-		# "voice": "default"
+		"text": text
 	}
 	var json_body = JSON.stringify(body_dict)
 	
@@ -195,7 +173,7 @@ func send_tts_request(text: String):
 		print("启动语音合成请求时发生错误: ", error)
 
 
-# 5. 当语音合成请求完成后调用
+# 5. 当语音合成请求完成后调用 (此部分通常无需修改)
 func _on_tts_request_completed(result, response_code, headers, body):
 	print("语音合成请求完成! 状态码: ", response_code)
 	
@@ -205,15 +183,14 @@ func _on_tts_request_completed(result, response_code, headers, body):
 		return
 
 	# --- 重要假设 ---
-	# API文档未明确返回的音频格式，我们继续假设是WAV。
-	# 如果播放失败或有噪音，您可能需要根据API的实际输出来调整。
+	# 假设音频格式仍为WAV。如果播放失败，请根据新API文档调整以下参数。
 	var audio_stream = AudioStreamWAV.new()
 	audio_stream.data = body
 	
-	# 这些参数也需要根据 API 的实际输出进行调整
-	# 如果播放的声音速度不对或者很刺耳，请尝试修改这些值
+	# 这些参数可能需要根据 API 的实际输出来调整
+	# XTTS的默认输出通常是 24000Hz, 16-bit, 单声道
 	audio_stream.format = AudioStreamWAV.FORMAT_16_BITS # 16位采样
-	audio_stream.mix_rate = 22050 # 采样率 (Coqui TTS的常用值)
+	audio_stream.mix_rate = 24000 # XTTS 常用采样率
 	audio_stream.stereo = false # 单声道
 	
 	audio_player.stream = audio_stream

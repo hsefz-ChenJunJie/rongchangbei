@@ -1,16 +1,16 @@
-[gd_scene load_steps=13 format=3 uid="uid://8jysn4e5t86m"]
+[gd_scene load_steps=14 format=3 uid="uid://8jysn4e5t86m"]
 
 [ext_resource type="PackedScene" uid="uid://ccmej2ta7xfh7" path="res://base.tscn" id="1_1tt3r"]
 [ext_resource type="Theme" uid="uid://cieb7ta71pkeo" path="res://ControlTheme.tres" id="1_n86ok"]
 [ext_resource type="Script" uid="uid://bfktylxevj2yw" path="res://record_control.gd" id="3_buvxa"]
+[ext_resource type="FontFile" uid="uid://bmai4ga2nqrvj" path="res://YanShiChunFengKai-2.ttf" id="3_lwnf7"]
 [ext_resource type="Texture2D" uid="uid://dlhu8hgd0yqvb" path="res://SVG/fill/plus.svg" id="4_or2g1"]
 [ext_resource type="Texture2D" uid="uid://d0d1cuy8bvsh5" path="res://SVG/fill/square-plus.svg" id="5_or2g1"]
 [ext_resource type="Texture2D" uid="uid://b2yj5pew8cs4c" path="res://SVG/outline/square-plus.svg" id="6_wc7ga"]
 [ext_resource type="Script" uid="uid://bo54hhvijmv7w" path="res://input_texture_button.gd" id="7_cmv46"]
 [ext_resource type="Script" uid="uid://dkmtm57x0r204" path="res://input_text_edit.gd" id="7_oawvg"]
 [ext_resource type="Script" uid="uid://ccmdw6wo62jev" path="res://input_tts_button.gd" id="9_8dxnk"]
-
-[sub_resource type="SystemFont" id="SystemFont_or2g1"]
+[ext_resource type="Script" uid="uid://bbs1lnmlgdxee" path="res://input_check_button.gd" id="11_xt3nm"]
 
 [sub_resource type="AudioStreamMicrophone" id="AudioStreamMicrophone_8dxnk"]
 
@@ -28,7 +28,6 @@ theme = ExtResource("1_n86ok")
 [node name="Base" parent="." instance=ExtResource("1_1tt3r")]
 layout_mode = 1
 offset_bottom = 0.0
-grow_vertical = 1
 
 [node name="Panel" type="Panel" parent="."]
 layout_mode = 1
@@ -85,7 +84,7 @@ offset_left = 288.0
 offset_top = 128.0
 offset_right = -196.0
 offset_bottom = 192.0
-theme_override_fonts/font = SubResource("SystemFont_or2g1")
+theme_override_fonts/font = ExtResource("3_lwnf7")
 theme_override_font_sizes/font_size = 24
 text = "自动检测"
 
@@ -208,9 +207,7 @@ placeholder_text = "等待输入……"
 script = ExtResource("7_oawvg")
 
 [node name="Timer" type="Timer" parent="Panel2"]
-wait_time = 5.0
-one_shot = true
-autostart = true
+wait_time = 10.0
 
 [node name="TTSButton" type="Button" parent="Panel2"]
 layout_mode = 1
@@ -236,6 +233,31 @@ layout_mode = 0
 offset_right = 368.0
 offset_bottom = 56.0
 
+[node name="TriggerButton" type="Button" parent="Panel2"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 32.0
+offset_top = 368.0
+offset_right = -368.0
+offset_bottom = 432.0
+grow_horizontal = 2
+theme_override_font_sizes/font_size = 36
+text = "获取建议"
+
+[node name="CheckButton" type="CheckButton" parent="Panel2"]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 288.0
+offset_top = 368.0
+offset_right = -200.0
+offset_bottom = 400.0
+grow_horizontal = 2
+scale = Vector2(2, 2)
+text = "自动提出建议"
+script = ExtResource("11_xt3nm")
+
 [node name="HTTPRequest" type="HTTPRequest" parent="."]
 
 [connection signal="pressed" from="Panel/ToggleRecording" to="Panel/RecordControl" method="_on_record_button_pressed"]
@@ -243,3 +265,5 @@ offset_bottom = 56.0
 [connection signal="pressed" from="Panel2/TextureButton" to="Panel2/TextureButton" method="_on_pressed"]
 [connection signal="timeout" from="Panel2/Timer" to="Panel2/TextEdit" method="_on_timer_timeout"]
 [connection signal="pressed" from="Panel2/TTSButton" to="Panel2/TTSButton" method="_on_button_pressed"]
+[connection signal="pressed" from="Panel2/TriggerButton" to="Panel2/TextEdit" method="_on_trigger_button_pressed"]
+[connection signal="toggled" from="Panel2/CheckButton" to="Panel2/CheckButton" method="_on_toggled"]
