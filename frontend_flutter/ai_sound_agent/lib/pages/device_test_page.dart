@@ -5,6 +5,7 @@ import 'package:record/record.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:dio/dio.dart';
 import '../widgets/shared/base.dart';
+import '../widgets/shared/tabs.dart';
 
 class DeviceTestPage extends BasePage {
   const DeviceTestPage({super.key})
@@ -63,211 +64,354 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
 
   @override
   Widget buildContent(BuildContext context) {
+    final tabs = [
+      TabConfig(
+        label: '网络测试',
+        icon: Icons.wifi,
+        content: _buildNetworkTestTab(),
+      ),
+      TabConfig(
+        label: '麦克风测试',
+        icon: Icons.mic,
+        content: _buildMicrophoneTestTab(),
+      ),
+      TabConfig(
+        label: '扬声器测试',
+        icon: Icons.volume_up,
+        content: _buildSpeakerTestTab(),
+      ),
+      TabConfig(
+        label: '测试总结',
+        icon: Icons.assessment,
+        content: _buildTestSummaryTab(),
+      ),
+    ];
+
+    return Column(
+      children: [
+        _buildTestProgress(),
+        Expanded(
+          child: LightweightCardTabs(
+            tabs: tabs,
+            onTabChanged: (index) {
+              // Tab切换时的逻辑可以在这里添加
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTestProgress() {
+    return Container(
+      padding: const EdgeInsets.all(16.0),
+      child: Card(
+        elevation: 2,
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            children: [
+              const Text(
+                '测试进度',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: _testCompleted ? 1.0 : _currentTestStep / 3,
+                  backgroundColor: Colors.grey[300],
+                  minHeight: 8,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _testCompleted ? '测试完成' : '步骤 $_currentTestStep/3',
+                style: const TextStyle(fontSize: 14),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNetworkTestTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildTestProgress(),
+          Card(
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.wifi,
+                    size: 48,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    '网络连接测试',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '检测网络连接状态和速度',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Theme.of(context).textTheme.bodySmall?.color,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 20),
-          _buildNetworkTestCard(),
-          const SizedBox(height: 16),
-          _buildMicrophoneTestCard(),
-          const SizedBox(height: 16),
-          _buildSpeakerTestCard(),
-          const SizedBox(height: 24),
-          _buildTestSummary(),
+          Card(
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text(
+                        '连接状态',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      const Spacer(),
+                      _buildStatusIcon(_networkStatus),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '状态: $_networkStatus',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  if (_networkSpeed > 0) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      '下载速度: ${_networkSpeed.toStringAsFixed(2)} Mbps',
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      onPressed: _isTestingNetwork ? null : _testNetworkConnection,
+                      icon: _isTestingNetwork
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.network_check, size: 20),
+                      label: const Text('开始网络测试', style: TextStyle(fontSize: 16)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildTestProgress() {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            const Text(
-              '测试进度',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: _testCompleted ? 1.0 : _currentTestStep / 3,
-                backgroundColor: Colors.grey[300],
-                minHeight: 8,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  Theme.of(context).colorScheme.primary,
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _testCompleted ? '测试完成' : '步骤 $_currentTestStep/3',
-              style: const TextStyle(fontSize: 14),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNetworkTestCard() {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.wifi, size: 24, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
-                const Text(
-                  '网络连接测试',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const Spacer(),
-                _buildStatusIcon(_networkStatus),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              '状态: $_networkStatus',
-              style: const TextStyle(fontSize: 14),
-            ),
-            if (_networkSpeed > 0) ...[
-              const SizedBox(height: 4),
-              Text(
-                '下载速度: ${_networkSpeed.toStringAsFixed(2)} Mbps',
-                style: const TextStyle(fontSize: 14),
-              ),
-            ],
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _isTestingNetwork ? null : _testNetworkConnection,
-                icon: _isTestingNetwork
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.network_check),
-                label: const Text('开始测试'),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMicrophoneTestCard() {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.mic, size: 24, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
-                const Text(
-                  '麦克风测试',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const Spacer(),
-                _buildStatusIcon(_recordingStatus),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              '状态: $_recordingStatus',
-              style: const TextStyle(fontSize: 14),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _isRecording ? null : _startRecording,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                      foregroundColor: Colors.white,
+  Widget _buildMicrophoneTestTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Card(
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.mic,
+                    size: 48,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    '麦克风测试',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '测试麦克风录音功能',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Theme.of(context).textTheme.bodySmall?.color,
                     ),
-                    icon: const Icon(Icons.mic),
-                    label: const Text('开始录音'),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _isRecording ? _stopRecording : null,
-                    icon: const Icon(Icons.stop),
-                    label: const Text('停止录音'),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 20),
+          Card(
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text(
+                        '录音状态',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      const Spacer(),
+                      _buildStatusIcon(_recordingStatus),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '状态: $_recordingStatus',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _isRecording ? null : _startRecording,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          icon: const Icon(Icons.mic, size: 20),
+                          label: const Text('开始录音', style: TextStyle(fontSize: 16)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _isRecording ? _stopRecording : null,
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          icon: const Icon(Icons.stop, size: 20),
+                          label: const Text('停止录音', style: TextStyle(fontSize: 16)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildSpeakerTestCard() {
-    return Card(
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.volume_up, size: 24, color: Theme.of(context).colorScheme.primary),
-                const SizedBox(width: 8),
-                const Text(
-                  '扬声器测试',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-                const Spacer(),
-                _buildStatusIcon(_speakerStatus),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              '状态: $_speakerStatus',
-              style: const TextStyle(fontSize: 14),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: (_hasRecordedAudio || _recordingStatus == '正常') && !_isPlaying
-                    ? _playTestAudio
-                    : null,
-                icon: _isPlaying
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.play_arrow),
-                label: Text(_hasRecordedAudio ? '播放录音' : '播放测试音频'),
+  Widget _buildSpeakerTestTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Card(
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.volume_up,
+                    size: 48,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    '扬声器测试',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '测试音频播放功能',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Theme.of(context).textTheme.bodySmall?.color,
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 20),
+          Card(
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text(
+                        '播放状态',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      const Spacer(),
+                      _buildStatusIcon(_speakerStatus),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    '状态: $_speakerStatus',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      onPressed: (_hasRecordedAudio || _recordingStatus == '正常') && !_isPlaying
+                          ? _playTestAudio
+                          : null,
+                      icon: _isPlaying
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.play_arrow, size: 20),
+                      label: Text(
+                        _hasRecordedAudio ? '播放录音' : '播放测试音频',
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -302,50 +446,132 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
     return Icon(icon, color: color, size: 20);
   }
 
-  Widget _buildTestSummary() {
-    if (!_testCompleted) return const SizedBox();
-    
-    return Card(
-      elevation: 4,
-      color: Theme.of(context).colorScheme.secondaryContainer,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            const Text(
-              '测试结果总结',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            _buildSummaryItem('网络连接', _networkStatus, _networkStatus == '正常'),
-            _buildSummaryItem('麦克风', _recordingStatus, _recordingStatus == '正常'),
-            _buildSummaryItem('扬声器', _speakerStatus, _speakerStatus == '正常'),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _resetAllTests,
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('重新测试'),
+  Widget _buildTestSummaryTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Card(
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.assessment,
+                    size: 48,
+                    color: _testCompleted ? Colors.green : Theme.of(context).colorScheme.primary,
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.check),
-                    label: const Text('完成'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green,
-                      foregroundColor: Colors.white,
+                  const SizedBox(height: 16),
+                  Text(
+                    _testCompleted ? '测试完成' : '测试进行中',
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _testCompleted ? '查看测试结果总结' : '完成所有测试后查看总结',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Theme.of(context).textTheme.bodySmall?.color,
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 20),
+          if (_testCompleted)
+            Card(
+              elevation: 4,
+              color: Theme.of(context).colorScheme.secondaryContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    const Text(
+                      '测试结果总结',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildSummaryItem('网络连接', _networkStatus, _networkStatus == '正常'),
+                    _buildSummaryItem('麦克风', _recordingStatus, _recordingStatus == '正常'),
+                    _buildSummaryItem('扬声器', _speakerStatus, _speakerStatus == '正常'),
+                    const SizedBox(height: 16),
+                  ],
+                ),
+              ),
+            )
+          else
+            Card(
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  children: [
+                    const Icon(Icons.info_outline, size: 48, color: Colors.blue),
+                    const SizedBox(height: 16),
+                    const Text(
+                      '测试尚未完成',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '请完成所有三个测试项目后查看总结',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Theme.of(context).textTheme.bodySmall?.color,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          const SizedBox(height: 20),
+          Card(
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  const Text(
+                    '操作选项',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          onPressed: _resetAllTests,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('重新测试', style: TextStyle(fontSize: 16)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.check),
+                          label: const Text('完成', style: TextStyle(fontSize: 16)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:ai_sound_agent/pages/home_page.dart';
-import 'package:ai_sound_agent/app/route.dart';
 import 'package:ai_sound_agent/services/theme_manager.dart';
 
 void main() async {

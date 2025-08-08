@@ -1,43 +1,52 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
+const Map<String, dynamic> defaultUserPreferences = {
+  'color': 'defaultColor',
+  'llmCallingInterval': 10,
+  'sttSendingInterval': -1,
+  'stt': {
+    'mode': 'url',
+    'use_api_key': false,
+    'api_key': '',
+    'url': 'http://localhost:8000',
+    'route': '/stt',
+    'method': 'POST',
+    'headers': {
+      'Content-Type': 'audio/wav',
+    },
+  },
+  'tts': {
+    'mode': 'ip-port',
+    'use_api_key': false,
+    'api_key': '',
+    'ip': '127.0.0.1',
+    'port': 8000,
+    'route': '/tts',
+    'method': 'POST',
+    'headers': {
+      'Content-Type': 'text/plain',
+    },
+  },
+  'llm': {
+    'mode': 'ip-port',
+    'use_api_key': false,
+    'api_key': '',
+    'ip': '127.0.0.1',
+    'port': 8000,
+    'route': '/llm',
+    'method': 'POST',
+    'headers': {
+      'Content-Type': 'text/plain',
+    },
+  }
+};
+
 class Userdata {
   String username = 'anonymous';
 
-  Map<String, dynamic> preferences = {
-    'color': 'defaultColor',
-    'llmCallingInterval': 10,
-    'sttSendingInterval': -1,
-    'stt': {
-      'mode': 'url',
-      'url': 'http://localhost:8000',
-      'route': '/stt',
-      'method': 'POST',
-      'headers': {
-        'Content-Type': 'audio/wav',
-      },
-    },
-    'tts': {
-      'mode': 'ip-port',
-      'ip': '127.0.0.1',
-      'port': 8000,
-      'route': '/tts',
-      'method': 'POST',
-      'headers': {
-        'Content-Type': 'text/plain',
-      },
-    },
-    'llm': {
-      'mode': 'ip-port',
-      'ip': '127.0.0.1',
-      'port': 8000,
-      'route': '/llm',
-      'method': 'POST',
-      'headers': {
-        'Content-Type': 'text/plain',
-      },
-    }
-  };
+  Map<String, dynamic> preferences = defaultUserPreferences;
+
 
   // 构造函数
   Userdata();
@@ -129,40 +138,8 @@ class Userdata {
   // 重置到默认设置
   Future<void> resetToDefaults() async {
     username = 'anonymous';
-    preferences = {
-      'color': 'defaultColor',
-      'llmCallingInterval': 10,
-      'sttSendingInterval': -1,
-      'stt': {
-        'mode': 'url',
-        'url': 'http://localhost:8000',
-        'route': '/stt',
-        'method': 'POST',
-        'headers': {
-          'Content-Type': 'audio/wav',
-        },
-      },
-      'tts': {
-        'mode': 'ip-port',
-        'ip': '127.0.0.1',
-        'port': 8000,
-        'route': '/tts',
-        'method': 'POST',
-        'headers': {
-          'Content-Type': 'text/plain',
-        },
-      },
-      'llm': {
-        'mode': 'ip-port',
-        'ip': '127.0.0.1',
-        'port': 8000,
-        'route': '/llm',
-        'method': 'POST',
-        'headers': {
-          'Content-Type': 'text/plain',
-        },
-      }
-    };
+    preferences = defaultUserPreferences;
+
     await saveUserData();
   }
 
