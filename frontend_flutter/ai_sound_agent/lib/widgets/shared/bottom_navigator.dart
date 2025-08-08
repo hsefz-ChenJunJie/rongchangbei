@@ -72,6 +72,7 @@ class _BottomNavigatorState extends State<BottomNavigator> {
         alignment: Alignment.center,
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               isSelected ? widget.items[index].selectedIcon : widget.items[index].icon,
@@ -80,16 +81,18 @@ class _BottomNavigatorState extends State<BottomNavigator> {
                   ? (widget.selectedColor ?? theme.colorScheme.primary)
                   : (widget.unselectedColor ?? theme.colorScheme.onSurface.withOpacity(0.6)),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2),
             Text(
               widget.items[index].label,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: 11,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
                 color: isSelected 
                     ? (widget.selectedColor ?? theme.colorScheme.primary)
                     : (widget.unselectedColor ?? theme.colorScheme.onSurface.withOpacity(0.6)),
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),

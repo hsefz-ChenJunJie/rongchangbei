@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:ai_sound_agent/widgets/shared/base.dart';
-import 'package:ai_sound_agent/widgets/shared/bottom_navigator.dart';
 import 'package:ai_sound_agent/app/route.dart';
 
 
@@ -28,30 +27,35 @@ class _HomePageState extends BasePageState<HomePage> {
 
   @override
   Widget buildContent(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            '当前页面: ${_pageTitles[_currentPageIndex]}',
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+    return SingleChildScrollView(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                '当前页面: ${_pageTitles[_currentPageIndex]}',
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                '这是使用BasePage的基础页面',
+                style: TextStyle(fontSize: 16),
+              ),
+              const SizedBox(height: 40),
+              ElevatedButton(
+                onPressed: () {
+                  // 测试面包屑导航
+                  final routeState = AppRouteState();
+                  routeState.push('settings');
+                  setState(() {});
+                },
+                child: const Text('测试面包屑导航'),
+              ),
+            ],
           ),
-          const SizedBox(height: 20),
-          const Text(
-            '这是使用BasePage的基础页面',
-            style: TextStyle(fontSize: 16),
-          ),
-          const SizedBox(height: 40),
-          ElevatedButton(
-            onPressed: () {
-              // 测试面包屑导航
-              final routeState = AppRouteState();
-              routeState.push('settings');
-              setState(() {});
-            },
-            child: const Text('测试面包屑导航'),
-          ),
-        ],
+        ),
       ),
     );
   }
