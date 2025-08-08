@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../widgets/shared/base.dart';
+import '../widgets/shared/base_line_input.dart';
+import '../services/userdata_services.dart';
 
 class Settings extends BasePage {
   const Settings({Key? key})
@@ -16,28 +18,250 @@ class Settings extends BasePage {
 }
 
 class _SettingsState extends BasePageState<Settings> {
+  late Userdata _userData;
+  bool _isLoading = true;
+  bool _hasChanges = false;
+
+  // 控制器
+  final TextEditingController _colorController = TextEditingController();
+  final TextEditingController _llmIntervalController = TextEditingController();
+  final TextEditingController _sttIntervalController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  @override
+  void dispose() {
+    _colorController.dispose();
+    _llmIntervalController.dispose();
+    _sttIntervalController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      _userData = Userdata();
+      await _userData.loadUserData();
+      
+      // 设置控制器初始值
+      _colorController.text = _userData.preferences['color'] ?? 'defaultColor';
+      _llmIntervalController.text = _userData.preferences['llmCallingInterval'].toString();
+      _sttIntervalController.text = _userData.preferences['sttSendingInterval'].toString();
+      
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('加载用户数据失败: $e');
+      // 使用默认数据
+      _userData = Userdata();
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _handleColorChanged(String value) {
+    setState(() {
+      _userData.preferences['color'] = value;
+      _hasChanges = true;
+    });
+  }
+
+  void _handleLlmIntervalChanged(String value) {
+    setState(() {
+      _userData.preferences['llmCallingInterval'] = int.tryParse(value) ?? 10;
+      _hasChanges = true;
+    });
+  }
+
+  void _handleSttIntervalChanged(String value) {
+    setState(() {
+      _userData.preferences['sttSendingInterval'] = int.tryParse(value) ?? -1;
+      _hasChanges = true;
+    });
+  }
+
+  Future<void> _saveSettings() async {
+    try {
+      await _userData.saveUserData();
+      setState(() {
+        _hasChanges = false;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('设置已保存'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('保存失败: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _resetToDefaults() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('重置设置'),
+        content: const Text('确定要重置所有设置为默认值吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('确定'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _userData.resetToDefaults();
+      
+      // 重新加载控制器值
+      _colorController.text = _userData.preferences['color'] ?? 'defaultColor';
+      _llmIntervalController.text = _userData.preferences['llmCallingInterval'].toString();
+      _sttIntervalController.text = _userData.preferences['sttSendingInterval'].toString();
+      
+      setState(() {
+        _hasChanges = false;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('已重置为默认设置'),
+          backgroundColor: Colors.blue,
+        ),
+      );
+    }
+  }
+
   @override
   Widget buildContent(BuildContext context) {
-    final args = ModalRoute.of(context)!.settings.arguments as Map;
+    final args = ModalRoute.of(context)!.settings.arguments as Map?;
     
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     return SingleChildScrollView(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (args != null && args['message'] != null)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  '来源: ${args['message']}',
+                  style: const TextStyle(fontSize: 14, color: Colors.grey),
+                ),
+              ),
+            ),
+          
+          const SizedBox(height: 16),
+          
+          const Text(
+            '外观设置',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          
+          BaseLineInput(
+            label: '主题颜色',
+            controller: _colorController,
+            placeholder: '例如: blue, red, green, defaultColor',
+            onChanged: _handleColorChanged,
+          ),
+          
+          const SizedBox(height: 24),
+          
+          const Text(
+            '功能设置',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          
+          BaseLineInput(
+            label: 'LLM调用间隔 (秒)',
+            controller: _llmIntervalController,
+            placeholder: '请输入调用间隔，-1表示禁用',
+            keyboardType: TextInputType.number,
+            onChanged: _handleLlmIntervalChanged,
+          ),
+          
+          const SizedBox(height: 16),
+          
+          BaseLineInput(
+            label: 'STT发送间隔 (秒)',
+            controller: _sttIntervalController,
+            placeholder: '请输入发送间隔，-1表示禁用',
+            keyboardType: TextInputType.number,
+            onChanged: _handleSttIntervalChanged,
+          ),
+          
+          const SizedBox(height: 32),
+          
+          Row(
             children: [
-              Text('收到参数: ${args['message'] ?? '无参数'}'),
-              const SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context, '操作成功'); // 返回结果
-                },
-                child: const Text('返回'),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: _hasChanges ? _saveSettings : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: const Text(
+                    '保存设置',
+                    style: TextStyle(fontSize: 16, color: Colors.white),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _resetToDefaults,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: const Text(
+                    '重置为默认',
+                    style: TextStyle(fontSize: 16),
+                  ),
+                ),
               ),
             ],
           ),
-        ),
+          
+          const SizedBox(height: 16),
+          
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context, '设置已更新');
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+            child: const Text(
+              '返回',
+              style: TextStyle(fontSize: 16, color: Colors.white),
+            ),
+          ),
+        ],
       ),
     );
   }

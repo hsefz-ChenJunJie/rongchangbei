@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../widgets/shared/base.dart';
-import '../widgets/shared/bottom_navigator.dart';
 
 class SampleBasePage extends BasePage {
   const SampleBasePage({Key? key}) : super(
@@ -58,7 +57,4 @@ class _SampleBasePageState extends BasePageState<SampleBasePage> {
       ),
     );
   }
-
-  // 使用默认的底部导航栏（来自constants.dart）
-  // 如需自定义，可以重写此方法
 }
