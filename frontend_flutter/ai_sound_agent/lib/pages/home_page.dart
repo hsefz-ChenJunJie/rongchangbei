@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:ai_sound_agent/widgets/shared/base.dart';
 import 'package:ai_sound_agent/app/route.dart';
 import 'package:ai_sound_agent/pages/device_test_page.dart';
+import 'package:ai_sound_agent/pages/tabs_demo_simple.dart';
 
 
 class HomePage extends BasePage {
@@ -57,6 +58,19 @@ class _HomePageState extends BasePageState<HomePage> {
                 icon: const Icon(Icons.devices),
                 label: const Text('设备功能测试'),
               ),
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const TabsDemoSimple(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.tab),
+            label: const Text('Tab组件演示'),
+          ),
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () {
