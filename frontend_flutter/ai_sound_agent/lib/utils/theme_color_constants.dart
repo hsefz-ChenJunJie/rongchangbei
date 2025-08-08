@@ -29,6 +29,13 @@ enum ThemeColor {
     Color(0xffff6dba),
     Color(0xffffd3ea),
     Color(0xffff86c6)
+  ),
+  dab9ffColor(
+    Color(0xffdab9ff),
+    Color(0xfff5ecff),
+    Color(0xffb26dff),
+    Color(0xffe7d3ff),
+    Color(0xffbf86ff)
   );
 
 
