@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+import 'package:ai_sound_agent/widgets/shared/bottom_navigator.dart';
 
 // app name
 
@@ -14,3 +16,22 @@ const String textToSpeechApiRoute = '/tts';
 const String speechToTextApiRoute = '/stt';
 const String largeLanguageModelApiRoute = '/llm';
 
+// navigator pagetiles
+
+const List<BottomNavItem> pagetiles = const [
+  BottomNavItem(
+    icon: Icons.home_outlined,
+    selectedIcon: Icons.home,
+    label: '首页',
+  ),
+  BottomNavItem(
+    icon: Icons.favorite_outline,
+    selectedIcon: Icons.favorite,
+    label: '收藏',
+  ),
+  BottomNavItem(
+    icon: Icons.person_outline,
+    selectedIcon: Icons.person,
+    label: '我的',
+  ),
+];

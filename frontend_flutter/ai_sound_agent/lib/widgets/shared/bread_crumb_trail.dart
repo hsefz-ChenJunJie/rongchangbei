@@ -9,7 +9,12 @@ class BreadcrumbTrail extends StatelessWidget {
   
   @override
   Widget build(BuildContext context) {
+    if (state.breadcrumbs.isEmpty) {
+      return const Text('首页');
+    }
+    
     return Wrap(
+      spacing: 4,
       children: [
         for (int i = 0; i < state.breadcrumbs.length; i++)
           GestureDetector(
@@ -18,11 +23,14 @@ class BreadcrumbTrail extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  state.breadcrumbs[i],
+                  _getDisplayName(state.breadcrumbs[i]),
                   style: TextStyle(
                     color: i == state.breadcrumbs.length - 1 
-                      ? Colors.blue 
+                      ? Theme.of(context).colorScheme.primary
                       : Colors.grey,
+                    fontWeight: i == state.breadcrumbs.length - 1 
+                      ? FontWeight.bold
+                      : FontWeight.normal,
                   ),
                 ),
                 if (i < state.breadcrumbs.length - 1)
@@ -35,5 +43,21 @@ class BreadcrumbTrail extends StatelessWidget {
           ),
         ],
     );
+  }
+  
+  String _getDisplayName(String route) {
+    // 将路由路径转换为显示名称
+    switch (route) {
+      case '/':
+        return '首页';
+      case 'settings':
+        return '设置';
+      case 'advanced':
+        return '高级设置';
+      case 'shop':
+        return '商店';
+      default:
+        return route.isEmpty ? '首页' : route;
+    }
   }
 }
