@@ -6,6 +6,7 @@ import 'basebutton.dart';
 import '../../pages/settings.dart';
 import '../../app/route.dart';
 import '../../utils/constants.dart';
+import '../../services/theme_manager.dart';
 
 abstract class BasePage extends StatefulWidget {
   final String title;
@@ -73,16 +74,21 @@ abstract class BasePageState<T extends BasePage> extends State<T> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final themeManager = ThemeManager();
     
     return Scaffold(
+      backgroundColor: themeManager.lighterColor,
       appBar: widget.showBreadcrumb || widget.title.isNotEmpty
           ? AppBar(
-              title: widget.showBreadcrumb
-                  ? BreadcrumbTrail(state: _routeState)
-                  : Text(widget.title),
-              backgroundColor: theme.colorScheme.surface,
+                title: widget.showBreadcrumb
+                    ? BreadcrumbTrail(state: _routeState)
+                    : Text(
+                        widget.title,
+                        style: TextStyle(color: themeManager.darkTextColor),
+                      ),
+              backgroundColor: themeManager.lighterColor,
               elevation: 0,
+              iconTheme: IconThemeData(color: themeManager.darkTextColor),
             )
           : null,
       
@@ -93,8 +99,8 @@ abstract class BasePageState<T extends BasePage> extends State<T> {
       floatingActionButton: widget.showSettingsFab
           ? FloatingActionButton(
               onPressed: navigateToSettings,
-              backgroundColor: theme.colorScheme.primary,
-              child: const Icon(Icons.settings, color: Colors.white),
+              backgroundColor: themeManager.darkerColor,
+              child: Icon(Icons.settings, color: themeManager.lightTextColor),
             )
           : null,
       

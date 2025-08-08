@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ai_sound_agent/app/route.dart';
+import '../../services/theme_manager.dart';
 
 
 class BreadcrumbTrail extends StatelessWidget {
@@ -9,8 +10,13 @@ class BreadcrumbTrail extends StatelessWidget {
   
   @override
   Widget build(BuildContext context) {
+    final themeManager = ThemeManager();
+    
     if (state.breadcrumbs.isEmpty) {
-      return const Text('首页');
+      return Text(
+        '首页',
+        style: TextStyle(color: themeManager.darkTextColor),
+      );
     }
     
     return Wrap(
@@ -26,17 +32,17 @@ class BreadcrumbTrail extends StatelessWidget {
                   _getDisplayName(state.breadcrumbs[i]),
                   style: TextStyle(
                     color: i == state.breadcrumbs.length - 1 
-                      ? Theme.of(context).colorScheme.primary
-                      : Colors.grey,
+                      ? themeManager.lighterColor
+                      : themeManager.darkTextColor.withValues(alpha: 0.6),
                     fontWeight: i == state.breadcrumbs.length - 1 
                       ? FontWeight.bold
                       : FontWeight.normal,
                   ),
                 ),
                 if (i < state.breadcrumbs.length - 1)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 4),
-                    child: Text('>', style: TextStyle(color: Colors.grey)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text('>', style: TextStyle(color: themeManager.darkTextColor.withValues(alpha: 0.4))),
                   )
               ],
             ),

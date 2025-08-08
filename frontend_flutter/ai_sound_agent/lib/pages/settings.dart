@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../widgets/shared/base.dart';
 import '../widgets/shared/base_line_input.dart';
 import '../services/userdata_services.dart';
+import '../services/theme_manager.dart';
+import '../utils/theme_color_constants.dart';
 
 class Settings extends BasePage {
   const Settings({Key? key})
@@ -64,11 +66,14 @@ class _SettingsState extends BasePageState<Settings> {
     }
   }
 
-  void _handleColorChanged(String value) {
+  void _handleColorChanged(String value) async {
     setState(() {
       _userData.preferences['color'] = value;
       _hasChanges = true;
     });
+    
+    // 立即更新主题
+    await ThemeManager().updateTheme(value);
   }
 
   void _handleLlmIntervalChanged(String value) {
@@ -183,8 +188,40 @@ class _SettingsState extends BasePageState<Settings> {
           BaseLineInput(
             label: '主题颜色',
             controller: _colorController,
-            placeholder: '例如: blue, red, green, defaultColor',
+            placeholder: '例如: defaultColor, defaultRedColor, peachpuffColor',
             onChanged: _handleColorChanged,
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: ThemeColor.values.map((themeColor) {
+              final isSelected = _colorController.text == themeColor.name;
+              return GestureDetector(
+                onTap: () => _handleColorChanged(themeColor.name),
+                child: Container(
+                  width: 60,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: themeColor.baseColor,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isSelected ? Colors.black : Colors.transparent,
+                      width: isSelected ? 2 : 0,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      themeColor.name.substring(0, 1).toUpperCase(),
+                      style: TextStyle(
+                        color: themeColor.lightTextColor,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
           ),
           
           const SizedBox(height: 24),
@@ -221,7 +258,7 @@ class _SettingsState extends BasePageState<Settings> {
                 child: ElevatedButton(
                   onPressed: _hasChanges ? _saveSettings : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
+                    backgroundColor: ThemeManager().baseColor,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                   child: const Text(
@@ -232,14 +269,15 @@ class _SettingsState extends BasePageState<Settings> {
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: OutlinedButton(
+                child: ElevatedButton(
                   onPressed: _resetToDefaults,
-                  style: OutlinedButton.styleFrom(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: ThemeManager().baseColor,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                   child: const Text(
                     '重置为默认',
-                    style: TextStyle(fontSize: 16),
+                    style: TextStyle(fontSize: 16, color: Colors.white),
                   ),
                 ),
               ),

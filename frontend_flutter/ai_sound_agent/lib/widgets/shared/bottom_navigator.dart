@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../services/theme_manager.dart';
 
 class BottomNavigator extends StatefulWidget {
   final int currentIndex;
@@ -30,15 +31,15 @@ class BottomNavigator extends StatefulWidget {
 class _BottomNavigatorState extends State<BottomNavigator> {
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final themeManager = ThemeManager();
     
     return Container(
       height: widget.height,
       decoration: BoxDecoration(
-        color: widget.backgroundColor ?? theme.colorScheme.surface,
+        color: widget.backgroundColor ?? themeManager.darkerColor,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 8,
             offset: const Offset(0, -2),
           ),
@@ -59,7 +60,7 @@ class _BottomNavigatorState extends State<BottomNavigator> {
 
   Widget _buildNavItem(int index) {
     final isSelected = index == widget.currentIndex;
-    final theme = Theme.of(context);
+    final themeManager = ThemeManager();
     
     return GestureDetector(
       onTap: () {
@@ -78,8 +79,8 @@ class _BottomNavigatorState extends State<BottomNavigator> {
               isSelected ? widget.items[index].selectedIcon : widget.items[index].icon,
               size: widget.iconSize,
               color: isSelected 
-                  ? (widget.selectedColor ?? theme.colorScheme.primary)
-                  : (widget.unselectedColor ?? theme.colorScheme.onSurface.withOpacity(0.6)),
+                  ? (widget.selectedColor ?? themeManager.lightTextColor)
+                  : (widget.unselectedColor ?? themeManager.lightTextColor.withValues(alpha: 0.6)),
             ),
             const SizedBox(height: 2),
             Text(
@@ -88,8 +89,8 @@ class _BottomNavigatorState extends State<BottomNavigator> {
                 fontSize: 11,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
                 color: isSelected 
-                    ? (widget.selectedColor ?? theme.colorScheme.primary)
-                    : (widget.unselectedColor ?? theme.colorScheme.onSurface.withOpacity(0.6)),
+                    ? (widget.selectedColor ?? themeManager.lightTextColor)
+                    : (widget.unselectedColor ?? themeManager.lightTextColor.withValues(alpha: 0.6)),
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

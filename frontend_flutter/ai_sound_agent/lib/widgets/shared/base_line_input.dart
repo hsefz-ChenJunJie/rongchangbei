@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../services/theme_manager.dart';
 
 class BaseLineInput extends StatefulWidget {
   final String label;
@@ -106,7 +107,11 @@ class _BaseLineInputState extends State<BaseLineInput> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final themeManager = ThemeManager();
+    final baseColor = themeManager.baseColor;
+    final darkerColor = themeManager.darkerColor;
+    final lighterColor = themeManager.lighterColor;
+    final darkTextColor = themeManager.darkTextColor;
     
     return Focus(
       onFocusChange: (hasFocus) {
@@ -120,7 +125,7 @@ class _BaseLineInputState extends State<BaseLineInput> {
           Container(
             decoration: BoxDecoration(
               border: Border.all(
-                color: _isFocused ? widget.focusColor : widget.borderColor,
+                color: _isFocused ? baseColor : darkerColor,
                 width: widget.borderWidth,
               ),
               borderRadius: BorderRadius.circular(widget.borderRadius),
@@ -134,13 +139,13 @@ class _BaseLineInputState extends State<BaseLineInput> {
               maxLength: widget.maxLength,
               enabled: widget.enabled,
               style: widget.textStyle ?? TextStyle(
-                color: widget.textColor,
+                color: darkTextColor,
                 fontSize: 16,
               ),
               decoration: InputDecoration(
                 hintText: widget.placeholder,
                 hintStyle: widget.placeholderStyle ?? TextStyle(
-                  color: widget.placeholderColor,
+                  color: darkTextColor.withValues(alpha: 0.6),
                   fontSize: 16,
                 ),
                 border: InputBorder.none,
@@ -154,12 +159,12 @@ class _BaseLineInputState extends State<BaseLineInput> {
             top: -8,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 4),
-              color: theme.scaffoldBackgroundColor,
+              color: lighterColor,
               child: Text(
                 widget.label,
                 style: widget.labelStyle ?? TextStyle(
                   fontSize: 12,
-                  color: _isFocused ? widget.focusColor : widget.labelColor,
+                  color: _isFocused ? baseColor : darkTextColor,
                   fontWeight: FontWeight.w500,
                 ),
               ),

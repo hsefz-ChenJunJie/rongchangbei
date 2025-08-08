@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:ai_sound_agent/widgets/shared/base.dart';
 import 'package:ai_sound_agent/app/route.dart';
+import 'package:ai_sound_agent/pages/device_test_page.dart';
 
 
 class HomePage extends BasePage {
-  const HomePage({Key? key}) : super(
-    key: key,
-    title: '首页',
-    showBottomNav: true,
-    showBreadcrumb: true,
-    showSettingsFab: true,
-  );
+  const HomePage({super.key})
+      : super(
+          title: '首页',
+          showBottomNav: true,
+          showBreadcrumb: true,
+          showSettingsFab: true,
+        );
 
   @override
   _HomePageState createState() => _HomePageState();
@@ -43,7 +44,20 @@ class _HomePageState extends BasePageState<HomePage> {
                 '这是使用BasePage的基础页面',
                 style: TextStyle(fontSize: 16),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const DeviceTestPage(),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.devices),
+                label: const Text('设备功能测试'),
+              ),
+              const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: () {
                   // 测试面包屑导航

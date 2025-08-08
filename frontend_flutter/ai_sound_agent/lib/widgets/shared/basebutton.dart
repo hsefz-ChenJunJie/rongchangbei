@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../services/theme_manager.dart';
 
 class BaseButton extends StatefulWidget {
   final IconData? icon;
   final String? text;
-  final Color primaryColor;
-  final Color secondaryColor;
+  final Color? primaryColor;
+  final Color? secondaryColor;
   final VoidCallback? onPressed;
   final double? width;
   final double? height;
@@ -18,8 +19,8 @@ class BaseButton extends StatefulWidget {
     Key? key,
     this.icon,
     this.text,
-    required this.primaryColor,
-    required this.secondaryColor,
+    this.primaryColor,
+    this.secondaryColor,
     this.onPressed,
     this.width,
     this.height = 48,
@@ -39,17 +40,24 @@ class _BaseButtonState extends State<BaseButton> {
   bool _isPressed = false;
 
   Color get _currentBackgroundColor {
+    final themeManager = ThemeManager();
+    final primaryColor = widget.primaryColor ?? themeManager.darkerColor;
+    final secondaryColor = widget.secondaryColor ?? themeManager.baseColor;
+    
     if (_isPressed) {
-      return widget.secondaryColor;
+      return secondaryColor;
     } else if (_isHovered) {
-      return widget.secondaryColor;
+      return secondaryColor;
     } else {
-      return widget.primaryColor;
+      return primaryColor;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final themeManager = ThemeManager();
+    final textColor = themeManager.lightTextColor;
+
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
@@ -70,7 +78,7 @@ class _BaseButtonState extends State<BaseButton> {
             borderRadius: BorderRadius.circular(widget.borderRadius),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withValues(alpha: 0.1),
                 blurRadius: 4,
                 offset: const Offset(0, 2),
               ),
@@ -84,7 +92,7 @@ class _BaseButtonState extends State<BaseButton> {
                 Icon(
                   widget.icon,
                   size: widget.iconSize,
-                  color: Colors.white,
+                  color: textColor,
                 ),
                 if (widget.text != null) SizedBox(width: widget.spacing),
               ],
@@ -92,8 +100,8 @@ class _BaseButtonState extends State<BaseButton> {
                 Text(
                   widget.text!,
                   style: widget.textStyle ??
-                      const TextStyle(
-                        color: Colors.white,
+                      TextStyle(
+                        color: textColor,
                         fontSize: 16,
                         fontWeight: FontWeight.w500,
                       ),
