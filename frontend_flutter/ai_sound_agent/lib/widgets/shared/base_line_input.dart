@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'base_elevated_button.dart';
 import '../../services/theme_manager.dart';
 
 class BaseLineInput extends StatefulWidget {
@@ -293,18 +294,32 @@ class _BaseLineInputExamplesState extends State<BaseLineInputExamples> {
             Row(
               spacing: 8,
               children: [
-                ElevatedButton(
+                BaseElevatedButton(
                   onPressed: () {
                     setState(() {
                       _controller1.text = '新设置的文本';
                     });
                   },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
                   child: const Text('设置邮箱文本'),
                 ),
-                ElevatedButton(
+                BaseElevatedButton(
                   onPressed: () {
                     _controller1.clear();
                   },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
                   child: const Text('清空邮箱'),
                 ),
               ],

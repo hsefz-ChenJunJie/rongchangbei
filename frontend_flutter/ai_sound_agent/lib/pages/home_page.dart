@@ -3,6 +3,7 @@ import 'package:ai_sound_agent/widgets/shared/base.dart';
 import 'package:ai_sound_agent/app/route.dart';
 import 'package:ai_sound_agent/pages/device_test_page.dart';
 import 'package:ai_sound_agent/pages/tabs_demo_simple.dart';
+import '../widgets/shared/base_elevated_button.dart';
 
 
 class HomePage extends BasePage {
@@ -46,7 +47,7 @@ class _HomePageState extends BasePageState<HomePage> {
                 style: TextStyle(fontSize: 16),
               ),
               const SizedBox(height: 20),
-              ElevatedButton.icon(
+              BaseElevatedButton.icon(
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -55,30 +56,54 @@ class _HomePageState extends BasePageState<HomePage> {
                     ),
                   );
                 },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
                 icon: const Icon(Icons.devices),
-                label: const Text('设备功能测试'),
+                label: '设备功能测试',
               ),
               const SizedBox(height: 16),
-              ElevatedButton.icon(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const TabsDemoSimple(),
+              BaseElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const TabsDemoSimple(),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-              );
-            },
-            icon: const Icon(Icons.tab),
-            label: const Text('Tab组件演示'),
-          ),
+                icon: const Icon(Icons.tab),
+                label: 'Tab组件演示',
+              ),
               const SizedBox(height: 16),
-              ElevatedButton(
+              BaseElevatedButton(
                 onPressed: () {
                   // 测试面包屑导航
                   final routeState = AppRouteState();
                   routeState.push('settings');
                   setState(() {});
                 },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
                 child: const Text('测试面包屑导航'),
               ),
             ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../widgets/shared/base.dart';
+import '../widgets/shared/base_elevated_button.dart';
 
 class SampleBasePage extends BasePage {
   const SampleBasePage({Key? key}) : super(
@@ -33,12 +34,20 @@ class _SampleBasePageState extends BasePageState<SampleBasePage> {
             style: const TextStyle(fontSize: 24),
           ),
           const SizedBox(height: 20),
-          ElevatedButton(
+          BaseElevatedButton(
             onPressed: () {
               setState(() {
                 _counter++;
               });
             },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
             child: const Text('增加计数'),
           ),
         ],

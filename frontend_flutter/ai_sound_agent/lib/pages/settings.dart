@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import '../widgets/shared/base.dart';
 import '../widgets/shared/base_line_input.dart';
+import '../widgets/shared/base_elevated_button.dart';
+import '../utils/theme_color_constants.dart';
 import '../services/userdata_services.dart';
 import '../services/theme_manager.dart';
-import '../utils/theme_color_constants.dart';
 
 class Settings extends BasePage {
   const Settings({Key? key})
@@ -255,29 +256,37 @@ class _SettingsState extends BasePageState<Settings> {
           Row(
             children: [
               Expanded(
-                child: ElevatedButton(
+                child: BaseElevatedButton(
                   onPressed: _hasChanges ? _saveSettings : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: ThemeManager().baseColor,
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   child: const Text(
                     '保存设置',
-                    style: TextStyle(fontSize: 16, color: Colors.white),
+                    style: TextStyle(fontSize: 16),
                   ),
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: ElevatedButton(
+                child: BaseElevatedButton(
                   onPressed: _resetToDefaults,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: ThemeManager().baseColor,
+                    foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   child: const Text(
                     '重置为默认',
-                    style: TextStyle(fontSize: 16, color: Colors.white),
+                    style: TextStyle(fontSize: 16),
                   ),
                 ),
               ),
@@ -286,17 +295,21 @@ class _SettingsState extends BasePageState<Settings> {
           
           const SizedBox(height: 16),
           
-          ElevatedButton(
+          BaseElevatedButton(
             onPressed: () {
               Navigator.pop(context, '设置已更新');
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
             child: const Text(
               '返回',
-              style: TextStyle(fontSize: 16, color: Colors.white),
+              style: TextStyle(fontSize: 16),
             ),
           ),
         ],

@@ -1,0 +1,238 @@
+import 'package:flutter/material.dart';
+import '../../utils/theme_color_constants.dart';
+
+class BaseElevatedButton extends StatelessWidget {
+  final VoidCallback? onPressed;
+  final Widget? child;
+  final Widget? icon;
+  final String? label;
+  final Color? backgroundColor;
+  final Color? foregroundColor;
+  final bool isSpecial;
+  final ButtonStyle? style;
+  final double? elevation;
+  final EdgeInsetsGeometry? padding;
+  final double borderRadius;
+  final double? width;
+  final double? height;
+  final bool expanded;
+
+  const BaseElevatedButton({
+    Key? key,
+    this.onPressed,
+    this.child,
+    this.icon,
+    this.label,
+    this.backgroundColor,
+    this.foregroundColor,
+    this.isSpecial = false,
+    this.style,
+    this.elevation,
+    this.padding,
+    this.borderRadius = 8.0,
+    this.width,
+    this.height,
+    this.expanded = false,
+  })  : assert(child != null || (icon != null && label != null)),
+        super(key: key);
+
+  const BaseElevatedButton.icon({
+    Key? key,
+    required VoidCallback? onPressed,
+    required Widget icon,
+    required String label,
+    Color? backgroundColor,
+    Color? foregroundColor,
+    bool isSpecial = false,
+    ButtonStyle? style,
+    double? elevation,
+    EdgeInsetsGeometry? padding,
+    double borderRadius = 8.0,
+    double? width,
+    double? height,
+    bool expanded = false,
+  }) : this(
+          key: key,
+          onPressed: onPressed,
+          icon: icon,
+          label: label,
+          backgroundColor: backgroundColor,
+          foregroundColor: foregroundColor,
+          isSpecial: isSpecial,
+          style: style,
+          elevation: elevation,
+          padding: padding,
+          borderRadius: borderRadius,
+          width: width,
+          height: height,
+          expanded: expanded,
+        );
+
+  ButtonStyle _getButtonStyle(BuildContext context) {
+    if (style != null) return style!;
+
+    final theme = Theme.of(context);
+    final primaryColor = theme.colorScheme.primary;
+
+    ThemeColor themeColor = ThemeColor.defaultColor;
+    for (var color in ThemeColor.values) {
+      if (color.baseColor.value == primaryColor.value) {
+        themeColor = color;
+        break;
+      }
+    }
+
+    if (isSpecial) {
+      return ElevatedButton.styleFrom(
+        backgroundColor: backgroundColor,
+        foregroundColor: foregroundColor ?? Colors.white,
+        padding: padding ?? const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(borderRadius),
+        ),
+        elevation: elevation ?? 2,
+      );
+    }
+
+    return ElevatedButton.styleFrom(
+      backgroundColor: backgroundColor ?? themeColor.darkerColor,
+      foregroundColor: foregroundColor ?? themeColor.lightTextColor,
+      padding: padding ?? const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(borderRadius),
+      ),
+      elevation: elevation ?? 2,
+    ).copyWith(
+      backgroundColor: MaterialStateProperty.resolveWith<Color?>(
+        (Set<MaterialState> states) {
+          if (states.contains(MaterialState.pressed)) {
+            return backgroundColor ?? themeColor.baseColor;
+          }
+          if (states.contains(MaterialState.hovered)) {
+            return backgroundColor ?? themeColor.baseColor;
+          }
+          if (states.contains(MaterialState.focused)) {
+            return backgroundColor ?? themeColor.baseColor;
+          }
+          if (states.contains(MaterialState.disabled)) {
+            return (backgroundColor ?? themeColor.darkerColor).withValues(alpha: 0.5);
+          }
+          return backgroundColor ?? themeColor.darkerColor;
+        },
+      ),
+      foregroundColor: MaterialStateProperty.resolveWith<Color?>(
+        (Set<MaterialState> states) {
+          if (states.contains(MaterialState.disabled)) {
+            return (foregroundColor ?? themeColor.lightTextColor).withValues(alpha: 0.5);
+          }
+          return foregroundColor ?? themeColor.lightTextColor;
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final buttonStyle = _getButtonStyle(context);
+
+    Widget button;
+    if (child != null) {
+      button = ElevatedButton(
+        onPressed: onPressed,
+        style: buttonStyle,
+        child: child,
+      );
+    } else {
+      button = ElevatedButton.icon(
+        onPressed: onPressed,
+        style: buttonStyle,
+        icon: icon!,
+        label: Text(
+          label!,
+          style: const TextStyle(fontSize: 16),
+        ),
+      );
+    }
+
+    if (width != null || height != null) {
+      button = SizedBox(
+        width: width,
+        height: height,
+        child: button,
+      );
+    }
+
+    if (expanded) {
+      button = SizedBox(
+        width: double.infinity,
+        child: button,
+      );
+    }
+
+    return button;
+  }
+}
+
+// 使用示例
+class BaseElevatedButtonExamples extends StatelessWidget {
+  const BaseElevatedButtonExamples({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Base Elevated Button Examples')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          spacing: 16,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 基本用法
+            BaseElevatedButton(
+              onPressed: () {},
+              child: const Text('基础按钮'),
+            ),
+
+            // 图标按钮
+            BaseElevatedButton.icon(
+              onPressed: () {},
+              icon: const Icon(Icons.add),
+              label: '添加',
+            ),
+
+            // 特殊颜色按钮
+            BaseElevatedButton.icon(
+              onPressed: () {},
+              icon: const Icon(Icons.delete),
+              label: '删除',
+              isSpecial: true,
+              backgroundColor: Colors.red,
+            ),
+
+            // 禁用状态
+            const BaseElevatedButton(
+              onPressed: null,
+              child: Text('禁用按钮'),
+            ),
+
+            // 自定义尺寸
+            BaseElevatedButton(
+              onPressed: () {},
+              width: 200,
+              height: 50,
+              child: const Text('自定义尺寸'),
+            ),
+
+            // 扩展宽度
+            BaseElevatedButton.icon(
+              onPressed: () {},
+              icon: const Icon(Icons.save),
+              label: '保存',
+              expanded: true,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

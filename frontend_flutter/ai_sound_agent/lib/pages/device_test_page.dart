@@ -5,7 +5,9 @@ import 'package:record/record.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:dio/dio.dart';
 import '../widgets/shared/base.dart';
+import '../widgets/shared/base_elevated_button.dart';
 import '../widgets/shared/tabs.dart';
+import '../utils/theme_color_constants.dart';
 
 class DeviceTestPage extends BasePage {
   const DeviceTestPage({super.key})
@@ -207,9 +209,14 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
                   const SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton.icon(
+                    child: BaseElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
                         padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                       onPressed: _isTestingNetwork ? null : _testNetworkConnection,
                       icon: _isTestingNetwork
@@ -219,7 +226,7 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.network_check, size: 20),
-                      label: const Text('开始网络测试', style: TextStyle(fontSize: 16)),
+                      label: '开始网络测试',
                     ),
                   ),
                 ],
@@ -293,26 +300,34 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
                   Row(
                     children: [
                       Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _isRecording ? null : _startRecording,
+                        child: BaseElevatedButton.icon(
+                          onPressed: _isRecording ? _stopRecording : _startRecording,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
+                            backgroundColor: _isRecording ? Colors.orange : Colors.red,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
-                          icon: const Icon(Icons.mic, size: 20),
-                          label: const Text('开始录音', style: TextStyle(fontSize: 16)),
+                          icon: Icon(_isRecording ? Icons.stop : Icons.mic, size: 20),
+                          label: _isRecording ? '停止录音' : '开始录音',
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _isRecording ? _stopRecording : null,
+                        child: BaseElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
+                            backgroundColor: Theme.of(context).colorScheme.primary,
+                            foregroundColor: Theme.of(context).colorScheme.onPrimary,
                             padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
-                          icon: const Icon(Icons.stop, size: 20),
-                          label: const Text('停止录音', style: TextStyle(fontSize: 16)),
+                          onPressed: _resetAllTests,
+                          icon: const Icon(Icons.refresh),
+                          label: '重新测试',
                         ),
                       ),
                     ],
@@ -387,9 +402,14 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
                   const SizedBox(height: 20),
                   SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton.icon(
+                    child: BaseElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
                         padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
                       ),
                       onPressed: (_hasRecordedAudio || _recordingStatus == '正常') && !_isPlaying
                           ? _playTestAudio
@@ -401,10 +421,7 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.play_arrow, size: 20),
-                      label: Text(
-                        _hasRecordedAudio ? '播放录音' : '播放测试音频',
-                        style: const TextStyle(fontSize: 16),
-                      ),
+                      label: _hasRecordedAudio ? '播放录音' : '播放测试音频',
                     ),
                   ),
                 ],
@@ -543,26 +560,34 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
                   Row(
                     children: [
                       Expanded(
-                        child: ElevatedButton.icon(
+                        child: BaseElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
+                            backgroundColor: Theme.of(context).colorScheme.primary,
+                            foregroundColor: Theme.of(context).colorScheme.onPrimary,
                             padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                           onPressed: _resetAllTests,
                           icon: const Icon(Icons.refresh),
-                          label: const Text('重新测试', style: TextStyle(fontSize: 16)),
+                          label: '重新测试',
                         ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: ElevatedButton.icon(
+                        child: BaseElevatedButton.icon(
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
                           ),
                           onPressed: () => Navigator.pop(context),
                           icon: const Icon(Icons.check),
-                          label: const Text('完成', style: TextStyle(fontSize: 16)),
+                          label: '完成',
                         ),
                       ),
                     ],
@@ -699,6 +724,7 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
     } catch (e) {
       setState(() {
         _recordingStatus = '失败';
+        _isRecording = false;
       });
     }
   }
@@ -715,6 +741,7 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
     } catch (e) {
       setState(() {
         _recordingStatus = '失败';
+        _isRecording = false;
       });
     }
   }
@@ -765,5 +792,16 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
       _hasRecordedAudio = false;
       _recordedFilePath = null;
     });
+  }
+
+  ButtonStyle _getStandardButtonStyle(BuildContext context, {Color? backgroundColor, bool isSpecial = false}) {
+    return ElevatedButton.styleFrom(
+      backgroundColor: backgroundColor ?? Theme.of(context).colorScheme.primary,
+      foregroundColor: Theme.of(context).colorScheme.onPrimary,
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+    );
   }
 }
