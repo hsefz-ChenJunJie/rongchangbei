@@ -2,12 +2,33 @@ import 'package:flutter/material.dart';
 
 // This file is used to store the theme color constants.
 enum ThemeColor {
-  defaultColor(
+  defaultColor( // 一元纸币配色
     Color(0xff6a855b),
     Color(0xffdfe7d7),
     Color(0xff3e563b),
     Color(0xffb0ce95),
     Color(0xff46776d)
+  ),
+  defaultRedColor( // 百元大钞配色
+    Color(0xffeb4035),
+    Color(0xfff5abb7),
+    Color(0xffbe0f2d),
+    Color(0xffd55f6f),
+    Color(0xffcf273c)
+  ),
+  peachpuffColor(
+    Color(0xffffdab3),
+    Color(0xffffe4c4),
+    Color(0xffff8c00),
+    Color(0xffffc080),
+    Color(0xffffa54f)
+  ),
+  ffb9deColor(
+    Color(0xffffb9de),
+    Color(0xffffecf6),
+    Color(0xffff6dba),
+    Color(0xffffd3ea),
+    Color(0xffff86c6)
   );
 
 
