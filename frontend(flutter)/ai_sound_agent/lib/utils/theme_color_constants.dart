@@ -2,47 +2,29 @@ import 'package:flutter/material.dart';
 
 // This file is used to store the theme color constants.
 enum ThemeColor {
-  defaultRed(
-    Colors.red,
-    Colors.redAccent,
-    Color(0xFFB71C1C), // Colors.red[700]的确定值
-  ),
-  defaultGreen(
-    Colors.green,
-    Color.fromARGB(255, 194, 231, 213),
-    Color.fromARGB(255, 48, 131, 54), // Colors.green[700]的确定值
-  ),
-  defaultBlue(
-    Colors.blue,
-    Colors.cyan,
-    Color(0xFF0D47A1), // Colors.blue[700]的确定值
+  defaultColor(
+    Color(0xff6a855b),
+    Color(0xffdfe7d7),
+    Color(0xff3e563b),
+    Color(0xffb0ce95),
+    Color(0xff46776d)
   );
+
 
   final Color baseColor;
   final Color lighterColor;
   final Color darkerColor;
-  final Color textColor;
+  final Color lightTextColor;
+  final Color darkTextColor;
+
 
   const ThemeColor(
     this.baseColor,
     this.lighterColor,
     this.darkerColor,
-    this.textColor
+    this.lightTextColor,
+    this.darkTextColor
   );
-
-  // 获取颜色方案
-  ColorScheme get colorScheme => ColorScheme.light(
-        primary: baseColor,
-        secondary: lighterColor,
-        tertiary: darkerColor,
-        onPrimary: textColor,
-      );
-
-  // 创建主题数据
-  ThemeData get themeData => ThemeData(
-        colorScheme: colorScheme,
-        useMaterial3: true,
-      );
 }
 
 // 颜色工具类
