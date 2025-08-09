@@ -251,52 +251,15 @@ class _SettingsState extends BasePageState<Settings> {
             onChanged: _handleSttIntervalChanged,
           ),
           
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
           
-          const Text(
-            '高级功能',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          
-          Row(
-            children: [
-              Expanded(
-                child: BaseElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pushNamed(context, '/device-test');
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  icon: const Icon(Icons.devices, size: 20),
-                  label: '设备测试',
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: BaseElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pushNamed(context, '/settings/advanced');
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.purple,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  icon: const Icon(Icons.settings, size: 20),
-                  label: '高级设置',
-                ),
-              ),
-            ],
+          BaseElevatedButton.icon(
+            onPressed: () {
+              Navigator.pushNamed(context, '/device-test');
+            },
+            icon: const Icon(Icons.devices, size: 20),
+            label: '设备测试',
+            expanded: true,
           ),
           
           const SizedBox(height: 32),
