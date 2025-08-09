@@ -7,6 +7,7 @@ class Routes {
   static const String advancedSettings = '/settings/advanced';
   static const String shop = '/shop';
   static const String deviceTest = '/device-test';
+  static const String mainProcessing = '/main-processing';
 }
 
 // 路由状态类 (存储当前路由状态)
