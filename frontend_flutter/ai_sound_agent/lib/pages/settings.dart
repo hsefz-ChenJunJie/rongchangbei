@@ -251,17 +251,6 @@ class _SettingsState extends BasePageState<Settings> {
             onChanged: _handleSttIntervalChanged,
           ),
           
-          const SizedBox(height: 24),
-          
-          BaseElevatedButton.icon(
-            onPressed: () {
-              Navigator.pushNamed(context, '/device-test');
-            },
-            icon: const Icon(Icons.devices, size: 20),
-            label: '设备测试',
-            expanded: true,
-          ),
-          
           const SizedBox(height: 32),
           
           Row(
@@ -269,14 +258,6 @@ class _SettingsState extends BasePageState<Settings> {
               Expanded(
                 child: BaseElevatedButton(
                   onPressed: _hasChanges ? _saveSettings : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: ThemeManager().baseColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
                   child: const Text(
                     '保存设置',
                     style: TextStyle(fontSize: 16),
@@ -287,14 +268,6 @@ class _SettingsState extends BasePageState<Settings> {
               Expanded(
                 child: BaseElevatedButton(
                   onPressed: _resetToDefaults,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: ThemeManager().baseColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
                   child: const Text(
                     '重置为默认',
                     style: TextStyle(fontSize: 16),
@@ -306,18 +279,36 @@ class _SettingsState extends BasePageState<Settings> {
           
           const SizedBox(height: 16),
           
+          Row(
+            children: [
+              Expanded(
+                child: BaseElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/device-test');
+                  },
+                  icon: const Icon(Icons.devices, size: 20),
+                  label: '设备测试',
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: BaseElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pushNamed(context, '/settings/advanced');
+                  },
+                  icon: const Icon(Icons.settings, size: 20),
+                  label: '高级设置',
+                ),
+              ),
+            ],
+          ),
+          
+          const SizedBox(height: 16),
+          
           BaseElevatedButton(
             onPressed: () {
               Navigator.pop(context, '设置已更新');
             },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.primary,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
             child: const Text(
               '返回',
               style: TextStyle(fontSize: 16),
