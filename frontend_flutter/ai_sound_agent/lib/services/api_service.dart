@@ -50,15 +50,22 @@ class ApiService {
       
       final String fullUrl = '$baseUrl$route';
       
-      // 准备请求数据
+      // 准备请求数据 - 匹配Python示例格式
       final formData = FormData();
       formData.files.add(MapEntry(
-        'audio_file',
+        'file',  // 修改为'file'而不是'audio_file'
         MultipartFile.fromBytes(
           audioBytes,
           filename: 'audio.wav',
         ),
       ));
+      
+      // 添加额外的表单参数，匹配Python示例
+      formData.fields.addAll([
+        MapEntry('language', 'zh'),  // 默认中文
+        MapEntry('model', 'base'),   // 默认base模型
+        MapEntry('response_format', 'json'),  // 返回JSON格式
+      ]);
 
       // 发送请求
       final response = await _dio.post(
@@ -66,15 +73,28 @@ class ApiService {
         data: formData,
         options: Options(
           headers: headers,
+          receiveTimeout: const Duration(seconds: 600),  // 匹配Python示例的timeout=600
         ),
       );
 
       if (response.statusCode == 200) {
         final data = response.data;
-        // 根据API文档返回格式提取文本
+        
+        // 根据新的API格式解析返回数据
         if (data is Map<String, dynamic>) {
-          return data['text'] ?? data['result'] ?? '语音识别失败';
+          // 检查code字段
+          final code = data['code'];
+          if (code == 0) {
+            // 成功，返回data字段中的文本
+            return data['data']?.toString() ?? '语音识别失败';
+          } else {
+            // 失败，返回错误信息
+            final errorMsg = data['msg'] ?? '语音识别失败';
+            print('语音识别API返回错误: $errorMsg');
+            return '语音识别失败: $errorMsg';
+          }
         } else if (data is String) {
+          // 兼容旧格式
           return data;
         } else {
           return '语音识别失败';
