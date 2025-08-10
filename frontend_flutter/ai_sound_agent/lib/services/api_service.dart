@@ -63,7 +63,7 @@ class ApiService {
       // 添加额外的表单参数，匹配Python示例
       formData.fields.addAll([
         MapEntry('language', 'zh'),  // 默认中文
-        MapEntry('model', 'base'),   // 默认base模型
+        MapEntry('model', 'tiny'),   // 默认tiny模型
         MapEntry('response_format', 'json'),  // 返回JSON格式
       ]);
 

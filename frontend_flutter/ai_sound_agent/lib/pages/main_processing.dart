@@ -5,15 +5,24 @@ import 'package:record/record.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:ai_sound_agent/services/api_service.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:ai_sound_agent/widgets/shared/base.dart';
+import 'package:ai_sound_agent/widgets/shared/base_line_input.dart';
+import 'package:ai_sound_agent/widgets/shared/base_text_area.dart';
+import 'package:ai_sound_agent/widgets/shared/base_elevated_button.dart';
 
-class MainProcessingPage extends StatefulWidget {
-  const MainProcessingPage({super.key});
+class MainProcessingPage extends BasePage {
+  const MainProcessingPage({super.key}) : super(
+    title: '语音处理中心',
+    showBottomNav: true,
+    showBreadcrumb: true,
+    showSettingsFab: true,
+  );
 
   @override
-  State<MainProcessingPage> createState() => _MainProcessingPageState();
+  _MainProcessingPageState createState() => _MainProcessingPageState();
 }
 
-class _MainProcessingPageState extends State<MainProcessingPage> {
+class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   // 文本控制器
   final TextEditingController _sceneHintController = TextEditingController();
   final TextEditingController _userOpinionController = TextEditingController();
@@ -126,7 +135,13 @@ class _MainProcessingPageState extends State<MainProcessingPage> {
       
       if (mounted) {
         setState(() {
-          _conversationController.text = recognizedText;
+          // 追加内容而不是替换
+          final currentText = _conversationController.text;
+          if (currentText.isEmpty) {
+            _conversationController.text = recognizedText;
+          } else {
+            _conversationController.text = '$currentText\n$recognizedText';
+          }
           _isProcessingStt = false;
         });
 
@@ -247,172 +262,129 @@ class _MainProcessingPageState extends State<MainProcessingPage> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('语音处理中心'),
-        centerTitle: true,
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // 场景提示输入框
-            _buildSection(
-              title: '场景提示',
-              child: TextField(
-                controller: _sceneHintController,
-                decoration: const InputDecoration(
-                  hintText: '请输入场景提示...',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lightbulb_outline),
-                ),
-                maxLines: 1,
-                onChanged: (value) => _generateSuggestions(),
-              ),
+  Widget buildContent(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 场景提示输入框
+          _buildSection(
+            title: '场景提示',
+            child: BaseLineInput(
+              label: '场景提示',
+              placeholder: '请输入场景提示...',
+              controller: _sceneHintController,
+              keyboardType: TextInputType.text,
+              onChanged: (value) => _generateSuggestions(),
             ),
+          ),
 
-            const SizedBox(height: 20),
+          const SizedBox(height: 20),
 
-            // 对话场景输入框
-            _buildSection(
-              title: '对话场景',
-              child: TextField(
-                controller: _conversationController,
-                decoration: const InputDecoration(
-                  hintText: '语音识别结果将显示在这里...',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.chat_bubble_outline),
-                ),
-                maxLines: 4,
-                readOnly: true,
-              ),
+          // 对话场景输入框
+          _buildSection(
+            title: '对话场景',
+            child: BaseTextArea(
+              label: '对话场景',
+              placeholder: '语音识别结果将显示在这里...',
+              controller: _conversationController,
+              maxLines: 4,
+              minLines: 2,
+              enabled: false,
             ),
+          ),
 
-            const SizedBox(height: 16),
+          const SizedBox(height: 16),
 
-            // 录音控制按钮
-            ElevatedButton.icon(
-              onPressed: _toggleRecording,
-              icon: _isRecording
-                  ? const Icon(Icons.stop)
-                  : (_isProcessingStt
-                      ? const SizedBox(
+          // 用户观点输入框
+          _buildSection(
+            title: '用户观点',
+            child: BaseLineInput(
+              label: '用户观点',
+              placeholder: '请输入您的观点或意见...',
+              controller: _userOpinionController,
+              keyboardType: TextInputType.text,
+              onChanged: (value) => _generateSuggestions(),
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // 建议生成区域
+          _buildSection(
+            title: '智能建议',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (_isGeneratingSuggestions)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 8.0),
+                    child: Row(
+                      children: [
+                        SizedBox(
                           width: 16,
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.mic)),
-              label: Text(_isRecording
-                  ? '停止录音'
-                  : (_isProcessingStt ? '识别中...' : '开始录音')),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: _isRecording ? Colors.red : Theme.of(context).colorScheme.primary,
-                foregroundColor: Colors.white,
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // 用户观点输入框
-            _buildSection(
-              title: '用户观点',
-              child: TextField(
-                controller: _userOpinionController,
-                decoration: const InputDecoration(
-                  hintText: '请输入您的观点或意见...',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.person),
-                ),
-                maxLines: 1,
-                onChanged: (value) => _generateSuggestions(),
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // 建议生成区域
-            _buildSection(
-              title: '智能建议',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (_isGeneratingSuggestions)
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: 8.0),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                          SizedBox(width: 8),
-                          Text('正在生成建议...'),
-                        ],
-                      ),
+                        ),
+                        SizedBox(width: 8),
+                        Text('正在生成建议...'),
+                      ],
                     ),
-                  if (_suggestions.isEmpty && !_isGeneratingSuggestions)
-                    const Text(
-                      '暂无建议，请先录音或输入内容',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _suggestions.map((suggestion) {
-                      return ActionChip(
-                        label: Text(suggestion),
-                        onPressed: () => _onSuggestionTap(suggestion),
-                        avatar: const Icon(Icons.smart_toy, size: 16),
-                        backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-                      );
-                    }).toList(),
                   ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 20),
-
-            // 大文本输入框
-            _buildSection(
-              title: '文本内容',
-              child: TextField(
-                controller: _largeTextController,
-                decoration: const InputDecoration(
-                  hintText: '建议内容将显示在这里，可编辑...',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.description),
-                  alignLabelWithHint: true,
+                if (_suggestions.isEmpty && !_isGeneratingSuggestions)
+                  const Text(
+                    '暂无建议，请先录音或输入内容',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _suggestions.map((suggestion) {
+                    return ActionChip(
+                      label: Text(suggestion),
+                      onPressed: () => _onSuggestionTap(suggestion),
+                      avatar: const Icon(Icons.smart_toy, size: 16),
+                      backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
+                    );
+                  }).toList(),
                 ),
-                maxLines: 6,
-              ),
+              ],
             ),
+          ),
 
-            const SizedBox(height: 16),
+          const SizedBox(height: 20),
 
-            // 语音合成按钮
-            ElevatedButton.icon(
-              onPressed: _isProcessingTts ? null : _processTextToSpeech,
-              icon: _isProcessingTts
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.volume_up),
-              label: Text(_isProcessingTts ? '合成中...' : '开始语音合成'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
-              ),
+          // 大文本输入框
+          _buildSection(
+            title: '文本内容',
+            child: BaseTextArea(
+              label: '文本内容',
+              placeholder: '建议内容将显示在这里，可编辑...',
+              controller: _largeTextController,
+              maxLines: 6,
+              minLines: 3,
             ),
-          ],
-        ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // 语音合成按钮
+          BaseElevatedButton.icon(
+            onPressed: _isProcessingTts ? null : _processTextToSpeech,
+            icon: _isProcessingTts
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.volume_up),
+            label: _isProcessingTts ? '合成中...' : '开始语音合成',
+            backgroundColor: Colors.green,
+            foregroundColor: Colors.white,
+            expanded: true,
+          ),
+        ],
       ),
     );
   }
@@ -441,5 +413,24 @@ class _MainProcessingPageState extends State<MainProcessingPage> {
         _generateSuggestions();
       }
     });
+  }
+
+  @override
+  List<Widget> buildAdditionalFloatingActionButtons() {
+    return [
+      FloatingActionButton(
+        onPressed: _toggleRecording,
+        backgroundColor: _isRecording ? Colors.red : Theme.of(context).colorScheme.primary,
+        child: _isRecording
+            ? const Icon(Icons.stop, color: Colors.white)
+            : (_isProcessingStt
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.mic, color: Colors.white)),
+      ),
+    ];
   }
 }

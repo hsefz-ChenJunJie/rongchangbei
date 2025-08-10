@@ -97,11 +97,7 @@ abstract class BasePageState<T extends BasePage> extends State<T> {
       ),
       
       floatingActionButton: widget.showSettingsFab
-          ? FloatingActionButton(
-              onPressed: navigateToSettings,
-              backgroundColor: themeManager.darkerColor,
-              child: Icon(Icons.settings, color: themeManager.lightTextColor),
-            )
+          ? _buildFloatingActionButtons(themeManager)
           : null,
       
       bottomNavigationBar: widget.showBottomNav && bottomNavItems.isNotEmpty
@@ -193,6 +189,38 @@ abstract class BasePageState<T extends BasePage> extends State<T> {
         ],
       ),
     );
+  }
+
+  // 构建悬浮按钮组
+  Widget _buildFloatingActionButtons(ThemeManager themeManager) {
+    final additionalButtons = buildAdditionalFloatingActionButtons();
+    
+    if (additionalButtons.isEmpty) {
+      return FloatingActionButton(
+        onPressed: navigateToSettings,
+        backgroundColor: themeManager.darkerColor,
+        child: Icon(Icons.settings, color: themeManager.lightTextColor),
+      );
+    }
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.end,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        ...additionalButtons,
+        const SizedBox(height: 16),
+        FloatingActionButton(
+          onPressed: navigateToSettings,
+          backgroundColor: themeManager.darkerColor,
+          child: Icon(Icons.settings, color: themeManager.lightTextColor),
+        ),
+      ],
+    );
+  }
+
+  // 子类可以重写此方法添加额外的悬浮按钮
+  List<Widget> buildAdditionalFloatingActionButtons() {
+    return [];
   }
 }
 
