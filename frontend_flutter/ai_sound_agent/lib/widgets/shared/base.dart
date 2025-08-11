@@ -197,6 +197,7 @@ abstract class BasePageState<T extends BasePage> extends State<T> {
     
     if (additionalButtons.isEmpty) {
       return FloatingActionButton(
+        heroTag: 'base_settings',
         onPressed: navigateToSettings,
         backgroundColor: themeManager.darkerColor,
         child: Icon(Icons.settings, color: themeManager.lightTextColor),
@@ -210,6 +211,7 @@ abstract class BasePageState<T extends BasePage> extends State<T> {
         ...additionalButtons,
         const SizedBox(height: 16),
         FloatingActionButton(
+          heroTag: 'base_settings_additional',
           onPressed: navigateToSettings,
           backgroundColor: themeManager.darkerColor,
           child: Icon(Icons.settings, color: themeManager.lightTextColor),

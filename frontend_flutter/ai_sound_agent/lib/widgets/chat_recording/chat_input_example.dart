@@ -57,6 +57,7 @@ class _ChatInputExampleState extends State<ChatInputExample> {
         ],
       ),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'chat_input_example_demo',
         onPressed: () {
           // 演示API用法
           _showDemoMenu();

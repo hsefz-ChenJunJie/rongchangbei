@@ -146,7 +146,17 @@ class _ChatRecordingPageState extends BasePageState<ChatRecordingPage> {
 
   // 发送消息到MainProcessingPage
   void _sendToMainProcessing() {
-    final messages = _dialogueKey.currentState?.getAllMessages() ?? [];
+    // 首先检查是否有选中的消息
+    final selectedMessages = _dialogueKey.currentState?.getSelection() ?? [];
+    List<Map<String, dynamic>> messages;
+    
+    if (selectedMessages.isNotEmpty) {
+      messages = selectedMessages;
+    } else {
+      // 如果没有选中的消息，则获取全部消息
+      messages = _dialogueKey.currentState?.getAllMessages() ?? [];
+    }
+    
     if (messages.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('没有消息可发送')),
@@ -301,6 +311,7 @@ class _ChatRecordingPageState extends BasePageState<ChatRecordingPage> {
   List<Widget> buildAdditionalFloatingActionButtons() {
     return [
       FloatingActionButton(
+        heroTag: 'chat_recording_mic',
         onPressed: _toggleRecording,
         backgroundColor: _isRecording ? Colors.red : Theme.of(context).colorScheme.primary,
         child: _isRecording

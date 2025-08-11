@@ -285,44 +285,35 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // 场景提示输入框
-          _buildSection(
-            title: '场景提示',
-            child: BaseLineInput(
-              label: '场景提示',
-              placeholder: '请输入场景提示...',
-              controller: _sceneHintController,
-              keyboardType: TextInputType.text,
-              onChanged: (value) => _generateSuggestions(),
-            ),
+          BaseLineInput(
+            label: '场景提示',
+            placeholder: '请输入场景提示...',
+            controller: _sceneHintController,
+            keyboardType: TextInputType.text,
+            onChanged: (value) => _generateSuggestions(),
           ),
 
           const SizedBox(height: 20),
 
           // 对话场景输入框
-          _buildSection(
-            title: '对话场景',
-            child: BaseTextArea(
-              label: '对话场景',
-              placeholder: '语音识别结果将显示在这里...',
-              controller: _conversationController,
-              maxLines: 4,
-              minLines: 2,
-              enabled: false,
-            ),
+          BaseTextArea(
+            label: '对话场景',
+            placeholder: '语音识别结果将显示在这里...',
+            controller: _conversationController,
+            maxLines: 4,
+            minLines: 2,
+            enabled: true,
           ),
 
           const SizedBox(height: 16),
 
           // 用户观点输入框
-          _buildSection(
-            title: '用户观点',
-            child: BaseLineInput(
-              label: '用户观点',
-              placeholder: '请输入您的观点或意见...',
-              controller: _userOpinionController,
-              keyboardType: TextInputType.text,
-              onChanged: (value) => _generateSuggestions(),
-            ),
+          BaseLineInput(
+            label: '用户观点',
+            placeholder: '请输入您的观点或意见...',
+            controller: _userOpinionController,
+            keyboardType: TextInputType.text,
+            onChanged: (value) => _generateSuggestions(),
           ),
 
           const SizedBox(height: 20),
@@ -372,15 +363,12 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
           const SizedBox(height: 20),
 
           // 大文本输入框
-          _buildSection(
-            title: '文本内容',
-            child: BaseTextArea(
-              label: '文本内容',
-              placeholder: '建议内容将显示在这里，可编辑...',
-              controller: _largeTextController,
-              maxLines: 6,
-              minLines: 3,
-            ),
+          BaseTextArea(
+            label: '文本内容',
+            placeholder: '建议内容将显示在这里，可编辑...',
+            controller: _largeTextController,
+            maxLines: 6,
+            minLines: 3,
           ),
 
           const SizedBox(height: 16),
@@ -435,6 +423,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   List<Widget> buildAdditionalFloatingActionButtons() {
     return [
       FloatingActionButton(
+        heroTag: 'main_processing_mic',
         onPressed: _toggleRecording,
         backgroundColor: _isRecording ? Colors.red : Theme.of(context).colorScheme.primary,
         child: _isRecording

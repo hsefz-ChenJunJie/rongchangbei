@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../shared/base_line_input.dart';
+import '../shared/base_elevated_button.dart';
 import 'chat_dialogue.dart';
 
 class ChatRole {
@@ -262,9 +263,9 @@ class ChatInputState extends State<ChatInput> {
                 padding: const EdgeInsets.all(16),
                 child: SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton.icon(
+                  child: BaseElevatedButton.icon(
                     icon: const Icon(Icons.add),
-                    label: const Text('添加新角色'),
+                    label: '添加新角色',
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
@@ -399,7 +400,7 @@ class ChatInputState extends State<ChatInput> {
                   onPressed: () => Navigator.pop(context),
                   child: const Text('取消'),
                 ),
-                ElevatedButton(
+                BaseElevatedButton(
                   onPressed: () {
                     if (nameController.text.isNotEmpty) {
                       final newRole = ChatRole(
@@ -428,21 +429,22 @@ class ChatInputState extends State<ChatInput> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // 角色显示区域
+        // 角色显示区域和发送按钮在同一行
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           child: Row(
             children: [
+              // 角色选择按钮
               GestureDetector(
                 onTap: _showRoleSelector,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: _currentRole.color.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: _currentRole.color.withValues(alpha: 0.3),
-                            ),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: _currentRole.color.withValues(alpha: 0.3),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -459,6 +461,18 @@ class ChatInputState extends State<ChatInput> {
                       ),
                     ],
                   ),
+                ),
+              ),
+              const Spacer(),
+              // 发送按钮
+              Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).primaryColor,
+                  shape: BoxShape.circle,
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.send, color: Colors.white, size: 20),
+                  onPressed: sendAndClear,
                 ),
               ),
             ],
@@ -523,17 +537,6 @@ class ChatInputState extends State<ChatInput> {
                         ),
                       ),
                   ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).primaryColor,
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.send, color: Colors.white),
-                  onPressed: sendAndClear,
                 ),
               ),
             ],
