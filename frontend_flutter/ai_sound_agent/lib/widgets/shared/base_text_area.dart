@@ -22,7 +22,7 @@ class BaseTextArea extends StatefulWidget {
   final Color labelColor;
   final Color textColor;
   final Color placeholderColor;
-  final Color backgroundColor;
+  final Color? backgroundColor;
   final double borderWidth;
   final double borderRadius;
   final EdgeInsetsGeometry? contentPadding;
@@ -34,6 +34,7 @@ class BaseTextArea extends StatefulWidget {
   final FocusNode? focusNode;
   final ValueChanged<String>? onSubmitted;
   final VoidCallback? onTap;
+  final Widget? icon;
 
   const BaseTextArea({
     Key? key,
@@ -56,7 +57,7 @@ class BaseTextArea extends StatefulWidget {
     this.labelColor = Colors.grey,
     this.textColor = Colors.black87,
     this.placeholderColor = Colors.grey,
-    this.backgroundColor = Colors.white,
+    this.backgroundColor,
     this.borderWidth = 1.0,
     this.borderRadius = 8.0,
     this.contentPadding,
@@ -68,6 +69,7 @@ class BaseTextArea extends StatefulWidget {
     this.focusNode,
     this.onSubmitted,
     this.onTap,
+    this.icon,
   }) : super(key: key);
 
   @override
@@ -162,45 +164,63 @@ class _BaseTextAreaState extends State<BaseTextArea> {
           children: [
             Container(
               decoration: BoxDecoration(
-                color: widget.backgroundColor,
+                color: widget.backgroundColor ?? lighterColor,
                 border: Border.all(
                   color: _isFocused ? baseColor : darkerColor,
                   width: widget.borderWidth,
                 ),
                 borderRadius: BorderRadius.circular(widget.borderRadius),
               ),
-              child: TextField(
-                controller: _controller,
-                focusNode: _focusNode,
-                keyboardType: widget.keyboardType,
-                inputFormatters: widget.inputFormatters,
-                maxLines: widget.maxLines,
-                minLines: widget.minLines,
-                maxLength: widget.maxLength,
-                enabled: widget.enabled,
-                expands: widget.expands,
-                textAlign: widget.textAlign,
-                textAlignVertical: widget.textAlignVertical ?? TextAlignVertical.top,
-                autofocus: widget.autofocus,
-                onSubmitted: widget.onSubmitted,
-                onTap: widget.onTap,
-                style: widget.textStyle ?? TextStyle(
-                  color: darkTextColor,
-                  fontSize: 16,
-                  height: 1.5,
-                ),
-                decoration: InputDecoration(
-                  hintText: widget.placeholder,
-                  hintStyle: widget.placeholderStyle ?? TextStyle(
-                    color: darkTextColor.withValues(alpha: 0.6),
-                    fontSize: 16,
-                    height: 1.5,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (widget.icon != null)
+                    Padding(
+                      padding: const EdgeInsets.only(left: 12, top: 16),
+                      child: IconTheme(
+                        data: IconThemeData(
+                          color: darkTextColor.withValues(alpha: 0.6),
+                          size: 20,
+                        ),
+                        child: widget.icon!,
+                      ),
+                    ),
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _focusNode,
+                      keyboardType: widget.keyboardType,
+                      inputFormatters: widget.inputFormatters,
+                      maxLines: widget.maxLines,
+                      minLines: widget.minLines,
+                      maxLength: widget.maxLength,
+                      enabled: widget.enabled,
+                      expands: widget.expands,
+                      textAlign: widget.textAlign,
+                      textAlignVertical: widget.textAlignVertical ?? TextAlignVertical.top,
+                      autofocus: widget.autofocus,
+                      onSubmitted: widget.onSubmitted,
+                      onTap: widget.onTap,
+                      style: widget.textStyle ?? TextStyle(
+                        color: darkTextColor,
+                        fontSize: 16,
+                        height: 1.5,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: widget.placeholder,
+                        hintStyle: widget.placeholderStyle ?? TextStyle(
+                          color: darkTextColor.withValues(alpha: 0.6),
+                          fontSize: 16,
+                          height: 1.5,
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: widget.contentPadding ?? EdgeInsets.all(widget.icon != null ? 12 : 16),
+                        counterText: widget.showCounter ? null : '',
+                        isDense: false,
+                      ),
+                    ),
                   ),
-                  border: InputBorder.none,
-                  contentPadding: widget.contentPadding ?? const EdgeInsets.all(16),
-                  counterText: widget.showCounter ? null : '',
-                  isDense: false,
-                ),
+                ],
               ),
             ),
             Positioned(
@@ -264,25 +284,26 @@ class _BaseTextAreaExamplesState extends State<BaseTextAreaExamples> {
               },
             ),
 
-            // 带控制器
+            // 带图标
             BaseTextArea(
               label: '详细描述',
-              controller: _controller1,
               placeholder: '请详细描述您的问题或建议...',
               maxLines: 4,
               minLines: 2,
               maxLength: 200,
+              icon: const Icon(Icons.description),
               onChanged: (value) {
                 print('描述: $value');
               },
             ),
 
-            // 预设文本
+            // 带图标和预设文本
             BaseTextArea(
               label: '反馈内容',
               text: '这是一段预设的多行文本内容。\n可以包含多行文字，\n用于展示文本域的预设内容效果。',
               placeholder: '请输入反馈内容...',
               maxLines: 6,
+              icon: const Icon(Icons.feedback),
               onChanged: (value) {
                 print('反馈: $value');
               },
@@ -297,6 +318,7 @@ class _BaseTextAreaExamplesState extends State<BaseTextAreaExamples> {
               focusColor: Colors.purple,
               labelColor: Colors.purple,
               backgroundColor: Colors.purple.shade50,
+              icon: const Icon(Icons.note, color: Colors.purple),
               onChanged: (value) {
                 print('备注: $value');
               },
@@ -309,6 +331,7 @@ class _BaseTextAreaExamplesState extends State<BaseTextAreaExamples> {
               placeholder: '无法输入',
               enabled: false,
               maxLines: 3,
+              icon: const Icon(Icons.lock),
             ),
 
             // 展开填充
@@ -319,6 +342,7 @@ class _BaseTextAreaExamplesState extends State<BaseTextAreaExamples> {
               maxLines: null,
               minLines: null,
               maxLength: 500,
+              icon: const Icon(Icons.auto_awesome),
               onChanged: (value) {
                 print('自适应: $value');
               },
@@ -334,6 +358,7 @@ class _BaseTextAreaExamplesState extends State<BaseTextAreaExamples> {
                   text: _text3,
                   maxLines: 3,
                   maxLength: 100,
+                  icon: const Icon(Icons.edit),
                   onChanged: (value) {
                     setState(() {
                       _text3 = value;

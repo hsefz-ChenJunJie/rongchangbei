@@ -26,6 +26,7 @@ class BaseLineInput extends StatefulWidget {
   final TextStyle? labelStyle;
   final TextStyle? textStyle;
   final TextStyle? placeholderStyle;
+  final Widget? icon;
 
   const BaseLineInput({
     Key? key,
@@ -51,6 +52,7 @@ class BaseLineInput extends StatefulWidget {
     this.labelStyle,
     this.textStyle,
     this.placeholderStyle,
+    this.icon,
   }) : super(key: key);
 
   @override
@@ -131,28 +133,46 @@ class _BaseLineInputState extends State<BaseLineInput> {
               ),
               borderRadius: BorderRadius.circular(widget.borderRadius),
             ),
-            child: TextField(
-              controller: _controller,
-              obscureText: widget.obscureText,
-              keyboardType: widget.keyboardType,
-              inputFormatters: widget.inputFormatters,
-              maxLines: widget.maxLines,
-              maxLength: widget.maxLength,
-              enabled: widget.enabled,
-              style: widget.textStyle ?? TextStyle(
-                color: darkTextColor,
-                fontSize: 16,
-              ),
-              decoration: InputDecoration(
-                hintText: widget.placeholder,
-                hintStyle: widget.placeholderStyle ?? TextStyle(
-                  color: darkTextColor.withValues(alpha: 0.6),
-                  fontSize: 16,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                if (widget.icon != null)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 12),
+                    child: IconTheme(
+                      data: IconThemeData(
+                        color: darkTextColor.withValues(alpha: 0.6),
+                        size: 20,
+                      ),
+                      child: widget.icon!,
+                    ),
+                  ),
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    obscureText: widget.obscureText,
+                    keyboardType: widget.keyboardType,
+                    inputFormatters: widget.inputFormatters,
+                    maxLines: widget.maxLines,
+                    maxLength: widget.maxLength,
+                    enabled: widget.enabled,
+                    style: widget.textStyle ?? TextStyle(
+                      color: darkTextColor,
+                      fontSize: 16,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: widget.placeholder,
+                      hintStyle: widget.placeholderStyle ?? TextStyle(
+                        color: darkTextColor.withValues(alpha: 0.6),
+                        fontSize: 16,
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: widget.contentPadding ?? EdgeInsets.fromLTRB(widget.icon != null ? 8 : 12, 16, 12, 12),
+                      isDense: true,
+                    ),
+                  ),
                 ),
-                border: InputBorder.none,
-                contentPadding: widget.contentPadding ?? const EdgeInsets.fromLTRB(12, 16, 12, 12),
-                isDense: true,
-              ),
+              ],
             ),
           ),
           Positioned(
@@ -215,39 +235,41 @@ class _BaseLineInputExamplesState extends State<BaseLineInputExamples> {
               },
             ),
 
-            // 带控制器
+            // 带图标
             BaseLineInput(
               label: '邮箱',
-              controller: _controller1,
               placeholder: '请输入邮箱地址',
               keyboardType: TextInputType.emailAddress,
+              icon: const Icon(Icons.email),
               onChanged: (value) {
                 print('邮箱: $value');
               },
             ),
 
-            // 预设文本
+            // 带图标和预设文本
             BaseLineInput(
               label: '描述',
               text: '预设文本',
               placeholder: '请输入描述',
               maxLines: 3,
+              icon: const Icon(Icons.description),
               onChanged: (value) {
                 print('描述: $value');
               },
             ),
 
-            // 密码输入
+            // 密码输入带图标
             BaseLineInput(
               label: '密码',
               placeholder: '请输入密码',
               obscureText: true,
+              icon: const Icon(Icons.lock),
               onChanged: (value) {
                 print('密码: $value');
               },
             ),
 
-            // 自定义样式
+            // 自定义样式带图标
             BaseLineInput(
               label: '电话号码',
               placeholder: '请输入电话号码',
@@ -255,20 +277,22 @@ class _BaseLineInputExamplesState extends State<BaseLineInputExamples> {
               borderColor: Colors.purple,
               focusColor: Colors.purple,
               labelColor: Colors.purple,
+              icon: const Icon(Icons.phone, color: Colors.purple),
               onChanged: (value) {
                 print('电话: $value');
               },
             ),
 
-            // 禁用状态
+            // 禁用状态带图标
             BaseLineInput(
               label: '禁用输入',
               text: '这是禁用状态的文本',
               placeholder: '无法输入',
               enabled: false,
+              icon: const Icon(Icons.lock),
             ),
 
-            // 显示当前值
+            // 显示当前值带图标
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -276,6 +300,7 @@ class _BaseLineInputExamplesState extends State<BaseLineInputExamples> {
                   label: '动态显示',
                   placeholder: '输入内容会显示在下面',
                   text: _text3,
+                  icon: const Icon(Icons.edit),
                   onChanged: (value) {
                     setState(() {
                       _text3 = value;
