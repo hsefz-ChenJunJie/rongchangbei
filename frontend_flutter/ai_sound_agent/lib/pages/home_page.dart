@@ -5,6 +5,7 @@ import 'package:ai_sound_agent/pages/device_test_page.dart';
 import 'package:ai_sound_agent/pages/tabs_demo_simple.dart';
 import 'package:ai_sound_agent/pages/main_processing.dart';
 import 'package:ai_sound_agent/pages/chat_test_page.dart';
+import 'package:ai_sound_agent/pages/chat_recording.dart';
 import '../widgets/shared/base_elevated_button.dart';
 
 
@@ -131,6 +132,27 @@ class _HomePageState extends BasePageState<HomePage> {
                 ),
                 icon: const Icon(Icons.chat),
                 label: '聊天对话框测试',
+              ),
+              const SizedBox(height: 16),
+              BaseElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ChatRecordingPage(),
+                    ),
+                  );
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                icon: const Icon(Icons.record_voice_over),
+                label: '聊天录音',
               ),
               const SizedBox(height: 16),
               BaseElevatedButton(

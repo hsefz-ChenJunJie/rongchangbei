@@ -156,6 +156,23 @@ class ChatDialogueState extends State<ChatDialogue> {
     return selected;
   }
 
+  // 获取所有消息
+  List<Map<String, dynamic>> getAllMessages() {
+    List<Map<String, dynamic>> allMessages = [];
+    for (int i = 0; i < _messages.length; i++) {
+      final message = _messages[i];
+      allMessages.add({
+        'idx': i,
+        'name': message.name,
+        'content': message.content,
+        'time': '${message.time.year}/${message.time.month}/${message.time.day} '
+                '${message.time.hour.toString().padLeft(2, '0')}:${message.time.minute.toString().padLeft(2, '0')}:${message.time.second.toString().padLeft(2, '0')}',
+        'is_me': message.isMe,
+      });
+    }
+    return allMessages;
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeManager = ThemeManager();
@@ -164,7 +181,7 @@ class ChatDialogueState extends State<ChatDialogue> {
     final darkTextColor = themeManager.darkTextColor;
 
     return Container(
-      color: lighterColor.withOpacity(0.1),
+      color: lighterColor.withValues(alpha: 0.1),
       child: ListView.builder(
         controller: _scrollController,
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
@@ -211,7 +228,7 @@ class ChatDialogueState extends State<ChatDialogue> {
           if (!isMe) ...[
             CircleAvatar(
               radius: 16,
-              backgroundColor: baseColor.withOpacity(0.2),
+              backgroundColor: baseColor.withValues(alpha: 0.2),
               child: Icon(
                 message.icon ?? Icons.person,
                 size: 16,
@@ -230,8 +247,8 @@ class ChatDialogueState extends State<ChatDialogue> {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 decoration: BoxDecoration(
                   color: isMe 
-                      ? Colors.green[100] 
-                      : baseColor.withOpacity(0.1),
+                      ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.8)
+                      : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.only(
                     topLeft: const Radius.circular(12),
                     topRight: const Radius.circular(12),
@@ -240,8 +257,8 @@ class ChatDialogueState extends State<ChatDialogue> {
                   ),
                   border: Border.all(
                     color: isMe 
-                        ? Colors.green[300]! 
-                        : baseColor.withOpacity(0.3),
+                        ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.9)
+                        : baseColor.withValues(alpha: 0.3),
                     width: 1,
                   ),
                 ),
@@ -254,7 +271,9 @@ class ChatDialogueState extends State<ChatDialogue> {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: baseColor,
+                          color: isMe 
+                              ? Theme.of(context).colorScheme.onPrimary
+                              : baseColor,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -263,7 +282,9 @@ class ChatDialogueState extends State<ChatDialogue> {
                       message.content,
                       style: TextStyle(
                         fontSize: 14,
-                        color: darkTextColor,
+                        color: isMe 
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -271,7 +292,10 @@ class ChatDialogueState extends State<ChatDialogue> {
                       '${message.time.hour.toString().padLeft(2, '0')}:${message.time.minute.toString().padLeft(2, '0')}',
                       style: TextStyle(
                         fontSize: 10,
-                        color: darkTextColor.withOpacity(0.5),
+                        color: (isMe 
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : Theme.of(context).colorScheme.onSurface)
+                            .withValues(alpha: 0.7),
                       ),
                     ),
                   ],

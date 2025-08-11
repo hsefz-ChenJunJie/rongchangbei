@@ -45,6 +45,22 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   @override
   void initState() {
     super.initState();
+    
+    // 检查是否有从ChatRecordingPage传递的对话内容
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final args = ModalRoute.of(context)?.settings.arguments;
+      if (args != null && args is Map<String, dynamic>) {
+        final conversation = args['conversation'] as String?;
+        if (conversation != null && conversation.isNotEmpty) {
+          setState(() {
+            _conversationController.text = conversation;
+          });
+          // 立即生成建议
+          _generateSuggestions();
+        }
+      }
+    });
+    
     _startSuggestionTimer();
   }
 

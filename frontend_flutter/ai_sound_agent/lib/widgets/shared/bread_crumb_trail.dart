@@ -62,6 +62,12 @@ class BreadcrumbTrail extends StatelessWidget {
         return '高级设置';
       case 'shop':
         return '商店';
+      case 'chat-recording':
+        return '聊天录音';
+      case 'device-test':
+        return '设备测试';
+      case 'main-processing':
+        return '语音处理中心';
       default:
         return route.isEmpty ? '首页' : route;
     }

@@ -215,11 +215,12 @@ class ChatInputState extends State<ChatInput> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
+                    Text(
                       '选择角色',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     IconButton(
@@ -240,7 +241,12 @@ class ChatInputState extends State<ChatInput> {
                         backgroundColor: role.color.withValues(alpha: 0.2),
                         child: Icon(role.icon, color: role.color),
                       ),
-                      title: Text(role.name),
+                      title: Text(
+                        role.name,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
+                      ),
                       trailing: _currentRole == role 
                           ? const Icon(Icons.check, color: Colors.green)
                           : null,
@@ -287,20 +293,51 @@ class ChatInputState extends State<ChatInput> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: const Text('添加新角色'),
+              title: Text(
+                '添加新角色',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     TextField(
                       controller: nameController,
-                      decoration: const InputDecoration(
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
+                      decoration: InputDecoration(
                         labelText: '角色名称',
                         hintText: '例如：同事、助手',
+                        labelStyle: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9),
+                      ),
+                      hintStyle: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderSide: BorderSide(
+                          color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderSide: BorderSide(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
                       ),
                     ),
                     const SizedBox(height: 16),
-                    const Text('选择颜色'),
+                    Text(
+                      '选择颜色',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
@@ -324,7 +361,14 @@ class ChatInputState extends State<ChatInput> {
                       )).toList(),
                     ),
                     const SizedBox(height: 16),
-                    const Text('选择图标'),
+                    Text(
+                      '选择图标',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     const SizedBox(height: 8),
                     Wrap(
                       spacing: 8,
@@ -451,6 +495,15 @@ class ChatInputState extends State<ChatInput> {
                       controller: _controller,
                       maxLines: 3,
                       contentPadding: const EdgeInsets.fromLTRB(12, 12, 48, 12),
+                      labelStyle: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9),
+                      ),
+                      placeholderStyle: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
+                      textStyle: TextStyle(
+                        color: Theme.of(context).colorScheme.onSurface,
+                      ),
                       onChanged: (value) {
                         if (_isShowingSuggestion) {
                           _clearSuggestion();

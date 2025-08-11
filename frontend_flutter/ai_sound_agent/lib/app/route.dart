@@ -8,6 +8,7 @@ class Routes {
   static const String shop = '/shop';
   static const String deviceTest = '/device-test';
   static const String mainProcessing = '/main-processing';
+  static const String chatRecording = '/chat-recording';
 }
 
 // 路由状态类 (存储当前路由状态)
