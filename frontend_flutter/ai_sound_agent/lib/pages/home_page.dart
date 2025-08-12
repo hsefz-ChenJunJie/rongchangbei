@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:ai_sound_agent/widgets/shared/base.dart';
-import 'package:ai_sound_agent/app/route.dart';
 import 'package:ai_sound_agent/pages/device_test_page.dart';
-import 'package:ai_sound_agent/pages/tabs_demo_simple.dart';
 import 'package:ai_sound_agent/pages/main_processing.dart';
-import 'package:ai_sound_agent/pages/chat_test_page.dart';
 import 'package:ai_sound_agent/pages/chat_recording.dart';
 import '../widgets/home_page/animation.dart';
-import '../widgets/shared/base_elevated_button.dart';
 
 
 class HomePage extends BasePage {
@@ -24,11 +20,6 @@ class HomePage extends BasePage {
 }
 
 class _HomePageState extends BasePageState<HomePage> {
-  final List<String> _pageTitles = const [
-    '首页',
-    '发现',
-    '我的',
-  ];
 
   int _currentPageIndex = 0;
 

@@ -5,7 +5,6 @@ class Routes {
   static const String home = '/';
   static const String settings = '/settings';
   static const String advancedSettings = '/settings/advanced';
-  static const String shop = '/shop';
   static const String deviceTest = '/device-test';
   static const String mainProcessing = '/main-processing';
   static const String chatRecording = '/chat-recording';

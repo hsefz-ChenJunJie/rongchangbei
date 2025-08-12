@@ -14,7 +14,9 @@ dependencies:
   path_provider: ^2.1.5
   dio: ^5.8.0+1
   record: ^6.0.0
-  audioplayers: ^6.4.0
+  audioplayers: ^6.1.0
+  permission_handler: ^11.3.1
+  vad: ^0.0.6
 
 dev_dependencies:
   flutter_test:
