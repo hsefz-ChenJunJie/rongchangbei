@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:ai_sound_agent/widgets/shared/bottom_navigator.dart';
 
-// app name
+// app info
 
 const String appName = 'AI Sound Agent';
+const String appVersion = '0.0.1';
+const String companyName = 'efzzz';
+
+
 
 // api
 
