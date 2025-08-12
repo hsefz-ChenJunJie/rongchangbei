@@ -60,8 +60,6 @@ class BreadcrumbTrail extends StatelessWidget {
         return '设置';
       case 'advanced':
         return '高级设置';
-      case 'shop':
-        return '商店';
       case 'chat-recording':
         return '聊天录音';
       case 'device-test':

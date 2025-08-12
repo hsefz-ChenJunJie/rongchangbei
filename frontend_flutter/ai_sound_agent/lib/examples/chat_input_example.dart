@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'chat_input.dart';
-import 'chat_dialogue.dart';
+import '../widgets/chat_recording/chat_input.dart';
+import '../widgets/chat_recording/chat_dialogue.dart';
 
 class ChatInputExample extends StatefulWidget {
   const ChatInputExample({super.key});

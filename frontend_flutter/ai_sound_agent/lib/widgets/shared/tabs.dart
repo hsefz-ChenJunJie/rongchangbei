@@ -283,38 +283,3 @@ class _LightweightCardTabsState extends State<LightweightCardTabs> {
   }
 }
 
-/// 使用示例
-class LightweightTabsExample extends StatelessWidget {
-  const LightweightTabsExample({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final tabs = [
-      TabConfig(
-        label: '首页',
-        icon: Icons.home,
-        content: const Center(child: Text('首页内容')),
-      ),
-      TabConfig(
-        label: '消息',
-        icon: Icons.message,
-        content: const Center(child: Text('消息内容')),
-        badgeText: '3',
-        badgeColor: Colors.red,
-      ),
-      TabConfig(
-        label: '设置',
-        icon: Icons.settings,
-        content: const Center(child: Text('设置内容')),
-      ),
-    ];
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('轻量级Tab组件示例')),
-      body: LightweightTabs(
-        tabs: tabs,
-        onTabChanged: (index) => print('切换到Tab: $index'),
-      ),
-    );
-  }
-}
