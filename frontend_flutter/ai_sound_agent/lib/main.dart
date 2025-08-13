@@ -1,10 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:ai_sound_agent/pages/home_page.dart';
-import 'package:ai_sound_agent/pages/settings.dart';
-import 'package:ai_sound_agent/pages/advanced_settings.dart';
-import 'package:ai_sound_agent/pages/device_test_page.dart';
-import 'package:ai_sound_agent/pages/main_processing.dart';
-import 'package:ai_sound_agent/pages/text_area_test_page.dart';
+import 'package:ai_sound_agent/app/route.dart';
 import 'package:ai_sound_agent/services/theme_manager.dart';
 
 void main() async {
@@ -42,15 +37,8 @@ class _MainAppState extends State<MainApp> {
     return MaterialApp(
       title: 'AI Sound Agent',
       theme: ThemeManager().themeData,
-      initialRoute: '/',
-      routes: {
-        '/': (context) => const HomePage(),
-        '/settings': (context) => const Settings(),
-        '/settings/advanced': (context) => const AdvancedSettingsPage(),
-        '/device-test': (context) => const DeviceTestPage(),
-        '/main-processing': (context) => const MainProcessingPage(),
-        '/text-area-test': (context) => const TextAreaTestPage(),
-      },
+      initialRoute: Routes.home,
+      routes: appRoutes,
     );
   }
 }

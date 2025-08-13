@@ -135,6 +135,24 @@ class ChatDialogueState extends State<ChatDialogue> {
     });
   }
 
+  // 全选
+  void selectAll() {
+    setState(() {
+      for (int i = 0; i < _selectedMessages.length; i++) {
+        _selectedMessages[i] = true;
+      }
+    });
+  }
+
+  // 反选
+  void invertSelection() {
+    setState(() {
+      for (int i = 0; i < _selectedMessages.length; i++) {
+        _selectedMessages[i] = !_selectedMessages[i];
+      }
+    });
+  }
+
   // 获取选择的消息
   List<Map<String, dynamic>> getSelection() {
     if (!_showSelection) return [];
@@ -180,22 +198,68 @@ class ChatDialogueState extends State<ChatDialogue> {
     final lighterColor = themeManager.lighterColor;
     final darkTextColor = themeManager.darkTextColor;
 
-    return Container(
-      color: lighterColor.withValues(alpha: 0.1),
-      child: ListView.builder(
-        controller: _scrollController,
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-        itemCount: _messages.length,
-        itemBuilder: (context, index) {
-          final message = _messages[index];
-          return _buildMessageBubble(
-            message: message,
-            index: index,
-            baseColor: baseColor,
-            darkTextColor: darkTextColor,
-          );
-        },
-      ),
+    return Column(
+      children: [
+        Expanded(
+          child: Container(
+            color: lighterColor.withValues(alpha: 0.1),
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+              itemCount: _messages.length,
+              itemBuilder: (context, index) {
+                final message = _messages[index];
+                return _buildMessageBubble(
+                  message: message,
+                  index: index,
+                  baseColor: baseColor,
+                  darkTextColor: darkTextColor,
+                );
+              },
+            ),
+          ),
+        ),
+        if (_showSelection)
+          Container(
+            color: lighterColor.withValues(alpha: 0.2),
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                ElevatedButton.icon(
+                  onPressed: hideSelection,
+                  icon: const Icon(Icons.close, size: 16),
+                  label: const Text('退出选择'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.grey[600],
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: selectAll,
+                  icon: const Icon(Icons.select_all, size: 16),
+                  label: const Text('全选'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: baseColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: invertSelection,
+                  icon: const Icon(Icons.flip_to_back, size: 16),
+                  label: const Text('反选'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 
@@ -210,123 +274,122 @@ class ChatDialogueState extends State<ChatDialogue> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
-        mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_showSelection && !isMe) ...[
-            Checkbox(
-              value: _selectedMessages[index],
-              onChanged: (bool? value) {
-                setState(() {
-                  _selectedMessages[index] = value ?? false;
-                });
-              },
-              activeColor: baseColor,
-            ),
-            const SizedBox(width: 8),
-          ],
-          if (!isMe) ...[
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: baseColor.withValues(alpha: 0.2),
-              child: Icon(
-                message.icon ?? Icons.person,
-                size: 16,
-                color: baseColor,
+          if (_showSelection) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 12, right: 8),
+              child: Checkbox(
+                value: _selectedMessages[index],
+                onChanged: (bool? value) {
+                  setState(() {
+                    _selectedMessages[index] = value ?? false;
+                  });
+                },
+                activeColor: baseColor,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             ),
-            const SizedBox(width: 8),
           ],
-          GestureDetector(
-            onLongPress: () => _showMessageActions(context, index, baseColor),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.of(context).size.width * 0.7,
-              ),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isMe 
-                      ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.8)
-                      : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(12),
-                    topRight: const Radius.circular(12),
-                    bottomLeft: Radius.circular(isMe ? 12 : 0),
-                    bottomRight: Radius.circular(isMe ? 0 : 12),
+          Expanded(
+            child: Row(
+              mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                if (!isMe) ...[
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: baseColor.withValues(alpha: 0.2),
+                    child: Icon(
+                      message.icon ?? Icons.person,
+                      size: 16,
+                      color: baseColor,
+                    ),
                   ),
-                  border: Border.all(
-                    color: isMe 
-                        ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.9)
-                        : baseColor.withValues(alpha: 0.3),
-                    width: 1,
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (!isMe) ...[
-                      Text(
-                        message.name,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
+                  const SizedBox(width: 8),
+                ],
+                GestureDetector(
+                  onLongPress: () => _showMessageActions(context, index, baseColor),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.of(context).size.width * 0.7,
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isMe 
+                            ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.8)
+                            : Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.only(
+                          topLeft: const Radius.circular(12),
+                          topRight: const Radius.circular(12),
+                          bottomLeft: Radius.circular(isMe ? 12 : 0),
+                          bottomRight: Radius.circular(isMe ? 0 : 12),
+                        ),
+                        border: Border.all(
                           color: isMe 
-                              ? Theme.of(context).colorScheme.onPrimary
-                              : baseColor,
+                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.9)
+                              : baseColor.withValues(alpha: 0.3),
+                          width: 1,
                         ),
                       ),
-                      const SizedBox(height: 2),
-                    ],
-                    Text(
-                      message.content,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: isMe 
-                            ? Theme.of(context).colorScheme.onPrimary
-                            : Theme.of(context).colorScheme.onSurface,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (!isMe) ...[
+                            Text(
+                              message.name,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: isMe 
+                                    ? Theme.of(context).colorScheme.onPrimary
+                                    : baseColor,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                          ],
+                          Text(
+                            message.content,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: isMe 
+                                  ? Theme.of(context).colorScheme.onPrimary
+                                  : Theme.of(context).colorScheme.onSurface,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${message.time.hour.toString().padLeft(2, '0')}:${message.time.minute.toString().padLeft(2, '0')}',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: (isMe 
+                                  ? Theme.of(context).colorScheme.onPrimary
+                                  : Theme.of(context).colorScheme.onSurface)
+                                  .withValues(alpha: 0.7),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${message.time.hour.toString().padLeft(2, '0')}:${message.time.minute.toString().padLeft(2, '0')}',
-                      style: TextStyle(
-                        fontSize: 10,
-                        color: (isMe 
-                            ? Theme.of(context).colorScheme.onPrimary
-                            : Theme.of(context).colorScheme.onSurface)
-                            .withValues(alpha: 0.7),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+                if (isMe) ...[
+                  const SizedBox(width: 8),
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: Colors.green[100],
+                    child: Icon(
+                      message.icon ?? Icons.person,
+                      size: 16,
+                      color: Colors.green[700],
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-          if (_showSelection && isMe) ...[
-            const SizedBox(width: 8),
-            Checkbox(
-              value: _selectedMessages[index],
-              onChanged: (bool? value) {
-                setState(() {
-                  _selectedMessages[index] = value ?? false;
-                });
-              },
-              activeColor: baseColor,
-            ),
-          ],
-          if (isMe) ...[
-            const SizedBox(width: 8),
-            CircleAvatar(
-              radius: 16,
-              backgroundColor: Colors.green[100],
-              child: Icon(
-                message.icon ?? Icons.person,
-                size: 16,
-                color: Colors.green[700],
-              ),
-            ),
-          ],
         ],
       ),
     );

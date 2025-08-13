@@ -1,15 +1,28 @@
 import 'package:flutter/material.dart';
+import 'package:ai_sound_agent/pages/home_page.dart';
+import 'package:ai_sound_agent/pages/settings.dart';
+import 'package:ai_sound_agent/pages/advanced_settings.dart';
+import 'package:ai_sound_agent/pages/device_test_page.dart';
+import 'package:ai_sound_agent/pages/main_processing.dart';
 
 // 定义路由名称常量
 class Routes {
   static const String home = '/';
   static const String settings = '/settings';
   static const String advancedSettings = '/settings/advanced';
-  static const String shop = '/shop';
   static const String deviceTest = '/device-test';
   static const String mainProcessing = '/main-processing';
   static const String chatRecording = '/chat-recording';
 }
+
+// 路由映射配置
+final Map<String, WidgetBuilder> appRoutes = {
+  Routes.home: (context) => const HomePage(),
+  Routes.settings: (context) => const Settings(),
+  Routes.advancedSettings: (context) => const AdvancedSettingsPage(),
+  Routes.deviceTest: (context) => const DeviceTestPage(),
+  Routes.mainProcessing: (context) => const MainProcessingPage(),
+};
 
 // 路由状态类 (存储当前路由状态)
 class AppRouteState extends ChangeNotifier {

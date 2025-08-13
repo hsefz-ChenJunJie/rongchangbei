@@ -1,9 +1,13 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:record/record.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:dio/dio.dart';
+import 'package:vad/vad.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'dart:math';
 import '../widgets/shared/base.dart';
 import '../widgets/shared/base_elevated_button.dart';
 import '../widgets/shared/tabs.dart';
@@ -35,6 +39,13 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
   String _recordingStatus = '未测试';
   String? _recordedFilePath;
   
+  // VAD相关
+  final _vadHandler = VadHandler.create(isDebug: true);
+  bool _isVadListening = false;
+  bool _isSomeoneSpeaking = false;
+  double _currentVolume = 0.0;
+  final List<String> _vadEvents = [];
+  
   // 扬声器测试相关
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isPlaying = false;
@@ -48,11 +59,13 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
   void initState() {
     super.initState();
     _checkPermissions();
+    _setupVadHandler();
   }
 
   @override
   void dispose() {
     _audioPlayer.dispose();
+    _vadHandler.dispose();
     super.dispose();
   }
 
@@ -62,6 +75,73 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
     setState(() {
       _recordingStatus = hasPermission ? '未测试' : '需要权限';
     });
+  }
+
+  void _setupVadHandler() {
+    _vadHandler.onSpeechStart.listen((_) {
+      debugPrint('Speech detected.');
+      setState(() {
+        _isSomeoneSpeaking = true;
+        _vadEvents.insert(0, 'Speech detected');
+      });
+    });
+
+    _vadHandler.onRealSpeechStart.listen((_) {
+      debugPrint('Real speech start detected (not a misfire).');
+      setState(() {
+        _vadEvents.insert(0, 'Real speech start detected');
+      });
+    });
+
+    _vadHandler.onSpeechEnd.listen((List<double> samples) {
+      debugPrint('Speech ended, first 10 samples: ${samples.take(10).toList()}');
+      setState(() {
+        _isSomeoneSpeaking = false;
+        _vadEvents.insert(0, 'Speech ended');
+      });
+    });
+
+    _vadHandler.onFrameProcessed.listen((frameData) {
+      final isSpeech = frameData.isSpeech;
+      final notSpeech = frameData.notSpeech;
+      
+      debugPrint('Frame processed - Speech probability: $isSpeech, Not speech: $notSpeech');
+      
+      // 计算音量RMS值
+      final frame = frameData.frame;
+      if (frame.isNotEmpty) {
+        double sum = 0;
+        for (double sample in frame) {
+          sum += sample * sample;
+        }
+        final rms = _calculateRms(sum, frame.length);
+        
+        setState(() {
+          _currentVolume = rms * 100;
+          _isSomeoneSpeaking = isSpeech > notSpeech;
+        });
+      }
+    });
+
+    _vadHandler.onVADMisfire.listen((_) {
+      debugPrint('VAD misfire detected.');
+      setState(() {
+        _vadEvents.insert(0, 'VAD misfire detected');
+      });
+    });
+
+    _vadHandler.onError.listen((String message) {
+      debugPrint('VAD Error: $message');
+      setState(() {
+        _vadEvents.insert(0, 'Error: $message');
+      });
+    });
+  }
+
+  // 计算RMS值
+  double _calculateRms(double sum, int length) {
+    if (length <= 0) return 0.0;
+    return sqrt(sum / length);
   }
 
   @override
@@ -332,6 +412,103 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
                       ),
                     ],
                   ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          // VAD实时监听部分
+          Card(
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    '实时语音检测',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      const Text('说话状态:'),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _isSomeoneSpeaking ? Colors.green : Colors.grey,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          _isSomeoneSpeaking ? '正在说话' : '无人说话',
+                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  const Text('实时音量:'),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: _currentVolume.clamp(0.0, 1.0),
+                      backgroundColor: Colors.grey[300],
+                      minHeight: 8,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        _currentVolume > 0.5 ? Colors.red : 
+                        _currentVolume > 0.2 ? Colors.orange : Colors.green,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    '音量: ${(_currentVolume * 100).toStringAsFixed(1)}%',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: BaseElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _isVadListening ? Colors.orange : Colors.blue,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onPressed: _toggleVadListening,
+                      icon: Icon(_isVadListening ? Icons.hearing : Icons.mic_external_on, size: 20),
+                      label: _isVadListening ? '停止监听' : '开始实时监听',
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (_vadEvents.isNotEmpty)
+                    Container(
+                      height: 100,
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: ListView.builder(
+                        reverse: true,
+                        itemCount: _vadEvents.length,
+                        itemBuilder: (context, index) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            child: Text(
+                              _vadEvents[index],
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -791,17 +968,52 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
       _testCompleted = false;
       _hasRecordedAudio = false;
       _recordedFilePath = null;
+      _isVadListening = false;
+      _isSomeoneSpeaking = false;
+      _currentVolume = 0.0;
+      _vadEvents.clear();
     });
   }
 
-  ButtonStyle _getStandardButtonStyle(BuildContext context, {Color? backgroundColor, bool isSpecial = false}) {
-    return ElevatedButton.styleFrom(
-      backgroundColor: backgroundColor ?? Theme.of(context).colorScheme.primary,
-      foregroundColor: Theme.of(context).colorScheme.onPrimary,
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
-    );
+  Future<void> _toggleVadListening() async {
+    try {
+      if (_isVadListening) {
+        await _vadHandler.stopListening();
+        if (mounted) {
+          setState(() {
+            _isVadListening = false;
+            _currentVolume = 0.0;
+            _isSomeoneSpeaking = false;
+          });
+        }
+      } else {
+        // 请求麦克风权限
+        final status = await Permission.microphone.request();
+        if (mounted) {
+          if (status.isGranted) {
+            await _vadHandler.startListening();
+            if (mounted) {
+              setState(() {
+                _isVadListening = true;
+                _vadEvents.clear();
+              });
+            }
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('需要麦克风权限才能使用语音检测功能')),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isVadListening = false;
+          _vadEvents.insert(0, 'VAD启动失败: ${e.toString()}');
+        });
+      }
+    }
   }
+
+
 }
