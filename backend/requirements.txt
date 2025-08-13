@@ -20,7 +20,7 @@ httpx==0.25.2
 asyncio-mqtt==0.11.1
 
 # Audio Processing
-pyaudio==0.2.11
+pyaudio>=0.2.11
 wave==0.0.2
 
 # Utilities
