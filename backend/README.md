@@ -4,6 +4,13 @@
 
 本文档提供AI对话应用后端的完整部署指南，包括开发环境部署和生产环境Docker部署两种方式。
 
+## 快速导航
+
+- 📋 **[详细配置说明](CONFIGURATION.md)** - 所有配置项的完整说明
+- 🚀 **[部署指南](#部署指南)** - 开发和生产环境部署
+- 🔧 **[故障排除](#故障排除)** - 常见问题解决方案
+- 🏗️ **[项目结构](#项目结构)** - 代码组织结构
+
 ## 系统要求
 
 ### 基础环境
@@ -15,6 +22,16 @@
 - Docker 和 Docker Compose（生产环境部署）
 - Vosk语音识别模型（真实STT服务）
 - OpenRouter API密钥（真实LLM服务）
+
+### 📋 重要配置说明
+
+本应用支持丰富的配置选项，详细配置说明请参考：**[CONFIGURATION.md](CONFIGURATION.md)**
+
+**快速配置要点：**
+- 🔑 **OpenRouter API**: 配置 `OPENROUTER_API_KEY` 启用真实LLM服务
+- 🎙️ **语音识别**: 下载Vosk模型启用真实STT服务  
+- 🌐 **网络设置**: 生产环境需设置 `HOST=0.0.0.0`
+- 📝 **日志配置**: 可调整 `LOG_LEVEL` 和 `LOG_FORMAT`
 
 ## 项目结构
 
@@ -67,23 +84,25 @@ pip install -r requirements.txt
 ### 2. 配置设置
 
 #### 2.1 环境变量配置
-创建 `.env` 文件（可选）：
+创建 `.env` 文件（基础配置示例）：
 ```bash
-# OpenRouter LLM服务配置（可选）
+# OpenRouter LLM配置（可选）
 OPENROUTER_API_KEY=your_api_key_here
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_MODEL=anthropic/claude-3-haiku
+OPENROUTER_TEMPERATURE=0.7
 
-# Vosk STT服务配置（可选）
+# Vosk STT配置（可选）
 VOSK_MODEL_PATH=model/vosk-model
 VOSK_SAMPLE_RATE=16000
-USE_REAL_VOSK=false
 
-# 应用配置
-HOST=0.0.0.0
+# 服务器配置
+HOST=127.0.0.1
 PORT=8000
 DEBUG=true
 LOG_LEVEL=INFO
 ```
+
+> 💡 **完整配置说明**: 查看 [CONFIGURATION.md](CONFIGURATION.md) 了解所有52个配置项的详细说明、默认值和最佳实践。
 
 #### 2.2 下载Vosk模型（可选）
 如果要使用真实的语音识别服务：
@@ -230,24 +249,30 @@ docker logs ai-backend
 #### 3.1 环境变量配置
 创建 `.env.production` 文件：
 ```bash
-# 生产环境配置
+# 生产环境核心配置
 DEBUG=false
 LOG_LEVEL=INFO
+LOG_FORMAT=json
 HOST=0.0.0.0
 PORT=8000
 
-# LLM服务配置
+# OpenRouter生产配置
 OPENROUTER_API_KEY=your_production_api_key
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_MODEL=anthropic/claude-3-sonnet
+OPENROUTER_TEMPERATURE=0.3
+OPENROUTER_MAX_TOKENS=1000
 
-# STT服务配置
-USE_REAL_VOSK=true
+# Vosk STT配置
 VOSK_MODEL_PATH=/app/model/vosk-model
 VOSK_SAMPLE_RATE=16000
 
-# 安全配置
-ALLOWED_ORIGINS=["https://your-frontend-domain.com"]
+# 性能优化
+STT_TIMEOUT=20
+LLM_TIMEOUT=45
+WEBSOCKET_TIMEOUT=600
 ```
+
+> 📖 **详细配置指南**: [CONFIGURATION.md](CONFIGURATION.md) 包含完整的生产环境配置最佳实践。
 
 #### 3.2 数据持久化
 ```bash

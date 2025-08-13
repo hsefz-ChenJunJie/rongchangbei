@@ -261,7 +261,7 @@ class LLMService:
         
         return "\n".join(parts)
     
-    async def _call_llm(self, prompt: str, response_format: str = "auto", max_tokens: int = 500) -> Optional[Dict[str, Any]]:
+    async def _call_llm(self, prompt: str, response_format: str = "auto", max_tokens: int = None) -> Optional[Dict[str, Any]]:
         """
         调用LLM API
         
@@ -383,12 +383,16 @@ class OpenRouterLLMService(LLMService):
             logger.error(f"OpenRouter LLM服务初始化失败: {e}")
             return False
     
-    async def _call_llm(self, prompt: str, response_format: str = "auto", max_tokens: int = 500) -> Optional[Dict[str, Any]]:
+    async def _call_llm(self, prompt: str, response_format: str = "auto", max_tokens: int = None) -> Optional[Dict[str, Any]]:
         """真实的OpenRouter API调用"""
         if not self.api_client:
             return None
         
         try:
+            # 使用配置中的参数
+            if max_tokens is None:
+                max_tokens = settings.openrouter_max_tokens
+            
             # 构建响应格式
             format_schema = None
             if response_format == "opinion":
@@ -428,14 +432,14 @@ class OpenRouterLLMService(LLMService):
                     }
                 }
             
-            # 调用API
+            # 调用API - 使用配置中的模型和参数
             response = await self.api_client.chat.completions.create(
-                model="anthropic/claude-3-haiku",  # 可配置的模型
+                model=settings.openrouter_model,
                 messages=[
                     {"role": "user", "content": prompt}
                 ],
                 max_tokens=max_tokens,
-                temperature=0.7,
+                temperature=settings.openrouter_temperature,
                 response_format=format_schema
             )
             

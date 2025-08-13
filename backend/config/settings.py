@@ -15,6 +15,18 @@ class Settings(BaseSettings):
         default="https://openrouter.ai/api/v1",
         description="OpenRouter API基础URL"
     )
+    openrouter_model: str = Field(
+        default="anthropic/claude-3-haiku",
+        description="OpenRouter使用的模型名称"
+    )
+    openrouter_temperature: float = Field(
+        default=0.7,
+        description="OpenRouter模型温度参数"
+    )
+    openrouter_max_tokens: int = Field(
+        default=800,
+        description="OpenRouter最大token数"
+    )
     
     # Vosk STT Configuration
     vosk_model_path: str = Field(
