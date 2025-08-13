@@ -426,123 +426,145 @@ class ChatInputState extends State<ChatInput> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // 角色显示区域和发送按钮在同一行
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          child: Row(
-            children: [
-              // 角色选择按钮
-              GestureDetector(
-                onTap: _showRoleSelector,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _currentRole.color.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: _currentRole.color.withValues(alpha: 0.3),
+    // 获取屏幕高度，限制最大高度为屏幕高度的15%
+    final screenHeight = MediaQuery.of(context).size.height;
+    final maxHeight = screenHeight * 0.15;
+    
+    return Container(
+      constraints: BoxConstraints(
+        maxHeight: maxHeight,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 角色显示区域和发送按钮在同一行
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Row(
+              children: [
+                // 角色选择按钮
+                GestureDetector(
+                  onTap: _showRoleSelector,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _currentRole.color.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: _currentRole.color.withValues(alpha: 0.3),
+                      ),
                     ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(_currentRole.icon, size: 16, color: _currentRole.color),
-                      const SizedBox(width: 4),
-                      Text(
-                        _currentRole.name,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: _currentRole.color,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const Spacer(),
-              // 发送按钮
-              Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).primaryColor,
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  icon: const Icon(Icons.send, color: Colors.white, size: 20),
-                  onPressed: sendAndClear,
-                ),
-              ),
-            ],
-          ),
-        ),
-        
-        // 输入区域
-        Focus(
-          autofocus: true,
-          onKeyEvent: (node, event) {
-            if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.enter) {
-              if (!_isShowingSuggestion) {
-                sendAndClear();
-              } else {
-                // 应用建议
-                final currentText = _controller.text;
-                final newText = currentText + _suggestion;
-                _controller.text = newText;
-                _controller.selection = TextSelection.collapsed(offset: newText.length);
-                _clearSuggestion();
-              }
-              return KeyEventResult.handled;
-            }
-            return KeyEventResult.ignored;
-          },
-          child: Row(
-            children: [
-              Expanded(
-                child: Stack(
-                  children: [
-                    BaseLineInput(
-                      label: '输入消息',
-                      placeholder: '输入消息...',
-                      controller: _controller,
-                      maxLines: 3,
-                      contentPadding: const EdgeInsets.fromLTRB(12, 12, 48, 12),
-                      labelStyle: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9),
-                      ),
-                      placeholderStyle: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                      ),
-                      textStyle: TextStyle(
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                      onChanged: (value) {
-                        if (_isShowingSuggestion) {
-                          _clearSuggestion();
-                        }
-                      },
-                    ),
-                    if (_isShowingSuggestion && _suggestion.isNotEmpty)
-                      Positioned(
-                        right: 48,
-                        bottom: 12,
-                        child: Text(
-                          _suggestion,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                            fontSize: 14,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(_currentRole.icon, size: 16, color: _currentRole.color),
+                        const SizedBox(width: 4),
+                        ConstrainedBox(
+                          constraints: BoxConstraints(
+                            maxWidth: 100, // 限制角色名称的最大宽度
+                          ),
+                          child: Text(
+                            _currentRole.name,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: _currentRole.color,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                      ),
-                  ],
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-            ],
+                const Spacer(),
+                // 发送按钮
+                Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor,
+                    shape: BoxShape.circle,
+                  ),
+                  child: IconButton(
+                    icon: const Icon(Icons.send, color: Colors.white, size: 20),
+                    onPressed: sendAndClear,
+                    padding: const EdgeInsets.all(8), // 减小内边距
+                    constraints: const BoxConstraints(), // 移除默认约束
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+          
+          // 输入区域
+          Expanded( // 使用Expanded来填充剩余空间
+            child: Focus(
+              autofocus: true,
+              onKeyEvent: (node, event) {
+                if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.enter) {
+                  if (!_isShowingSuggestion) {
+                    sendAndClear();
+                  } else {
+                    // 应用建议
+                    final currentText = _controller.text;
+                    final newText = currentText + _suggestion;
+                    _controller.text = newText;
+                    _controller.selection = TextSelection.collapsed(offset: newText.length);
+                    _clearSuggestion();
+                  }
+                  return KeyEventResult.handled;
+                }
+                return KeyEventResult.ignored;
+              },
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch, // 让子组件填满高度
+                children: [
+                  Expanded(
+                    child: Stack(
+                      children: [
+                        BaseLineInput(
+                          label: '输入消息',
+                          placeholder: '输入消息...',
+                          controller: _controller,
+                          maxLines: null, // 改为null让输入框自动适应
+                          contentPadding: const EdgeInsets.fromLTRB(12, 8, 48, 8), // 减小内边距
+                          labelStyle: TextStyle(
+                            fontSize: 12, // 减小字体大小
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9),
+                          ),
+                          placeholderStyle: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                          ),
+                          textStyle: TextStyle(
+                            fontSize: 14, // 减小字体大小
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                          onChanged: (value) {
+                            if (_isShowingSuggestion) {
+                              _clearSuggestion();
+                            }
+                          },
+                        ),
+                        if (_isShowingSuggestion && _suggestion.isNotEmpty)
+                          Positioned(
+                            right: 48,
+                            bottom: 8, // 调整位置
+                            child: Text(
+                              _suggestion,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                                fontSize: 12, // 减小字体大小
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

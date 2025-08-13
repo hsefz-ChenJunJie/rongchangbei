@@ -16,6 +16,7 @@
 - [base_button 示例](base_button_example.dart)：演示如何使用项目的`BaseButton`组件。
 - [bottom_navigator 示例](bottom_navigator_example.dart)：演示如何使用项目的`BottomNavigator`组件。
 - [tts 示例](tts_example.dart)：演示如何使用项目的`Tts`。
+- [responsive_sidebar 示例](responsive_sidebar_example.dart)：演示如何使用响应式侧边栏组件，根据屏幕宽高比自动调整显示方式。
 
 
 
@@ -199,6 +200,116 @@ class _HomePageState extends BasePageState<HomePage> {
 
   // 使用默认的底部导航栏（来自constants.dart）
   // 如需自定义，可以重写此方法
+}
+```
+
+## side bar
+```dart
+// 使用示例和测试组件
+class ResponsiveSidebarExample extends StatefulWidget {
+  const ResponsiveSidebarExample({super.key});
+
+  @override
+  State<ResponsiveSidebarExample> createState() => _ResponsiveSidebarExampleState();
+}
+
+class _ResponsiveSidebarExampleState extends State<ResponsiveSidebarExample> {
+  final GlobalKey<ResponsiveSidebarState> _sidebarKey = GlobalKey<ResponsiveSidebarState>();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('响应式侧边栏示例'),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Colors.white,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () {
+              _sidebarKey.currentState?.open();
+            },
+            tooltip: '打开侧边栏',
+          ),
+        ],
+      ),
+      body: ResponsiveSidebar(
+        key: _sidebarKey,
+        backgroundColor: Colors.white,
+        barrierColor: Colors.black54,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text(
+                '主内容区域',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 30),
+              ElevatedButton.icon(
+                onPressed: () {
+                  final isOpen = _sidebarKey.currentState?.isOpen() ?? false;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(isOpen ? '侧边栏已打开' : '侧边栏已关闭'),
+                      duration: const Duration(seconds: 1),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.info_outline),
+                label: const Text('检查侧边栏状态'),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: () {
+                  _sidebarKey.currentState?.toggle();
+                },
+                icon: const Icon(Icons.swap_horiz),
+                label: const Text('切换侧边栏'),
+              ),
+              const SizedBox(height: 40),
+              const Card(
+                margin: EdgeInsets.all(16),
+                child: Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.screen_rotation,
+                        size: 48,
+                        color: Colors.blue,
+                      ),
+                      SizedBox(height: 10),
+                      Text(
+                        '响应式设计',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        '旋转设备查看不同屏幕尺寸下的效果',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          _sidebarKey.currentState?.open();
+        },
+        child: const Icon(Icons.menu_open),
+        tooltip: '打开侧边栏',
+      ),
+    );
+  }
 }
 ```
 
