@@ -88,12 +88,25 @@ node_modules/
 uploads/
 temp/
 
-# Model files
+# Model files (只排除大型模型文件，保留目录结构)
 *.pt
 *.pth
 *.onnx
 *.om
-models/
+*.bin
+*.safetensors
+*.h5
+*.pkl
+*.model
+*.zip
+*.tar.gz
+
+# 排除大型模型文件但保留目录结构
+backend/model/vosk-model/*
+!backend/model/vosk-model/.gitkeep
+!backend/model/vosk-model/README.md
+
+# 其他模型检查点目录
 checkpoints/
 
 # Database
