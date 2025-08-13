@@ -144,33 +144,36 @@ ls -la  # 应该看到 am/, conf/, graph/, ivector/ 目录
 # 确保在backend目录下
 cd /path/to/荣昶杯项目/backend
 
-# 启动应用
-python -m app.main
-
-# 或使用uvicorn直接启动
+# 推荐方式：使用uvicorn直接启动
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+# 或使用Python模块启动（需要设置PYTHONPATH）
+PYTHONPATH=. python -m app.main
+
+# 最简单方式：直接运行main.py
+python app/main.py
 ```
 
 #### 3.2 验证部署
 ```bash
-# 检查健康状态
-curl http://localhost:8000/api/health
+# 检查后端总体健康状态
+curl http://localhost:8000/
 
-# 预期响应
+# 检查对话服务健康状态
+curl http://localhost:8000/conservation/health
+
+# 预期响应（根健康检查）
 {
   "status": "healthy",
   "timestamp": "2024-01-XX...",
-  "services": {
-    "stt": "healthy",
-    "llm": "healthy", 
-    "session_manager": "healthy",
-    "request_manager": "healthy"
-  }
+  "service": "AI对话应用后端总服务",
+  "version": "1.0.0",
+  "description": "后端进程运行正常，各服务状态良好"
 }
 
 # 测试WebSocket连接
 # 使用浏览器开发者工具或WebSocket客户端连接：
-# ws://localhost:8000/ws/test_client_id
+# ws://localhost:8000/conservation
 ```
 
 ### 4. 开发环境配置调优
@@ -372,12 +375,12 @@ logging:
 
 ### WebSocket 连接和对话开启
 
-**连接地址：** `ws://localhost:8000/ws`
+**连接地址：** `ws://localhost:8000/conservation`
 
 **前端集成示例：**
 ```javascript
-// 连接到WebSocket端点
-const ws = new WebSocket('ws://localhost:8000/ws');
+// 连接到对话服务WebSocket端点
+const ws = new WebSocket('ws://localhost:8000/conservation');
 
 ws.onopen = function() {
   console.log('WebSocket连接已建立');
@@ -432,8 +435,46 @@ ws.onclose = function(event) {
 
 ### API 端点
 
-- **健康检查**：`GET http://localhost:8000/api/health`
-- **就绪检查**：`GET http://localhost:8000/api/health/ready`
+#### 健康检查端点
+- **后端总健康检查**：`GET http://localhost:8000/`
+  - 用途：简单的进程存活检查，快速响应
+  - 适用于：负载均衡器 health check、监控系统
+  - 响应示例：
+    ```json
+    {
+      "status": "healthy",
+      "timestamp": "2024-XX-XX...",
+      "service": "AI对话应用后端总服务",
+      "version": "1.0.0",
+      "description": "后端进程运行正常，各服务状态良好"
+    }
+    ```
+  
+- **对话服务健康检查**：`GET http://localhost:8000/conservation/health`
+  - 用途：深度检查对话相关服务状态（STT、LLM、会话管理等）
+  - 适用于：服务诊断、故障排查
+  - 响应示例：
+    ```json
+    {
+      "status": "healthy|degraded",
+      "timestamp": 1705234567.89,
+      "service": "对话服务",
+      "version": "1.0.0", 
+      "services": {
+        "session_manager": "healthy",
+        "stt_service": "healthy",
+        "llm_service": "healthy",
+        "request_manager": "healthy",
+        "websocket_handler": "healthy"
+      }
+    }
+    ```
+
+#### WebSocket 端点
+- **对话服务连接**：`ws://localhost:8000/conservation`
+  - 用途：实时语音对话和消息交互
+  - 连接后自动分配客户端ID
+  - 支持所有定义的WebSocket事件类型
 
 ---
 
@@ -493,7 +534,26 @@ model/vosk-model/
 chmod -R 755 model/
 ```
 
-#### 5. WebSocket连接失败
+#### 5. 模块导入错误 (Could not import module "main")
+```bash
+# 错误现象：Error loading ASGI app. Could not import module "main"
+
+# 解决方案1：使用正确的启动命令（推荐）
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+# 解决方案2：设置PYTHONPATH环境变量
+export PYTHONPATH=.
+python -m app.main
+
+# 解决方案3：直接运行main.py
+python app/main.py
+
+# 确认工作目录正确（应在backend目录下）
+pwd  # 应显示 */荣昶杯项目/backend
+ls -la app/  # 应能看到main.py文件
+```
+
+#### 6. WebSocket连接失败
 ```bash
 # 检查防火墙设置
 sudo ufw allow 8000
@@ -503,7 +563,7 @@ sudo firewall-cmd --permanent --add-port=8000/tcp
 # 确保WebSocket升级头正确设置
 ```
 
-#### 6. Docker容器启动失败
+#### 7. Docker容器启动失败
 ```bash
 # 查看详细错误信息
 docker-compose logs ai-backend

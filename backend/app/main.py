@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 import logging
 import json
 import time
+from datetime import datetime
 from typing import Dict, Any
 
 from config.settings import settings
@@ -125,17 +126,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 注册API路由
-app.include_router(health_router, prefix="/api", tags=["健康检查"])
+# 注册根健康检查路由（不带前缀）
+app.include_router(health_router, tags=["健康检查"])
 
 
 # WebSocket连接管理已集成到WebSocketHandler中
 
 
-@app.websocket("/ws")
+@app.websocket("/conservation")
 async def websocket_endpoint(websocket: WebSocket):
     """
-    WebSocket端点
+    对话服务WebSocket端点
     
     Args:
         websocket: WebSocket连接
@@ -150,12 +151,44 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.close()
 
 
+@app.get("/conservation/health")
+async def conversation_health_check():
+    """
+    对话服务健康检查端点
+    
+    Returns:
+        Dict[str, Any]: 对话服务状态信息
+    """
+    global session_manager, stt_service, llm_service, request_manager, websocket_handler
+    
+    # 检查各个服务状态
+    services_status = {
+        "session_manager": "healthy" if session_manager else "unavailable",
+        "stt_service": "healthy" if stt_service else "unavailable",
+        "llm_service": "healthy" if llm_service else "unavailable",
+        "request_manager": "healthy" if request_manager else "unavailable",
+        "websocket_handler": "healthy" if websocket_handler else "unavailable"
+    }
+    
+    # 计算总体状态
+    all_healthy = all(status == "healthy" for status in services_status.values())
+    overall_status = "healthy" if all_healthy else "degraded"
+    
+    return {
+        "status": overall_status,
+        "timestamp": time.time(),
+        "service": "对话服务",
+        "version": "1.0.0",
+        "services": services_status
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     import time
     
     uvicorn.run(
-        "main:app",
+        "app.main:app",
         host=settings.host,
         port=settings.port,
         reload=settings.debug,

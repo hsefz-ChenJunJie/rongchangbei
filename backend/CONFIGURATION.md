@@ -282,7 +282,11 @@ VOSK_SAMPLE_RATE=16000
 启动应用后，访问健康检查端点验证配置：
 
 ```bash
-curl http://localhost:8000/api/health
+# 检查后端总体状态
+curl http://localhost:8000/
+
+# 检查对话服务状态  
+curl http://localhost:8000/conservation/health
 ```
 
 **期望响应：**
