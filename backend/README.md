@@ -14,7 +14,7 @@
 ## 系统要求
 
 ### 基础环境
-- Python 3.9+
+- Python 3.12+ （推荐3.12，3.9版本存在依赖兼容性问题）
 - Git
 - 网络连接（用于下载依赖和模型）
 
@@ -64,7 +64,13 @@ cd 荣昶杯项目/backend
 ```
 
 #### 1.2 创建Python虚拟环境
+
+> ⚠️ **重要提醒**：本项目需要Python 3.12+。如果使用Python 3.9可能会遇到依赖兼容性问题。
+
 ```bash
+# 确认Python版本（必须3.12+）
+python --version
+
 # 使用venv
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
@@ -104,23 +110,32 @@ LOG_LEVEL=INFO
 
 > 💡 **完整配置说明**: 查看 [CONFIGURATION.md](CONFIGURATION.md) 了解所有52个配置项的详细说明、默认值和最佳实践。
 
-#### 2.2 下载Vosk模型（可选）
-如果要使用真实的语音识别服务：
-```bash
-# 创建模型目录
-mkdir -p model
+#### 2.2 下载Vosk模型（推荐）
+如果要使用真实的语音识别服务（推荐测试环境使用）：
 
-# 下载中文模型（约500MB）
-cd model
+> 💡 **提示**：模型目录结构已预创建，详细说明请查看 `backend/model/vosk-model/README.md`
+
+```bash
+# 进入模型目录
+cd backend/model/vosk-model
+
+# 下载中文模型（约500MB，推荐）
 wget https://alphacephei.com/vosk/models/vosk-model-cn-0.22.zip
 unzip vosk-model-cn-0.22.zip
-mv vosk-model-cn-0.22 vosk-model
+mv vosk-model-cn-0.22/* .
+rm -rf vosk-model-cn-0.22 vosk-model-cn-0.22.zip
 
-# 或下载小型英文模型（约50MB）
+# 或下载小型英文模型（约50MB，快速测试）
 wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
 unzip vosk-model-small-en-us-0.15.zip
-mv vosk-model-small-en-us-0.15 vosk-model
+mv vosk-model-small-en-us-0.15/* .
+rm -rf vosk-model-small-en-us-0.15 vosk-model-small-en-us-0.15.zip
+
+# 验证模型文件
+ls -la  # 应该看到 am/, conf/, graph/, ivector/ 目录
 ```
+
+> ⚠️ **重要**：如果不下载模型，应用将使用Mock STT服务（用于开发测试）
 
 ### 3. 启动服务
 
@@ -436,7 +451,24 @@ netstat -tulpn | grep 8000
 export PORT=8001
 ```
 
-#### 2. 依赖安装失败
+#### 2. Python版本兼容性问题
+```bash
+# 检查当前Python版本
+python --version
+
+# 如果版本低于3.12，请升级Python
+# Ubuntu/Debian
+sudo apt update && sudo apt install python3.12 python3.12-venv python3.12-dev
+
+# macOS (使用Homebrew)
+brew install python@3.12
+
+# 创建新的虚拟环境
+python3.12 -m venv venv
+source venv/bin/activate
+```
+
+#### 3. 依赖安装失败
 ```bash
 # 更新pip
 pip install --upgrade pip
@@ -445,7 +477,7 @@ pip install --upgrade pip
 pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/
 ```
 
-#### 3. Vosk模型加载失败
+#### 4. Vosk模型加载失败
 ```bash
 # 检查模型文件
 ls -la model/vosk-model/
@@ -461,7 +493,7 @@ model/vosk-model/
 chmod -R 755 model/
 ```
 
-#### 4. WebSocket连接失败
+#### 5. WebSocket连接失败
 ```bash
 # 检查防火墙设置
 sudo ufw allow 8000
@@ -471,7 +503,7 @@ sudo firewall-cmd --permanent --add-port=8000/tcp
 # 确保WebSocket升级头正确设置
 ```
 
-#### 5. Docker容器启动失败
+#### 6. Docker容器启动失败
 ```bash
 # 查看详细错误信息
 docker-compose logs ai-backend
