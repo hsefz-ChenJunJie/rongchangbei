@@ -353,6 +353,75 @@ logging:
 
 ---
 
+## 前端集成指南
+
+### WebSocket 连接和对话开启
+
+**连接地址：** `ws://localhost:8000/ws`
+
+**前端集成示例：**
+```javascript
+// 连接到WebSocket端点
+const ws = new WebSocket('ws://localhost:8000/ws');
+
+ws.onopen = function() {
+  console.log('WebSocket连接已建立');
+  
+  // 发送开启对话请求
+  ws.send(JSON.stringify({
+    type: "conversation_start",
+    data: {
+      scenario_description: "商务会议讨论", // 可选
+      response_count: 3 // 必需，1-5之间的整数
+    }
+  }));
+};
+
+ws.onmessage = function(event) {
+  const response = JSON.parse(event.data);
+  console.log('收到消息:', response);
+  
+  switch(response.type) {
+    case 'session_created':
+      // 保存会话ID，后续所有请求都需要这个ID
+      const sessionId = response.data.session_id;
+      console.log('会话创建成功，ID:', sessionId);
+      break;
+      
+    case 'message_recorded':
+      console.log('消息记录成功:', response.data.content);
+      break;
+      
+    case 'opinion_suggestions':
+      console.log('意见建议:', response.data.suggestions);
+      break;
+      
+    case 'llm_response':
+      console.log('AI回答建议:', response.data.suggestions);
+      break;
+      
+    case 'error':
+      console.error('错误:', response.data.message);
+      break;
+  }
+};
+
+ws.onerror = function(error) {
+  console.error('WebSocket错误:', error);
+};
+
+ws.onclose = function(event) {
+  console.log('WebSocket连接已关闭:', event.code, event.reason);
+};
+```
+
+### API 端点
+
+- **健康检查**：`GET http://localhost:8000/api/health`
+- **就绪检查**：`GET http://localhost:8000/api/health/ready`
+
+---
+
 ## 故障排除
 
 ### 常见问题

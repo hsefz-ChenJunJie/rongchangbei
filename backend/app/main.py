@@ -132,16 +132,18 @@ app.include_router(health_router, prefix="/api", tags=["健康检查"])
 # WebSocket连接管理已集成到WebSocketHandler中
 
 
-@app.websocket("/ws/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, client_id: str):
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
     """
     WebSocket端点
     
     Args:
         websocket: WebSocket连接
-        client_id: 客户端ID
     """
     if websocket_handler:
+        # 生成客户端ID
+        import uuid
+        client_id = f"client_{uuid.uuid4().hex[:8]}"
         await websocket_handler.handle_connection(websocket, client_id)
     else:
         logger.error("WebSocket处理器未初始化")
