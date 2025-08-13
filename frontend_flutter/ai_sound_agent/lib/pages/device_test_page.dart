@@ -12,7 +12,6 @@ import 'package:flutter_tts/flutter_tts.dart';
 import '../widgets/shared/base.dart';
 import '../widgets/shared/base_elevated_button.dart';
 import '../widgets/shared/tabs.dart';
-import '../utils/theme_color_constants.dart';
 
 class DeviceTestPage extends BasePage {
   const DeviceTestPage({super.key})

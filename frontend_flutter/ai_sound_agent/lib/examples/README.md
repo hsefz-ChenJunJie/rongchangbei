@@ -15,6 +15,9 @@
 - [base_elevated_button 示例](base_elevated_button_example.dart)：演示如何使用项目的`BaseElevatedButton`组件。
 - [base_button 示例](base_button_example.dart)：演示如何使用项目的`BaseButton`组件。
 - [bottom_navigator 示例](bottom_navigator_example.dart)：演示如何使用项目的`BottomNavigator`组件。
+- [tts 示例](tts_example.dart)：演示如何使用项目的`Tts`。
+
+
 
 
 

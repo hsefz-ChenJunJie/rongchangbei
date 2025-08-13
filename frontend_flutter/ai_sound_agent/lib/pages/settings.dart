@@ -27,8 +27,6 @@ class _SettingsState extends BasePageState<Settings> {
 
   // 控制器
   final TextEditingController _colorController = TextEditingController();
-  final TextEditingController _llmIntervalController = TextEditingController();
-  final TextEditingController _sttIntervalController = TextEditingController();
 
   @override
   void initState() {
@@ -39,8 +37,6 @@ class _SettingsState extends BasePageState<Settings> {
   @override
   void dispose() {
     _colorController.dispose();
-    _llmIntervalController.dispose();
-    _sttIntervalController.dispose();
     super.dispose();
   }
 
@@ -51,8 +47,6 @@ class _SettingsState extends BasePageState<Settings> {
       
       // 设置控制器初始值
       _colorController.text = _userData.preferences['color'] ?? 'defaultColor';
-      _llmIntervalController.text = _userData.preferences['llmCallingInterval'].toString();
-      _sttIntervalController.text = _userData.preferences['sttSendingInterval'].toString();
       
       setState(() {
         _isLoading = false;
@@ -75,20 +69,6 @@ class _SettingsState extends BasePageState<Settings> {
     
     // 立即更新主题
     await ThemeManager().updateTheme(value);
-  }
-
-  void _handleLlmIntervalChanged(String value) {
-    setState(() {
-      _userData.preferences['llmCallingInterval'] = int.tryParse(value) ?? 10;
-      _hasChanges = true;
-    });
-  }
-
-  void _handleSttIntervalChanged(String value) {
-    setState(() {
-      _userData.preferences['sttSendingInterval'] = int.tryParse(value) ?? -1;
-      _hasChanges = true;
-    });
   }
 
   Future<void> _saveSettings() async {
@@ -138,8 +118,6 @@ class _SettingsState extends BasePageState<Settings> {
       
       // 重新加载控制器值
       _colorController.text = _userData.preferences['color'] ?? 'defaultColor';
-      _llmIntervalController.text = _userData.preferences['llmCallingInterval'].toString();
-      _sttIntervalController.text = _userData.preferences['sttSendingInterval'].toString();
       
       setState(() {
         _hasChanges = false;
@@ -223,32 +201,6 @@ class _SettingsState extends BasePageState<Settings> {
                 ),
               );
             }).toList(),
-          ),
-          
-          const SizedBox(height: 24),
-          
-          const Text(
-            '功能设置',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          
-          BaseLineInput(
-            label: 'LLM调用间隔 (秒)',
-            controller: _llmIntervalController,
-            placeholder: '请输入调用间隔，-1表示禁用',
-            keyboardType: TextInputType.number,
-            onChanged: _handleLlmIntervalChanged,
-          ),
-          
-          const SizedBox(height: 16),
-          
-          BaseLineInput(
-            label: 'STT发送间隔 (秒)',
-            controller: _sttIntervalController,
-            placeholder: '请输入发送间隔，-1表示禁用',
-            keyboardType: TextInputType.number,
-            onChanged: _handleSttIntervalChanged,
           ),
           
           const SizedBox(height: 32),

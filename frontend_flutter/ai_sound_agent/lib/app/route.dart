@@ -12,7 +12,6 @@ class Routes {
   static const String advancedSettings = '/settings/advanced';
   static const String deviceTest = '/device-test';
   static const String mainProcessing = '/main-processing';
-  static const String chatRecording = '/chat-recording';
 }
 
 // 路由映射配置
