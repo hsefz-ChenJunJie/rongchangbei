@@ -17,6 +17,7 @@ dependencies:
   audioplayers: ^6.1.0
   permission_handler: ^11.3.1
   vad: ^0.0.6
+  speech_to_text: 7.1.0
 
 dev_dependencies:
   flutter_test:
