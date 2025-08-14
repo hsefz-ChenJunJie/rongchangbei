@@ -74,6 +74,42 @@ class ChatDialogueState extends State<ChatDialogue> {
     });
   }
 
+  // 批量添加消息
+  void addMessages(List<Map<String, dynamic>> messages) {
+    if (messages.isEmpty) return;
+    
+    setState(() {
+      for (var msg in messages) {
+        final newMessage = ChatMessage(
+          name: msg['name'] ?? 'Unknown',
+          content: msg['content'] ?? '',
+          time: msg['time'] != null 
+              ? DateTime.parse(msg['time'].toString()) 
+              : DateTime.now(),
+          isMe: msg['is_me'] ?? false,
+          icon: msg['icon'] != null 
+              ? IconData(msg['icon'], fontFamily: 'MaterialIcons')
+              : Icons.person,
+        );
+        
+        _messages.add(newMessage);
+        _selectedMessages.add(false);
+      }
+      
+      // 按时间排序
+      _messages.sort((a, b) => a.time.compareTo(b.time));
+      
+      // 滚动到底部
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      });
+    });
+  }
+
   // 清除所有消息
   void clear() {
     setState(() {

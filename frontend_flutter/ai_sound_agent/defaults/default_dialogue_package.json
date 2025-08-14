@@ -1,0 +1,18 @@
+{
+    "type": "dialogue_package",
+    "name": "default",
+    "response_count": 3,
+    "scenario_description": "对话情景描述文本",
+    "message": [
+        {
+            "idx":0,
+            "name":"system",
+            "content":"Created a conversation",
+            "time":"2025/8/11 12:34:56",
+            "is_me":false
+        }
+    ],
+    "modification": "",
+    "user_opinion": "", 
+    "scenario_supplement": ""
+}

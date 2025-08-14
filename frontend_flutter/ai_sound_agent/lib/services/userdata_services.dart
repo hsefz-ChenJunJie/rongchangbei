@@ -2,7 +2,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
 const Map<String, dynamic> defaultUserPreferences = {
-  'color': 'defaultColor'
+  'color': 'defaultColor',
+  'base_url': 'ws://localhost:8000/conservation'
 };
 
 class Userdata {

@@ -27,6 +27,7 @@ class _SettingsState extends BasePageState<Settings> {
 
   // 控制器
   final TextEditingController _colorController = TextEditingController();
+  final TextEditingController _baseUrlController = TextEditingController();
 
   @override
   void initState() {
@@ -37,6 +38,7 @@ class _SettingsState extends BasePageState<Settings> {
   @override
   void dispose() {
     _colorController.dispose();
+    _baseUrlController.dispose();
     super.dispose();
   }
 
@@ -47,6 +49,7 @@ class _SettingsState extends BasePageState<Settings> {
       
       // 设置控制器初始值
       _colorController.text = _userData.preferences['color'] ?? 'defaultColor';
+      _baseUrlController.text = _userData.preferences['base_url'] ?? 'ws://localhost:8000/conservation';
       
       setState(() {
         _isLoading = false;
@@ -69,6 +72,13 @@ class _SettingsState extends BasePageState<Settings> {
     
     // 立即更新主题
     await ThemeManager().updateTheme(value);
+  }
+
+  void _handleBaseUrlChanged(String value) async {
+    setState(() {
+      _userData.preferences['base_url'] = value;
+      _hasChanges = true;
+    });
   }
 
   Future<void> _saveSettings() async {
@@ -118,6 +128,7 @@ class _SettingsState extends BasePageState<Settings> {
       
       // 重新加载控制器值
       _colorController.text = _userData.preferences['color'] ?? 'defaultColor';
+      _baseUrlController.text = _userData.preferences['base_url'] ?? 'ws://localhost:8000/conservation';
       
       setState(() {
         _hasChanges = false;
@@ -201,6 +212,21 @@ class _SettingsState extends BasePageState<Settings> {
                 ),
               );
             }).toList(),
+          ),
+          
+          const SizedBox(height: 32),
+          
+          const Text(
+            '连接设置',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          
+          BaseLineInput(
+            label: '服务器地址',
+            controller: _baseUrlController,
+            placeholder: '例如: ws://localhost:8000/conservation',
+            onChanged: _handleBaseUrlChanged,
           ),
           
           const SizedBox(height: 32),
