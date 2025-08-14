@@ -160,7 +160,7 @@ python app/main.py
 curl http://localhost:8000/
 
 # 检查对话服务健康状态
-curl http://localhost:8000/conservation/health
+curl http://localhost:8000/conversation/health
 
 # 预期响应（根健康检查）
 {
@@ -173,7 +173,7 @@ curl http://localhost:8000/conservation/health
 
 # 测试WebSocket连接
 # 使用浏览器开发者工具或WebSocket客户端连接：
-# ws://localhost:8000/conservation
+# ws://localhost:8000/conversation
 ```
 
 ### 4. 开发环境配置调优
@@ -375,12 +375,12 @@ logging:
 
 ### WebSocket 连接和对话开启
 
-**连接地址：** `ws://localhost:8000/conservation`
+**连接地址：** `ws://localhost:8000/conversation`
 
 **前端集成示例：**
 ```javascript
 // 连接到对话服务WebSocket端点
-const ws = new WebSocket('ws://localhost:8000/conservation');
+const ws = new WebSocket('ws://localhost:8000/conversation');
 
 ws.onopen = function() {
   console.log('WebSocket连接已建立');
@@ -450,7 +450,7 @@ ws.onclose = function(event) {
     }
     ```
   
-- **对话服务健康检查**：`GET http://localhost:8000/conservation/health`
+- **对话服务健康检查**：`GET http://localhost:8000/conversation/health`
   - 用途：深度检查对话相关服务状态（STT、LLM、会话管理等）
   - 适用于：服务诊断、故障排查
   - 响应示例：
@@ -471,7 +471,7 @@ ws.onclose = function(event) {
     ```
 
 #### WebSocket 端点
-- **对话服务连接**：`ws://localhost:8000/conservation`
+- **对话服务连接**：`ws://localhost:8000/conversation`
   - 用途：实时语音对话和消息交互
   - 连接后自动分配客户端ID
   - 支持所有定义的WebSocket事件类型

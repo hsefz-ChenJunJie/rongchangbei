@@ -133,7 +133,7 @@ app.include_router(health_router, tags=["健康检查"])
 # WebSocket连接管理已集成到WebSocketHandler中
 
 
-@app.websocket("/conservation")
+@app.websocket("/conversation")
 async def websocket_endpoint(websocket: WebSocket):
     """
     对话服务WebSocket端点
@@ -151,7 +151,7 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.close()
 
 
-@app.get("/conservation/health")
+@app.get("/conversation/health")
 async def conversation_health_check():
     """
     对话服务健康检查端点

@@ -3,9 +3,9 @@
 ## [v1.1.0] - 2025-08-13
 
 ### 端点架构优化
-- **BREAKING CHANGE**: 将 WebSocket 端点从 `/ws` 更改为 `/conservation`
+- **BREAKING CHANGE**: 将 WebSocket 端点从 `/ws` 更改为 `/conversation`
 - **BREAKING CHANGE**: 将根健康检查从 `/api/health` 更改为 `/`
-- **新增**: `/conservation/health` 对话服务专用健康检查端点
+- **新增**: `/conversation/health` 对话服务专用健康检查端点
 - **移除**: `/health/ready` 冗余端点
 
 ### 技术改进
@@ -21,7 +21,7 @@
 
 ### 向后兼容性
 ⚠️ **注意**: 此版本包含破坏性变更，前端需要更新连接地址：
-- WebSocket: `ws://localhost:8000/ws` → `ws://localhost:8000/conservation`
+- WebSocket: `ws://localhost:8000/ws` → `ws://localhost:8000/conversation`
 - 健康检查: `GET /api/health` → `GET /`
 
 ---

@@ -286,7 +286,7 @@ VOSK_SAMPLE_RATE=16000
 curl http://localhost:8000/
 
 # 检查对话服务状态  
-curl http://localhost:8000/conservation/health
+curl http://localhost:8000/conversation/health
 ```
 
 **期望响应：**
