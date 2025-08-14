@@ -37,11 +37,8 @@ class _DPManagerExampleState extends State<DPManagerExample> {
       // 获取默认对话包
       _defaultDp = await _dpManager.getDefaultDp();
       
-      // 获取所有对话包名称
-      final files = await _dpManager.getAllDpFiles();
-      _allDpNames = files
-          .map((file) => file.path.split('/').last.replaceAll('.dp', ''))
-          .toList();
+      // 使用内置的dp文件列表
+      _allDpNames = _dpManager.getAvailableDpFiles();
     } catch (e) {
       print('加载数据失败: $e');
     } finally {

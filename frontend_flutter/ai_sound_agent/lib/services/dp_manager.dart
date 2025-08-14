@@ -4,14 +4,14 @@ import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart';
 
 class DialoguePackage {
-  final String type;
-  final String name;
-  final int responseCount;
-  final String scenarioDescription;
-  final List<Message> messages;
-  final String modification;
-  final String userOpinion;
-  final String scenarioSupplement;
+  String type;
+  String name;
+  int responseCount;
+  String scenarioDescription;
+  List<Message> messages;
+  String modification;
+  String userOpinion;
+  String scenarioSupplement;
 
   DialoguePackage({
     required this.type,
@@ -106,6 +106,7 @@ class DPManager {
   static const String _defaultDpFileName = 'default.dp';
   
   late Directory _dpDirectory;
+  List<String> _availableDpFiles = [];
 
   // 单例模式
   static final DPManager _instance = DPManager._internal();
@@ -124,6 +125,9 @@ class DPManager {
 
     // 检查并创建默认对话包
     await _ensureDefaultDpExists();
+    
+    // 更新dp文件列表
+    await _updateDpFileList();
   }
 
   // 确保默认对话包存在
@@ -173,6 +177,36 @@ class DPManager {
   // 获取DP目录路径
   String get dpDirectoryPath => _dpDirectory.path;
 
+  // 更新dp文件列表
+  Future<void> _updateDpFileList() async {
+    _availableDpFiles = [];
+    if (!await _dpDirectory.exists()) {
+      return;
+    }
+
+    final files = _dpDirectory.listSync();
+    for (final entity in files) {
+      if (entity is File && entity.path.endsWith('.dp')) {
+        final fileName = entity.path.split('/').last.replaceAll('.dp', '');
+        _availableDpFiles.add(fileName);
+      }
+    }
+    
+    // 按字母顺序排序
+    _availableDpFiles.sort();
+  }
+
+  // 获取当前可用的dp文件列表
+  List<String> getAvailableDpFiles() {
+    return List.from(_availableDpFiles);
+  }
+
+  // 异步获取最新的dp文件列表（会重新扫描文件夹）
+  Future<List<String>> refreshDpFileList() async {
+    await _updateDpFileList();
+    return getAvailableDpFiles();
+  }
+
   // 获取所有对话包文件
   Future<List<File>> getAllDpFiles() async {
     if (!await _dpDirectory.exists()) {
@@ -211,11 +245,12 @@ class DPManager {
     final dpFile = File(dpPath);
     
     await dpFile.writeAsString(json.encode(dp.toJson()));
+    await _updateDpFileList();
   }
 
   // 删除对话包
   Future<void> deleteDp(String name) async {
-    if (name == 'default') {
+    if (name == 'default' || name == 'current') {
       throw Exception('不能删除默认对话包');
     }
 
@@ -224,6 +259,7 @@ class DPManager {
 
     if (await dpFile.exists()) {
       await dpFile.delete();
+      await _updateDpFileList();
     }
   }
 
