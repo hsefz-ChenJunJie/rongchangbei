@@ -110,20 +110,29 @@ class _HomePageState extends BasePageState<HomePage> {
 
   Future<void> _prepareCurrentDialogue(String scenarioDescription) async {
     try {
-      // 读取default.dp
+      // 读取default.dp作为模板
       var defaultPackage = await _dpManager.getDefaultDp();
       
-      // 创建新的current.dp，使用用户输入的场景描述
-      defaultPackage.scenarioDescription = scenarioDescription;
+      // 创建新的current.dp，使用用户输入的场景描述和default的结构
+      final currentPackage = DialoguePackage(
+        type: defaultPackage.type,
+        name: 'current',
+        responseCount: defaultPackage.responseCount,
+        scenarioDescription: scenarioDescription,
+        messages: defaultPackage.messages,
+        modification: defaultPackage.modification,
+        userOpinion: defaultPackage.userOpinion,
+        scenarioSupplement: defaultPackage.scenarioSupplement,
+      );
       
       // 保存为current.dp
-      await _dpManager.saveDp(defaultPackage);
+      await _dpManager.saveDp(currentPackage);
     } catch (e) {
       // 如果default.dp不存在，创建一个基础的current.dp
       final currentPackage = DialoguePackage(
         type: 'dialogue_package',
         name: 'current',
-        responseCount: 0,
+        responseCount: 3,
         scenarioDescription: scenarioDescription,
         messages: [],
         modification: '',
