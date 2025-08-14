@@ -12,6 +12,7 @@ from datetime import datetime
 
 class HistoryMessage(BaseModel):
     """历史消息数据"""
+    message_id: str = Field(description="前端提供的历史消息ID")
     sender: str = Field(description="消息发送者标识")
     content: str = Field(description="消息内容")
 

@@ -176,11 +176,10 @@ class WebSocketHandler:
         # 记录历史消息（如果有）
         if event.data.history_messages:
             logger.info(f"记录历史消息: {session_id}, 共 {len(event.data.history_messages)} 条")
-            for i, history_msg in enumerate(event.data.history_messages, 1):
-                # 为历史消息生成ID
-                message_id = f"his_{i:03d}"
+            for history_msg in event.data.history_messages:
+                # 使用前端提供的消息ID
                 self.session_manager.get_session(session_id).add_message(
-                    message_id=message_id,
+                    message_id=history_msg.message_id,
                     sender=history_msg.sender,
                     content=history_msg.content,
                     is_user_selected=False
