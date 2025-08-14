@@ -28,7 +28,7 @@ class ChatMessage {
 }
 
 class ChatDialogue extends StatefulWidget {
-  const ChatDialogue({Key? key}) : super(key: key);
+  const ChatDialogue({super.key});
 
   @override
   State<ChatDialogue> createState() => ChatDialogueState();
