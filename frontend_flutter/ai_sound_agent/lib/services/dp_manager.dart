@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart';
 
 class DialoguePackage {
   final String type;
@@ -325,9 +326,47 @@ class DPManager {
     return newDp;
   }
 
-  // 将DialoguePackage转换为ChatMessage列表（用于加载到ChatDialogue）
-  List<Map<String, dynamic>> toChatMessages(DialoguePackage dp) {
-    return dp.messages.map((msg) => msg.toJson()).toList();
+  // 转换为ChatMessage列表（用于UI显示）
+  List<Map<String, dynamic>> toChatMessages(DialoguePackage dialoguePackage) {
+    return dialoguePackage.messages.map((msg) {
+      String formattedTime = msg.time;
+      
+      // 确保时间格式为ISO格式，便于解析
+      try {
+        // 如果是自定义格式 (2025/8/11 12:34:56)，转换为ISO格式
+        if (msg.time.contains('/')) {
+          final parts = msg.time.split(' ');
+          if (parts.length >= 2) {
+            final dateParts = parts[0].split('/');
+            final timeParts = parts[1].split(':');
+            if (dateParts.length == 3 && timeParts.length == 3) {
+              final year = int.parse(dateParts[0]);
+              final month = int.parse(dateParts[1]);
+              final day = int.parse(dateParts[2]);
+              final hour = int.parse(timeParts[0]);
+              final minute = int.parse(timeParts[1]);
+              final second = int.parse(timeParts[2]);
+              
+              final dateTime = DateTime(year, month, day, hour, minute, second);
+              formattedTime = dateTime.toIso8601String();
+            }
+          }
+        } else {
+          // 已经是ISO格式或其他格式，保持不变
+          formattedTime = msg.time;
+        }
+      } catch (e) {
+        debugPrint('时间格式转换错误: $e, 使用原始时间: ${msg.time}');
+        formattedTime = msg.time;
+      }
+      
+      return {
+        'name': msg.name,
+        'content': msg.content,
+        'time': formattedTime,
+        'isMe': msg.isMe,
+      };
+    }).toList();
   }
 
   // 将DialoguePackage转换为历史消息列表（用于发送到服务器）

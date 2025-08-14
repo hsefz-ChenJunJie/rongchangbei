@@ -76,37 +76,93 @@ class ChatDialogueState extends State<ChatDialogue> {
 
   // 批量添加消息
   void addMessages(List<Map<String, dynamic>> messages) {
-    if (messages.isEmpty) return;
+    debugPrint('开始添加 ${messages.length} 条消息到对话');
+    
+    final newMessages = messages.map((msg) {
+      try {
+        // 获取时间字符串
+        String timeStr = msg['time']?.toString() ?? '';
+        debugPrint('原始时间字符串: "$timeStr"');
+        
+        // 处理空时间字符串
+        if (timeStr.isEmpty) {
+          timeStr = DateTime.now().toIso8601String();
+          debugPrint('使用当前时间: $timeStr');
+        }
+        
+        DateTime parsedTime;
+        try {
+          // 尝试解析ISO格式
+          parsedTime = DateTime.parse(timeStr);
+        } catch (e) {
+          debugPrint('ISO解析失败，尝试其他格式: $e');
+          try {
+            // 尝试解析自定义格式 (2025/8/11 12:34:56)
+            final parts = timeStr.split(' ');
+            if (parts.length >= 2) {
+              final dateParts = parts[0].split('/');
+              final timeParts = parts[1].split(':');
+              if (dateParts.length == 3 && timeParts.length == 3) {
+                parsedTime = DateTime(
+                  int.parse(dateParts[0]),
+                  int.parse(dateParts[1]),
+                  int.parse(dateParts[2]),
+                  int.parse(timeParts[0]),
+                  int.parse(timeParts[1]),
+                  int.parse(timeParts[2]),
+                );
+              } else {
+                throw FormatException('日期格式不正确');
+              }
+            } else {
+              throw FormatException('时间格式不正确');
+            }
+          } catch (e2) {
+            debugPrint('所有解析尝试失败，使用当前时间: $e2');
+            parsedTime = DateTime.now();
+          }
+        }
+        
+        debugPrint('解析后的时间: $parsedTime');
+        
+        return ChatMessage(
+          name: msg['name']?.toString() ?? '未知用户',
+          content: msg['content']?.toString() ?? '',
+          time: parsedTime,
+          isMe: msg['isMe'] as bool? ?? false,
+          icon: msg['isMe'] as bool? ?? false ? Icons.person : Icons.smart_toy,
+        );
+      } catch (e) {
+        debugPrint('处理消息时出错: $e');
+        debugPrint('消息内容: $msg');
+        return ChatMessage(
+          name: '错误用户',
+          content: '消息格式错误: ${msg.toString()}',
+          time: DateTime.now(),
+          isMe: false,
+          icon: Icons.error,
+        );
+      }
+    }).toList();
     
     setState(() {
-      for (var msg in messages) {
-        final newMessage = ChatMessage(
-          name: msg['name'] ?? 'Unknown',
-          content: msg['content'] ?? '',
-          time: msg['time'] != null 
-              ? DateTime.parse(msg['time'].toString()) 
-              : DateTime.now(),
-          isMe: msg['is_me'] ?? false,
-          icon: msg['icon'] != null 
-              ? IconData(msg['icon'], fontFamily: 'MaterialIcons')
-              : Icons.person,
-        );
-        
-        _messages.add(newMessage);
-        _selectedMessages.add(false);
-      }
-      
-      // 按时间排序
+      _messages.addAll(newMessages);
       _messages.sort((a, b) => a.time.compareTo(b.time));
       
-      // 滚动到底部
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-        );
-      });
+      // 添加对应的选择状态
+      for (var i = 0; i < newMessages.length; i++) {
+        _selectedMessages.add(false);
+      }
+    });
+    
+    debugPrint('成功添加 ${newMessages.length} 条消息，总消息数: ${_messages.length}');
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
     });
   }
 

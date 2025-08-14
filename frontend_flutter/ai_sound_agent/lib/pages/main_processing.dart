@@ -65,9 +65,19 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       
       // 转换为ChatMessage列表并添加到对话中
       final chatMessages = dpManager.toChatMessages(dialoguePackage);
+      debugPrint('从DP加载的消息数量: ${chatMessages.length}');
+      debugPrint('消息内容: $chatMessages');
       
-      if (chatMessages.isNotEmpty && _dialogueKey.currentState != null) {
-        _dialogueKey.currentState!.addMessages(chatMessages);
+      if (chatMessages.isNotEmpty) {
+        // 延迟添加消息，确保组件已完全加载
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_dialogueKey.currentState != null) {
+            _dialogueKey.currentState!.addMessages(chatMessages);
+            debugPrint('消息已添加到对话组件');
+          } else {
+            debugPrint('对话组件状态为null');
+          }
+        });
       }
 
       // 转换为历史消息列表（用于发送到服务器）
