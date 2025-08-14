@@ -4,14 +4,14 @@ import 'package:path_provider/path_provider.dart';
 import 'package:flutter/services.dart';
 
 class DialoguePackage {
-  String type;
-  String name;
-  int responseCount;
-  String scenarioDescription;
-  List<Message> messages;
-  String modification;
-  String userOpinion;
-  String scenarioSupplement;
+  final String type;
+  final String name;
+  final int responseCount;
+  final String scenarioDescription;
+  final List<Message> messages;
+  final String modification;
+  final String userOpinion;
+  final String scenarioSupplement;
 
   DialoguePackage({
     required this.type,
