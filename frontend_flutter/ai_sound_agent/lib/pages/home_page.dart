@@ -74,7 +74,7 @@ class _HomePageState extends BasePageState<HomePage> {
       DialoguePackage(
         type: 'dialogue_package',
         name: '商务谈判',
-        responseCount: 15,
+        responseCount: 1,
         scenarioDescription: '模拟商务谈判场景，学习如何达成双赢协议',
         messages: [],
         modification: '',
@@ -84,7 +84,7 @@ class _HomePageState extends BasePageState<HomePage> {
       DialoguePackage(
         type: 'dialogue_package',
         name: '面试技巧',
-        responseCount: 23,
+        responseCount: 2,
         scenarioDescription: '模拟求职面试，提升面试表现和沟通技巧',
         messages: [],
         modification: '',
@@ -94,7 +94,7 @@ class _HomePageState extends BasePageState<HomePage> {
       DialoguePackage(
         type: 'dialogue_package',
         name: '日常对话',
-        responseCount: 8,
+        responseCount: 3,
         scenarioDescription: '日常生活对话练习，提高日常交流能力',
         messages: [],
         modification: '',

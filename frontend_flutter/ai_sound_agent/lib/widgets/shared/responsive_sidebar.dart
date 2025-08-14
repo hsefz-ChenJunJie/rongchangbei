@@ -116,6 +116,9 @@ class ResponsiveSidebarState extends State<ResponsiveSidebar>
   }
 
   Widget _buildMobileLayout(ThemeManager themeManager) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final maxSidebarWidth = screenWidth * 0.85; // 限制最大宽度为屏幕的85%
+    
     return Stack(
       children: [
         // 主要内容区域
@@ -134,8 +137,19 @@ class ResponsiveSidebarState extends State<ResponsiveSidebar>
             ),
           ),
           
-          // 侧边栏内容
-          _buildSidebarContent(true),
+          // 侧边栏内容 - 限制最大宽度
+          Positioned.fill(
+            child: Align(
+              alignment: widget.isLeft ? Alignment.centerLeft : Alignment.centerRight,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: maxSidebarWidth,
+                  minWidth: 0,
+                ),
+                child: _buildSidebarContent(true),
+              ),
+            ),
+          ),
         ],
       ],
     );
@@ -159,12 +173,18 @@ class ResponsiveSidebarState extends State<ResponsiveSidebar>
         
         // 侧边栏区域
         if (_isOpen) ...[
-          // 侧边栏容器
-          AnimatedContainer(
-            duration: widget.animationDuration,
-            curve: Curves.easeInOut,
-            width: _isOpen ? sidebarWidth : 0,
-            child: _buildSidebarContent(false),
+          // 侧边栏容器 - 限制最大宽度避免溢出
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: sidebarWidth,
+              minWidth: 0,
+            ),
+            child: AnimatedContainer(
+              duration: widget.animationDuration,
+              curve: Curves.easeInOut,
+              width: _isOpen ? sidebarWidth : 0,
+              child: _buildSidebarContent(false),
+            ),
           ),
         ],
       ],
