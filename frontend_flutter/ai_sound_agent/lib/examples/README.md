@@ -17,6 +17,7 @@
 - [bottom_navigator 示例](bottom_navigator_example.dart)：演示如何使用项目的`BottomNavigator`组件。
 - [tts 示例](tts_example.dart)：演示如何使用项目的`Tts`。
 - [responsive_sidebar 示例](responsive_sidebar_example.dart)：演示如何使用响应式侧边栏组件，根据屏幕宽高比自动调整显示方式。
+- [popup 示例](popup_example.dart)：演示如何使用弹出式模态框组件，包含show、close、toggle、isShown等功能。
 
 
 

@@ -1,3 +1,4 @@
+/*
 import 'package:flutter/material.dart';
 import '../widgets/chat_recording/chat_input.dart';
 import '../widgets/chat_recording/chat_dialogue.dart';
@@ -130,3 +131,4 @@ class ChatDialogueState extends State<ChatDialogue> {
     return widget.child;
   }
 }
+*/

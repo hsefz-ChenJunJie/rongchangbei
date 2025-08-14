@@ -94,7 +94,28 @@ class ResponsiveSidebarState extends State<ResponsiveSidebar>
   @override
   Widget build(BuildContext context) {
     final themeManager = ThemeManager();
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final isPortrait = screenWidth < screenHeight;
     
+    // 平板模式下侧边栏宽度
+    final tabletSidebarWidth = screenWidth * 0.5;
+    
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 根据设备类型决定布局方式
+        if (isPortrait) {
+          // 手机模式：使用覆盖式侧边栏
+          return _buildMobileLayout(themeManager);
+        } else {
+          // 平板模式：使用并排式布局
+          return _buildTabletLayout(themeManager, tabletSidebarWidth);
+        }
+      },
+    );
+  }
+
+  Widget _buildMobileLayout(ThemeManager themeManager) {
     return Stack(
       children: [
         // 主要内容区域
@@ -114,100 +135,95 @@ class ResponsiveSidebarState extends State<ResponsiveSidebar>
           ),
           
           // 侧边栏内容
-          _buildSidebarContent(),
+          _buildSidebarContent(true),
         ],
       ],
     );
   }
 
-  Widget _buildSidebarContent() {
+  Widget _buildTabletLayout(ThemeManager themeManager, double sidebarWidth) {
+    return Row(
+      children: [
+        // 主内容区域
+        Expanded(
+          child: AnimatedContainer(
+            duration: widget.animationDuration,
+            curve: Curves.easeInOut,
+            margin: EdgeInsets.only(
+              left: widget.isLeft && _isOpen ? sidebarWidth : 0,
+              right: !widget.isLeft && _isOpen ? sidebarWidth : 0,
+            ),
+            child: widget.child,
+          ),
+        ),
+        
+        // 侧边栏区域
+        if (_isOpen) ...[
+          // 侧边栏容器
+          AnimatedContainer(
+            duration: widget.animationDuration,
+            curve: Curves.easeInOut,
+            width: _isOpen ? sidebarWidth : 0,
+            child: _buildSidebarContent(false),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildSidebarContent(bool isMobile) {
     final themeManager = ThemeManager();
     
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final screenWidth = MediaQuery.of(context).size.width;
-        final screenHeight = MediaQuery.of(context).size.height;
-        final isPortrait = screenWidth < screenHeight;
-        
-        // 根据屏幕方向决定侧边栏宽度
-        final sidebarWidth = isPortrait 
-            ? screenWidth // 手机：占满屏幕宽度
-            : screenWidth * 0.5; // 平板：占屏幕宽度的一半
-
-        return AnimatedBuilder(
-          animation: _slideAnimation,
-          builder: (context, child) {
-            final position = widget.isLeft
-                ? Positioned(
-                    left: _slideAnimation.value * sidebarWidth,
-                    top: 0,
-                    bottom: 0,
-                    width: sidebarWidth,
-                    child: child!,
-                  )
-                : Positioned(
-                    right: _slideAnimation.value * sidebarWidth,
-                    top: 0,
-                    bottom: 0,
-                    width: sidebarWidth,
-                    child: child!,
-                  );
-
-            return position;
-          },
-          child: Material(
-            elevation: 16,
-            color: widget.backgroundColor ?? themeManager.lighterColor,
-            child: Stack(
-              children: [
-                // 侧边栏内容区域
-                Positioned.fill(
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 48.0), // 为关闭按钮留出空间
-                    child: widget.child != null 
-                        ? (widget.child is Container || widget.child is SizedBox)
-                            ? Center(
-                                child: Text(
-                                  '侧边栏内容',
-                                  style: TextStyle(
-                                    color: themeManager.darkTextColor,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              )
-                            : widget.child!
-                        : Center(
-                            child: Text(
-                              '侧边栏内容',
-                              style: TextStyle(
-                                color: themeManager.darkTextColor,
-                                fontSize: 16,
-                              ),
+    return Material(
+      elevation: isMobile ? 16 : 8,
+      color: widget.backgroundColor ?? themeManager.lighterColor,
+      child: Stack(
+        children: [
+          // 侧边栏内容区域
+          Positioned.fill(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 48.0), // 为关闭按钮留出空间
+              child: widget.child != null 
+                  ? (widget.child is Container || widget.child is SizedBox)
+                      ? Center(
+                          child: Text(
+                            '侧边栏内容',
+                            style: TextStyle(
+                              color: themeManager.darkTextColor,
+                              fontSize: 16,
                             ),
                           ),
-                  ),
-                ),
-                
-                // 关闭按钮 - 根据滑出方向调整位置
-                Positioned(
-                  top: 8,
-                  right: widget.isLeft ? 8 : null,
-                  left: widget.isLeft ? null : 8,
-                  child: IconButton(
-                    icon: Icon(
-                      Icons.close,
-                      size: 24,
-                      color: themeManager.baseColor,
+                        )
+                      : widget.child!
+                  : Center(
+                      child: Text(
+                        '侧边栏内容',
+                        style: TextStyle(
+                          color: themeManager.darkTextColor,
+                          fontSize: 16,
+                        ),
+                      ),
                     ),
-                    onPressed: close,
-                    tooltip: '关闭',
-                  ),
-                ),
-              ],
             ),
           ),
-        );
-      },
+          
+          // 关闭按钮 - 根据滑出方向调整位置
+          Positioned(
+            top: 8,
+            right: widget.isLeft ? 8 : null,
+            left: widget.isLeft ? null : 8,
+            child: IconButton(
+              icon: Icon(
+                Icons.close,
+                size: 24,
+                color: themeManager.baseColor,
+              ),
+              onPressed: close,
+              tooltip: '关闭',
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
