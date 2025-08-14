@@ -3,7 +3,7 @@ import 'dart:convert';
 
 const Map<String, dynamic> defaultUserPreferences = {
   'color': 'defaultColor',
-  'base_url': 'ws://localhost:8000/conservation'
+  'base_url': 'ws://localhost:8000/conversation'
 };
 
 class Userdata {

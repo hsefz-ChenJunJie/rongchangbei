@@ -102,6 +102,7 @@ class ResponsiveSidebarState extends State<ResponsiveSidebar>
           if (_isOpen)
             SizedBox(
               width: screenWidth * 0.5,
+              height: screenHeight,
               child: _buildSidebarContent(false),
             ),
         ],
@@ -142,12 +143,13 @@ class ResponsiveSidebarState extends State<ResponsiveSidebar>
   Widget _buildSidebarContent(bool isMobile) {
     final themeManager = ThemeManager();
     
-    return Material(
-      elevation: isMobile ? 16 : 8,
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
       color: widget.backgroundColor ?? themeManager.lighterColor,
       child: Stack(
         children: [
-          // 侧边栏内容区域
+          // 侧边栏内容区域 - 占满全屏
           Positioned.fill(
             child: Padding(
               padding: const EdgeInsets.only(top: 48.0), // 为关闭按钮留出空间

@@ -6,6 +6,10 @@ import 'package:ai_sound_agent/widgets/chat_recording/role_selector.dart';
 import 'package:ai_sound_agent/widgets/chat_recording/role_manager.dart';
 import 'package:ai_sound_agent/widgets/shared/responsive_sidebar.dart';
 import 'package:ai_sound_agent/services/theme_manager.dart';
+import 'package:ai_sound_agent/services/dp_manager.dart';
+import 'package:ai_sound_agent/services/userdata_services.dart';
+import 'dart:convert';
+import 'package:web_socket_channel/web_socket_channel.dart';
 import 'settings.dart';
 import 'device_test_page.dart';
 import 'advanced_settings.dart';
@@ -28,15 +32,133 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   final GlobalKey<ChatDialogueState> _dialogueKey = GlobalKey<ChatDialogueState>();
   final GlobalKey<ChatInputState> _inputKey = GlobalKey<ChatInputState>();
   bool _isSidebarOpen = false;
+  bool _isLoading = true;
+  String? _sessionId;
+  WebSocketChannel? _webSocketChannel;
 
   @override
   void initState() {
     super.initState();
     
-    // 初始化默认角色
+    // 初始化默认角色并加载current.dp
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeDefaultRoles();
+      _loadCurrentDialogue();
     });
+  }
+
+  Future<void> _loadCurrentDialogue() async {
+    try {
+      setState(() {
+        _isLoading = true;
+      });
+
+      // 初始化DPManager
+      final dpManager = DPManager();
+      await dpManager.init();
+
+      // 检查current.dp是否存在，如果不存在则创建
+      if (!await dpManager.exists('current')) {
+        await dpManager.createNewDp('current', scenarioDescription: '当前对话');
+      }
+
+      // 获取current.dp
+      final dialoguePackage = await dpManager.getDp('current');
+      
+      // 转换为ChatMessage列表并添加到对话中
+      final chatMessages = dpManager.toChatMessages(dialoguePackage);
+      
+      if (chatMessages.isNotEmpty && _dialogueKey.currentState != null) {
+        _dialogueKey.currentState!.addMessages(chatMessages);
+      }
+
+      // 加载用户数据以获取用户名和base_url
+      final userdata = Userdata();
+      await userdata.loadUserData();
+      final username = userdata.username;
+      final baseUrl = userdata.preferences['base_url'] ?? 'ws://localhost:8000/conservation';
+
+      // 建立持久WebSocket连接并发送对话启动数据包
+      await _establishWebSocketConnection(
+        baseUrl: baseUrl,
+        username: username,
+        dialoguePackage: dialoguePackage,
+        historyMessages: chatMessages,
+      );
+
+    } catch (e) {
+      debugPrint('加载current.dp或建立WebSocket连接时出错: $e');
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _establishWebSocketConnection({
+    required String baseUrl,
+    required String username,
+    required DialoguePackage dialoguePackage,
+    required List<Map<String, dynamic>> historyMessages,
+  }) async {
+    try {
+      // 创建WebSocket连接
+      _webSocketChannel = WebSocketChannel.connect(
+        Uri.parse(baseUrl),
+      );
+
+      // 监听WebSocket消息
+      _webSocketChannel!.stream.listen(
+        (message) {
+          _handleWebSocketMessage(message);
+        },
+        onError: (error) {
+          debugPrint('WebSocket错误: $error');
+        },
+        onDone: () {
+          debugPrint('WebSocket连接关闭');
+          setState(() {
+            _sessionId = null;
+          });
+        },
+      );
+
+      // 构建并发送对话启动数据包
+      final startMessage = {
+        'type': 'conversation_start',
+        'data': {
+          'username': username,
+          'scenario_description': dialoguePackage.scenarioDescription,
+          'response_count': dialoguePackage.responseCount.clamp(1, 5), // 确保在1-5之间
+          'history_messages': historyMessages,
+        }
+      };
+
+      // 发送数据包
+      _webSocketChannel!.sink.add(json.encode(startMessage));
+      debugPrint('已发送对话启动数据包: ${json.encode(startMessage)}');
+      
+    } catch (e) {
+      debugPrint('WebSocket连接错误: $e');
+    }
+  }
+
+  void _handleWebSocketMessage(String message) {
+    try {
+      final data = json.decode(message);
+      debugPrint('收到WebSocket消息: $data');
+
+      if (data['type'] == 'session_created') {
+        final sessionId = data['data']['session_id'] as String;
+        setState(() {
+          _sessionId = sessionId;
+        });
+        debugPrint('会话已创建，session_id: $sessionId');
+      }
+      // 这里可以处理其他类型的WebSocket消息
+    } catch (e) {
+      debugPrint('处理WebSocket消息时出错: $e');
+    }
   }
 
   void _initializeDefaultRoles() {
@@ -119,7 +241,25 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
   @override
   Widget buildContent(BuildContext context) {
+    if (_isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('正在加载对话...'),
+          ],
+        ),
+      );
+    }
     return _buildMainLayout();
+  }
+
+  @override
+  void dispose() {
+    _webSocketChannel?.sink.close();
+    super.dispose();
   }
 
   Widget _buildMainContent() {
@@ -142,13 +282,37 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
             mainAxisSize: MainAxisSize.max,
             children: [
               Flexible(
-                child: Text(
-                  '对话记录',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '对话记录',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                    if (_sessionId != null) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          _sessionId!.length > 5 
+                              ? '${_sessionId!.substring(0, 5)}...'
+                              : _sessionId!,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.primary,
+                            fontSize: 10,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
               IconButton(
@@ -329,10 +493,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     );
   }
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
+  
 }
 
 
