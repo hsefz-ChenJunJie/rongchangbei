@@ -4,11 +4,8 @@ import 'package:ai_sound_agent/widgets/chat_recording/chat_dialogue.dart';
 import 'package:ai_sound_agent/widgets/chat_recording/chat_input.dart';
 import 'package:ai_sound_agent/widgets/chat_recording/role_selector.dart';
 import 'package:ai_sound_agent/widgets/chat_recording/role_manager.dart';
-import 'package:ai_sound_agent/widgets/shared/responsive_sidebar.dart';
-import 'package:ai_sound_agent/services/theme_manager.dart';
 import 'package:ai_sound_agent/services/dp_manager.dart';
 import 'package:ai_sound_agent/services/userdata_services.dart';
-import 'package:loading_indicator/loading_indicator.dart';
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'settings.dart';
@@ -36,9 +33,6 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   bool _isLoading = true;
   String? _sessionId;
   WebSocketChannel? _webSocketChannel;
-  
-  // 加载步骤提示
-  String _loadingStep = '正在初始化...';
 
   @override
   void initState() {
@@ -55,7 +49,6 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     try {
       setState(() {
         _isLoading = true;
-        _loadingStep = '正在读取对话文件...';
       });
 
       // 初始化DPManager
@@ -67,10 +60,6 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         await dpManager.createNewDp('current', scenarioDescription: '当前对话');
       }
 
-      setState(() {
-        _loadingStep = '正在设置页面...';
-      });
-
       // 获取current.dp
       final dialoguePackage = await dpManager.getDp('current');
       
@@ -81,19 +70,11 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         _dialogueKey.currentState!.addMessages(chatMessages);
       }
 
-      setState(() {
-        _loadingStep = '正在加载用户配置...';
-      });
-
       // 加载用户数据以获取用户名和base_url
       final userdata = Userdata();
       await userdata.loadUserData();
       final username = userdata.username;
       final baseUrl = userdata.preferences['base_url'] ?? 'ws://localhost:8000/conservation';
-
-      setState(() {
-        _loadingStep = '正在建立连接...';
-      });
 
       // 建立持久WebSocket连接并发送对话启动数据包
       await _establishWebSocketConnection(
@@ -102,10 +83,6 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         dialoguePackage: dialoguePackage,
         historyMessages: chatMessages,
       );
-
-      setState(() {
-        _loadingStep = '正在获取会话ID...';
-      });
 
     } catch (e) {
       debugPrint('加载current.dp或建立WebSocket连接时出错: $e');
@@ -144,15 +121,6 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         },
       );
 
-      // 转换历史消息格式以匹配服务器期望的格式
-      final formattedHistoryMessages = historyMessages.map((msg) => {
-        'message_id': inttostr(msg['idx']) ?? 'unknown',
-        'sender': msg['name'] ?? 'unknown',
-        'content': msg['content'] ?? '',
-        'timestamp': msg['time'] ?? '',
-        'is_user': msg['is_me'] ?? false,
-      }).toList();
-
       // 构建并发送对话启动数据包
       final startMessage = {
         'type': 'conversation_start',
@@ -160,7 +128,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
           'username': username,
           'scenario_description': dialoguePackage.scenarioDescription,
           'response_count': dialoguePackage.responseCount.clamp(1, 5), // 确保在1-5之间
-          'history_messages': formattedHistoryMessages,
+          'history_messages': historyMessages,
         }
       };
 
@@ -228,6 +196,8 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     _dialogueKey.currentState?.clear();
   }
 
+
+
   void _toggleSidebar() {
     setState(() {
       _isSidebarOpen = !_isSidebarOpen;
@@ -270,48 +240,15 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   @override
   Widget buildContent(BuildContext context) {
     if (_isLoading) {
-      return Stack(
-        children: [
-          // 原始加载界面（备用）
-          const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('正在加载对话...'),
-              ],
-            ),
-          ),
-          // 白色半透明遮罩和加载动画
-          Container(
-            color: Colors.white.withValues(alpha: 0.8),
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(
-                    width: 80,
-                    height: 80,
-                    child: LoadingIndicator(
-                      indicatorType: Indicator.ballPulse,
-                      colors: [Colors.blue, Colors.green, Colors.orange],
-                      strokeWidth: 2,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    _loadingStep,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.black87,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('正在加载对话...'),
+          ],
+        ),
       );
     }
     return _buildMainLayout();
@@ -553,7 +490,8 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       ),
     );
   }
-}
 
+  
+}
 
 

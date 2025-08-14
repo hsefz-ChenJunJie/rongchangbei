@@ -327,6 +327,12 @@ class DPManager {
 
   // 将DialoguePackage转换为ChatMessage列表（用于加载到ChatDialogue）
   List<Map<String, dynamic>> toChatMessages(DialoguePackage dp) {
-    return dp.messages.map((msg) => msg.toJson()).toList();
+    return dp.messages.map((msg) {
+      final json = msg.toJson();
+      // 添加message_id和sender字段以满足服务器要求
+      json['message_id'] = '${msg.idx}';
+      json['sender'] = msg.isMe ? 'user' : msg.name;
+      return json;
+    }).toList();
   }
 }
