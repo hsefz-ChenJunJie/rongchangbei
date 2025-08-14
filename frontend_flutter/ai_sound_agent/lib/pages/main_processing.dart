@@ -70,6 +70,9 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         _dialogueKey.currentState!.addMessages(chatMessages);
       }
 
+      // 转换为历史消息列表（用于发送到服务器）
+      final historyMessages = dpManager.toHistoryMessages(dialoguePackage);
+
       // 加载用户数据以获取用户名和base_url
       final userdata = Userdata();
       await userdata.loadUserData();
@@ -81,7 +84,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         baseUrl: baseUrl,
         username: username,
         dialoguePackage: dialoguePackage,
-        historyMessages: chatMessages,
+        historyMessages: historyMessages,
       );
 
     } catch (e) {
