@@ -74,7 +74,7 @@ class Message {
       idx: json['idx'] ?? 0,
       name: json['name'] ?? '',
       content: json['content'] ?? '',
-      time: json['time'] ?? '',
+      time: _parseDateTime(json['time'] ?? ''),
       isMe: json['is_me'] ?? false,
     );
   }
@@ -95,9 +95,43 @@ class Message {
       idx: selection['idx'] ?? 0,
       name: selection['name'] ?? '',
       content: selection['content'] ?? '',
-      time: selection['time'] ?? '',
+      time: _parseDateTime(selection['time'] ?? ''),
       isMe: selection['is_me'] ?? false,
     );
+  }
+
+  // 修复日期格式解析问题
+  static String _parseDateTime(String timeStr) {
+    if (timeStr.isEmpty) {
+      return DateTime.now().toIso8601String();
+    }
+    
+    try {
+      // 尝试解析多种日期格式
+      DateTime? parsed;
+      
+      // 格式1: 2025/8/11 12:34:56
+      final regex1 = RegExp(r'(\d{4})/(\d{1,2})/(\d{1,2}) (\d{1,2}):(\d{2}):(\d{2})');
+      final match1 = regex1.firstMatch(timeStr);
+      if (match1 != null) {
+        final year = int.parse(match1.group(1)!);
+        final month = int.parse(match1.group(2)!);
+        final day = int.parse(match1.group(3)!);
+        final hour = int.parse(match1.group(4)!);
+        final minute = int.parse(match1.group(5)!);
+        final second = int.parse(match1.group(6)!);
+        parsed = DateTime(year, month, day, hour, minute, second);
+      }
+      
+      // 格式2: ISO格式
+      if (parsed == null) {
+        parsed = DateTime.tryParse(timeStr);
+      }
+      
+      return parsed?.toIso8601String() ?? DateTime.now().toIso8601String();
+    } catch (e) {
+      return DateTime.now().toIso8601String();
+    }
   }
 }
 
@@ -161,7 +195,7 @@ class DPManager {
             "idx": 0,
             "name": "system",
             "content": "Created a conversation",
-            "time": "2025/8/11 12:34:56",
+            "time": DateTime.now().toIso8601String(),
             "is_me": false
           }
         ],
