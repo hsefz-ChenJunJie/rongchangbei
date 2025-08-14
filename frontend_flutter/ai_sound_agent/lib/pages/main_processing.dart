@@ -313,11 +313,11 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          _sessionId!.length > 5 
-                              ? '${_sessionId!.substring(0, 5)}...'
+                          _sessionId!.length > 20 
+                              ? '${_sessionId!.substring(0, 20)}...'
                               : _sessionId!,
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.primary,
+                            color: Colors.white,
                             fontSize: 10,
                           ),
                         ),
