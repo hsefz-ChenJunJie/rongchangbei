@@ -194,55 +194,16 @@ class ResponsiveSidebarState extends State<ResponsiveSidebar>
   Widget _buildSidebarContent(bool isMobile) {
     final themeManager = ThemeManager();
     
-    return Material(
-      elevation: isMobile ? 16 : 8,
+    return Container(
       color: widget.backgroundColor ?? themeManager.lighterColor,
-      child: Stack(
-        children: [
-          // 侧边栏内容区域
-          Positioned.fill(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 48.0), // 为关闭按钮留出空间
-              child: widget.child != null 
-                  ? (widget.child is Container || widget.child is SizedBox)
-                      ? Center(
-                          child: Text(
-                            '侧边栏内容',
-                            style: TextStyle(
-                              color: themeManager.darkTextColor,
-                              fontSize: 16,
-                            ),
-                          ),
-                        )
-                      : widget.child!
-                  : Center(
-                      child: Text(
-                        '侧边栏内容',
-                        style: TextStyle(
-                          color: themeManager.darkTextColor,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-            ),
+      child: widget.child ?? Center(
+        child: Text(
+          '侧边栏内容',
+          style: TextStyle(
+            color: themeManager.darkTextColor,
+            fontSize: 16,
           ),
-          
-          // 关闭按钮 - 根据滑出方向调整位置
-          Positioned(
-            top: 8,
-            right: widget.isLeft ? 8 : null,
-            left: widget.isLeft ? null : 8,
-            child: IconButton(
-              icon: Icon(
-                Icons.close,
-                size: 24,
-                color: themeManager.baseColor,
-              ),
-              onPressed: close,
-              tooltip: '关闭',
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

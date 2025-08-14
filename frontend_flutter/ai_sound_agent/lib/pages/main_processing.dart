@@ -6,6 +6,9 @@ import 'package:ai_sound_agent/widgets/chat_recording/role_selector.dart';
 import 'package:ai_sound_agent/widgets/chat_recording/role_manager.dart';
 import 'package:ai_sound_agent/widgets/shared/responsive_sidebar.dart';
 import 'package:ai_sound_agent/services/theme_manager.dart';
+import 'settings.dart';
+import 'device_test_page.dart';
+import 'advanced_settings.dart';
 
 class MainProcessingPage extends BasePage {
   const MainProcessingPage({super.key})
@@ -20,14 +23,16 @@ class MainProcessingPage extends BasePage {
   _MainProcessingPageState createState() => _MainProcessingPageState();
 }
 
+// ignore: library_private_types_in_public_api
 class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   final GlobalKey<ChatDialogueState> _dialogueKey = GlobalKey<ChatDialogueState>();
   final GlobalKey<ChatInputState> _inputKey = GlobalKey<ChatInputState>();
-  final GlobalKey<ResponsiveSidebarState> _sidebarKey = GlobalKey<ResponsiveSidebarState>();
+  bool _isSidebarOpen = false;
 
   @override
   void initState() {
     super.initState();
+    
     // 初始化默认角色
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeDefaultRoles();
@@ -71,12 +76,12 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     _dialogueKey.currentState?.clear();
   }
 
-  void _addSampleMessages() {
-    // 示例消息功能已移除
-  }
+
 
   void _toggleSidebar() {
-    _sidebarKey.currentState?.toggle();
+    setState(() {
+      _isSidebarOpen = !_isSidebarOpen;
+    });
   }
 
   void _startRecording() {
@@ -114,103 +119,218 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
   @override
   Widget buildContent(BuildContext context) {
-    return ResponsiveSidebar(
-      key: _sidebarKey,
-      isLeft: true, // 从左侧滑出
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: double.infinity),
-        child: _buildSidebarContent(),
-      ),
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      barrierColor: Colors.black54,
-    );
+    return _buildMainLayout();
   }
 
-  Widget _buildSidebarContent() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SizedBox(
-          width: constraints.maxWidth,
-          child: Column(
+  Widget _buildMainContent() {
+    return Column(
+      children: [
+        // 顶部操作栏
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            border: Border(
+              bottom: BorderSide(
+                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+              ),
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisSize: MainAxisSize.max,
             children: [
-              // 顶部操作栏
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                  border: Border(
-                    bottom: BorderSide(
-                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                    ),
+              Flexible(
+                child: Text(
+                  '对话记录',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  mainAxisSize: MainAxisSize.max,
-                  children: [
-                    Flexible(
-                      child: Text(
-                        '对话记录',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.clear_all, size: 18),
-                      tooltip: '清空对话',
-                      onPressed: _clearChat,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                    ),
-                  ],
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ),
-              
-              // 聊天对话区域
-              Expanded(
-                child: ChatDialogue(
-                  key: _dialogueKey,
-                ),
-              ),
-              
-              // 聊天输入区域
-              Container(
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surface,
-                  border: Border(
-                    top: BorderSide(
-                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                    ),
-                  ),
-                ),
-                child: Builder(
-                  builder: (context) {
-                    final dialogueState = _dialogueKey.currentState;
-                    if (dialogueState == null) {
-                      return const SizedBox.shrink();
-                    }
-                    return ChatInput(
-                      key: _inputKey,
-                      dialogueState: dialogueState,
-                      onSend: _handleSendMessage,
-                    );
-                  }
-                ),
+              IconButton(
+                icon: const Icon(Icons.clear_all, size: 18),
+                tooltip: '清空对话',
+                onPressed: _clearChat,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
               ),
             ],
           ),
-        );
-      }
+        ),
+        
+        // 聊天对话区域
+        Expanded(
+          child: ChatDialogue(
+            key: _dialogueKey,
+          ),
+        ),
+        
+        // 聊天输入区域
+        Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            border: Border(
+              top: BorderSide(
+                color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
+              ),
+            ),
+          ),
+          child: Builder(
+            builder: (context) {
+              final dialogueState = _dialogueKey.currentState;
+              if (dialogueState == null) {
+                return const SizedBox.shrink();
+              }
+              return ChatInput(
+                key: _inputKey,
+                dialogueState: dialogueState,
+                onSend: _handleSendMessage,
+              );
+            }
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 主布局 - 包含侧边栏和主内容
+  Widget _buildMainLayout() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final screenWidth = constraints.maxWidth;
+        final screenHeight = constraints.maxHeight;
+        final isPortrait = screenWidth < screenHeight;
+        
+        if (isPortrait) {
+          // 手机模式：使用覆盖式侧边栏
+          return _buildMobileLayout();
+        } else {
+          // 平板/桌面模式：使用抽屉式侧边栏
+          return _buildTabletLayout();
+        }
+      },
+    );
+  }
+
+  // 手机模式布局
+  Widget _buildMobileLayout() {
+    return Stack(
+      children: [
+        // 主内容
+        _buildMainContent(),
+        
+        // 侧边栏覆盖层
+        if (_isSidebarOpen)
+          Positioned.fill(
+            child: GestureDetector(
+              onTap: _toggleSidebar,
+              child: Container(
+                color: Colors.black54,
+              ),
+            ),
+          ),
+          
+        // 侧边栏内容
+        AnimatedPositioned(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          left: _isSidebarOpen ? 0 : -MediaQuery.of(context).size.width * 0.75,
+          top: 0,
+          bottom: 0,
+          child: Container(
+            width: MediaQuery.of(context).size.width * 0.75,
+            color: Theme.of(context).colorScheme.surface,
+            child: _buildSidebarMenu(),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 平板/桌面模式布局
+  Widget _buildTabletLayout() {
+    return Row(
+      children: [
+        // 侧边栏（抽屉式）
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+          width: _isSidebarOpen ? 250 : 0,
+          child: _isSidebarOpen
+              ? Container(
+                  color: Theme.of(context).colorScheme.surface,
+                  child: _buildSidebarMenu(),
+                )
+              : const SizedBox.shrink(),
+        ),
+          
+        // 主内容区域
+        Expanded(
+          child: _buildMainContent(),
+        ),
+      ],
+    );
+  }
+
+  // 侧边栏菜单内容
+  Widget _buildSidebarMenu() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 40), // 顶部间距
+          Text(
+            '功能菜单',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+          ListTile(
+            leading: const Icon(Icons.settings),
+            title: const Text('设置'),
+            onTap: () {
+              _toggleSidebar();
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const Settings()),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.devices),
+            title: const Text('设备测试'),
+            onTap: () {
+              _toggleSidebar();
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const DeviceTestPage()),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.tune),
+            title: const Text('高级设置'),
+            onTap: () {
+              _toggleSidebar();
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const AdvancedSettingsPage()),
+              );
+            },
+          ),
+        ],
+      ),
     );
   }
 
   @override
   void dispose() {
-    // 清理资源
     super.dispose();
   }
 }

@@ -225,58 +225,60 @@ class RoleSelectorState extends State<RoleSelector> {
   Widget _buildRoleSelectorContent() {
     final roles = getAllRoles();
     
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                '选择角色',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
+    return Material(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  '选择角色',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: _closeRoleSelector,
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Expanded(
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: roles.length + 1,
-              itemBuilder: (context, index) {
-                if (index == roles.length) {
-                  return ListTile(
-                    leading: const Icon(Icons.add),
-                    title: const Text('添加新角色'),
-                    onTap: _addRoleDialog,
-                  );
-                }
-                
-                final role = roles[index];
-                final isSelected = role == getCurrentRole();
-                
-                return ListTile(
-                  leading: Icon(role.icon, color: role.color),
-                  title: Text(role.name),
-                  trailing: isSelected ? const Icon(Icons.check) : null,
-                  selected: isSelected,
-                  onTap: () {
-                    changeRole(role);
-                    _closeRoleSelector();
-                  },
-                );
-              },
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: _closeRoleSelector,
+                ),
+              ],
             ),
-          ),
-        ],
+            const SizedBox(height: 8),
+            Expanded(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: roles.length + 1,
+                itemBuilder: (context, index) {
+                  if (index == roles.length) {
+                    return ListTile(
+                      leading: const Icon(Icons.add),
+                      title: const Text('添加新角色'),
+                      onTap: _addRoleDialog,
+                    );
+                  }
+                  
+                  final role = roles[index];
+                  final isSelected = role == getCurrentRole();
+                  
+                  return ListTile(
+                    leading: Icon(role.icon, color: role.color),
+                    title: Text(role.name),
+                    trailing: isSelected ? const Icon(Icons.check) : null,
+                    selected: isSelected,
+                    onTap: () {
+                      changeRole(role);
+                      _closeRoleSelector();
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
