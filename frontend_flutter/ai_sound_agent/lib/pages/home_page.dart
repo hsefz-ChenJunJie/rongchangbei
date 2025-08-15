@@ -18,7 +18,7 @@ class HomePage extends BasePage {
   _HomePageState createState() => _HomePageState();
 }
 
-class _HomePageState extends BasePageState<HomePage> {
+class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver {
   final TextEditingController _dialogueController = TextEditingController();
   final DPManager _dpManager = DPManager();
   List<DialoguePackage> _recommendedPackages = [];
@@ -27,13 +27,31 @@ class _HomePageState extends BasePageState<HomePage> {
   void initState() {
     super.initState();
     _loadRecommendedPackages();
+    // 监听应用生命周期状态变化
+    WidgetsBinding.instance.addObserver(this);
   }
 
   @override
   void dispose() {
     _dialogueController.dispose();
+    // 移除生命周期监听器
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
+
+  // 监听应用生命周期状态变化
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // 当应用恢复到前台时，重新加载对话包列表
+    if (state == AppLifecycleState.resumed) {
+      _loadRecommendedPackages();
+    }
+  }
+
+
+
+
 
   Future<void> _loadRecommendedPackages() async {
     try {
