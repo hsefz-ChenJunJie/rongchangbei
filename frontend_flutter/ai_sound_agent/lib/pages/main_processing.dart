@@ -11,8 +11,10 @@ import 'package:ai_sound_agent/services/dp_manager.dart';
 import 'package:ai_sound_agent/services/userdata_services.dart';
 import 'dart:convert';
 import 'dart:async';  // 新增：导入Timer
+import 'dart:typed_data';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:loading_indicator/loading_indicator.dart';
+import 'package:record/record.dart';
 
 class MainProcessingPage extends BasePage {
   const MainProcessingPage({super.key})
@@ -66,6 +68,12 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   bool _isGeneratingResponse = false;
   String _generatingMessage = '';
   List<String> _responseSuggestions = [];
+
+  // 音频录制相关状态
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  bool _isRecording = false;
+  String _recordingSender = '';
+  bool _isAudioInitialized = false;
 
   final Map<LoadingStep, String> _stepDescriptions = {
     LoadingStep.readingFile: '正在读取对话文件...',
@@ -225,7 +233,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     }
   }
 
-  void _handleWebSocketMessage(String message) {
+  Future<void> _handleWebSocketMessage(String message) async {
     try {
       final data = json.decode(message);
       debugPrint('收到WebSocket消息: $data');
@@ -284,6 +292,29 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
           });
           debugPrint('收到LLM响应: $suggestions (request_id: $requestId)');
         }
+      } else if (data['type'] == 'message_recorded') {
+        // 处理消息记录消息
+        final receivedSessionId = data['data']['session_id'] as String;
+        final messageId = data['data']['message_id'] as String;
+        final content = data['data']['content'] as String;
+        final sender = data['data']['sender'] as String;
+        
+        final userdata = Userdata();
+        await userdata.loadUserData();
+
+        if (_sessionId == receivedSessionId && mounted) {
+          // 将消息添加到对话中
+          if (_dialogueKey.currentState != null) {
+            _dialogueKey.currentState!.addMessage(
+              name: sender,
+              content: content,
+              isMe: sender == userdata.username, // 根据sender判断是否是用户消息
+            );
+            debugPrint('已添加消息到对话: sender=$sender, content=$content, message_id=$messageId');
+          } else {
+            debugPrint('对话组件状态为null，无法添加消息');
+          }
+        }
       }
       // 这里可以处理其他类型的WebSocket消息
     } catch (e) {
@@ -336,14 +367,184 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     });
   }
 
-  void _startRecording() {
-    // TODO: 实现录音功能
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('录音功能开发中...'),
-        duration: Duration(seconds: 1),
-      ),
-    );
+  Future<void> _startRecording() async {
+    if (_isRecording) {
+      // 如果正在录音，则停止录音
+      await _stopRecording();
+      return;
+    }
+
+    if (_sessionId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('请先建立会话连接'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+      return;
+    }
+
+    try {
+      // 检查并请求录音权限
+      if (!await _audioRecorder.hasPermission()) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('需要麦克风权限才能录音'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+        return;
+      }
+
+      // 获取发送者名称
+      String sender = await _getRecordingSender();
+      _recordingSender = sender;
+
+      // 发送message_start消息
+      _sendMessageStart(sender);
+
+      // 开始录音并获取音频流
+      final stream = await _audioRecorder.startStream(const RecordConfig(
+        encoder: AudioEncoder.pcm16bits,
+        sampleRate: 16000,
+        numChannels: 1,
+      ));
+
+      setState(() {
+        _isRecording = true;
+      });
+
+      // 启动音频流监听
+      _startAudioStreamListener(stream);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('开始录音...'),
+          duration: Duration(milliseconds: 500),
+        ),
+      );
+    } catch (e) {
+      debugPrint('开始录音时出错: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('录音失败: $e'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    try {
+      // 停止录音
+      await _audioRecorder.stop();
+
+      setState(() {
+        _isRecording = false;
+      });
+
+      // 发送message_end消息
+      _sendMessageEnd();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('录音已结束'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    } catch (e) {
+      debugPrint('停止录音时出错: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('停止录音失败: $e'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
+  Future<String> _getRecordingSender() async {
+    final roleManager = RoleManager.instance;
+    final userdata = Userdata();
+    await userdata.loadUserData();
+    
+    final currentRole = roleManager.currentRole;
+    if (currentRole.name == '我自己') {
+      return userdata.username;
+    } else {
+      return currentRole.name;
+    }
+  }
+
+  void _sendMessageStart(String sender) {
+    final message = {
+      'type': 'message_start',
+      'data': {
+        'session_id': _sessionId,
+        'sender': sender,
+      }
+    };
+    
+    _webSocketChannel?.sink.add(json.encode(message));
+    debugPrint('已发送message_start: ${json.encode(message)}');
+  }
+
+  void _sendMessageEnd() {
+    final message = {
+      'type': 'message_end',
+      'data': {
+        'session_id': _sessionId,
+      }
+    };
+    
+    _webSocketChannel?.sink.add(json.encode(message));
+    debugPrint('已发送message_end: ${json.encode(message)}');
+  }
+
+  void _startAudioStreamListener(Stream<List<int>> stream) {
+    List<int> audioBuffer = [];
+    const int chunkSize = 16000; // 大约1秒的16kHz单声道PCM数据
+    
+    stream.listen((chunk) {
+      if (!_isRecording) return;
+      
+      audioBuffer.addAll(chunk);
+      
+      // 当缓冲区达到指定大小时，发送音频chunk
+      if (audioBuffer.length >= chunkSize) {
+        _sendBufferedAudioChunk(audioBuffer);
+        audioBuffer.clear();
+      }
+    }, onError: (error) {
+      debugPrint('音频流错误: $error');
+    }, onDone: () {
+      // 音频流结束，发送剩余的音频数据
+      if (audioBuffer.isNotEmpty) {
+        _sendBufferedAudioChunk(audioBuffer);
+      }
+    });
+  }
+
+  void _sendBufferedAudioChunk(List<int> audioData) {
+    try {
+      if (!_isRecording || _sessionId == null) return;
+
+      // 将音频数据编码为base64
+      final base64Audio = base64.encode(Uint8List.fromList(audioData));
+      
+      final message = {
+        'type': 'audio_stream',
+        'data': {
+          'session_id': _sessionId,
+          'audio_chunk': base64Audio,
+        }
+      };
+      
+      _webSocketChannel?.sink.add(json.encode(message));
+      debugPrint('已发送audio_stream chunk，大小: ${audioData.length} bytes');
+    } catch (e) {
+      debugPrint('发送音频chunk时出错: $e');
+    }
   }
 
   @override
@@ -353,9 +554,12 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       FloatingActionButton(
         heroTag: 'record_button',
         onPressed: _startRecording,
-        tooltip: '开始录音',
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        child: const Icon(Icons.mic, color: Colors.white),
+        tooltip: _isRecording ? '停止录音' : '开始录音',
+        backgroundColor: _isRecording ? Colors.red : Theme.of(context).colorScheme.primary,
+        child: Icon(
+          _isRecording ? Icons.stop : Icons.mic,
+          color: Colors.white,
+        ),
       ),
       
       // 侧边栏控制按钮 - 统一使用主题主色调
@@ -420,6 +624,12 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   void dispose() {
     // 清理计时器
     _stopUserOpinionTimer();
+    
+    // 停止录音
+    if (_isRecording) {
+      _audioRecorder.stop();
+    }
+    _audioRecorder.dispose();
     
     // 清理控制器
     _scenarioSupplementController.dispose();
