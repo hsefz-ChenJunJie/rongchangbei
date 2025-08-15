@@ -13,6 +13,7 @@ class DialoguePackage {
   final String modification;
   final String userOpinion;
   final String scenarioSupplement;
+  final List<Map<String, dynamic>> roles; // 添加roles字段
 
   DialoguePackage({
     required this.type,
@@ -23,11 +24,19 @@ class DialoguePackage {
     required this.modification,
     required this.userOpinion,
     required this.scenarioSupplement,
+    required this.roles, // 添加roles参数
   });
 
   factory DialoguePackage.fromJson(Map<String, dynamic> json) {
     var messageList = json['message'] as List;
     List<Message> messages = messageList.map((i) => Message.fromJson(i)).toList();
+    
+    // 处理roles字段，如果不存在则使用空列表
+    List<Map<String, dynamic>> roles = [];
+    if (json['roles'] != null) {
+      var rolesList = json['roles'] as List;
+      roles = rolesList.map((i) => Map<String, dynamic>.from(i as Map)).toList();
+    }
 
     return DialoguePackage(
       type: json['type'],
@@ -38,6 +47,7 @@ class DialoguePackage {
       modification: json['modification'] ?? '',
       userOpinion: json['user_opinion'] ?? '',
       scenarioSupplement: json['scenario_supplement'] ?? '',
+      roles: roles, // 添加roles参数
     );
   }
 
@@ -51,6 +61,7 @@ class DialoguePackage {
       'modification': modification,
       'user_opinion': userOpinion,
       'scenario_supplement': scenarioSupplement,
+      'roles': roles, // 添加roles字段
     };
   }
 }
@@ -148,6 +159,11 @@ class DPManager {
       final String defaultDpJson = await rootBundle.loadString('defaults/default_dialogue_package.json');
       final Map<String, dynamic> defaultData = json.decode(defaultDpJson);
       
+      // 确保roles字段存在
+      if (!defaultData.containsKey('roles')) {
+        defaultData['roles'] = [];
+      }
+      
       // 保存到目标文件
       await targetFile.writeAsString(json.encode(defaultData));
     } catch (e) {
@@ -168,7 +184,8 @@ class DPManager {
         ],
         "modification": "",
         "user_opinion": "", 
-        "scenario_supplement": ""
+        "scenario_supplement": "",
+        "roles": [] // 添加默认的空roles字段
       };
       
       await targetFile.writeAsString(json.encode(defaultData));
@@ -289,6 +306,7 @@ class DPManager {
       modification: '',
       userOpinion: '',
       scenarioSupplement: '',
+      roles: [], // 添加默认的空roles字段
     );
 
     await saveDp(newDp);
@@ -320,6 +338,7 @@ class DPManager {
       modification: modification,
       userOpinion: userOpinion,
       scenarioSupplement: scenarioSupplement,
+      roles: [], // 添加默认的空roles字段
     );
 
     await saveDp(newDp);

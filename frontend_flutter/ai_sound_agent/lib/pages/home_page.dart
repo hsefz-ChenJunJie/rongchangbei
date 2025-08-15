@@ -98,6 +98,7 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
         modification: '',
         userOpinion: '',
         scenarioSupplement: '',
+        roles: [],
       ),
       DialoguePackage(
         type: 'dialogue_package',
@@ -108,6 +109,7 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
         modification: '',
         userOpinion: '',
         scenarioSupplement: '',
+        roles: [],
       ),
       DialoguePackage(
         type: 'dialogue_package',
@@ -118,6 +120,7 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
         modification: '',
         userOpinion: '',
         scenarioSupplement: '',
+        roles: [],
       ),
     ];
     
@@ -141,6 +144,7 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
         modification: defaultPackage.modification,
         userOpinion: defaultPackage.userOpinion,
         scenarioSupplement: defaultPackage.scenarioSupplement,
+        roles: defaultPackage.roles,
       );
       
       // 保存为current.dp
@@ -156,6 +160,7 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
         modification: '',
         userOpinion: '',
         scenarioSupplement: '',
+        roles: [],
       );
       
       await _dpManager.saveDp(currentPackage);
@@ -177,6 +182,7 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
         modification: selectedPackage.modification,
         userOpinion: selectedPackage.userOpinion,
         scenarioSupplement: selectedPackage.scenarioSupplement,
+        roles: selectedPackage.roles,
       );
       
       // 保存为current.dp
