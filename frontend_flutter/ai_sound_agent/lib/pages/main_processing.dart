@@ -57,6 +57,9 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   String _userOpinionBackup = '';
   Timer? _userOpinionTimer;
   bool _isUserOpinionTimerActive = false;
+  
+  // 新增：回答生成数控制
+  int _responseCount = 3; // 默认值，将从dialoguePackage读取
 
   final Map<LoadingStep, String> _stepDescriptions = {
     LoadingStep.readingFile: '正在读取对话文件...',
@@ -107,6 +110,11 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       _scenarioSupplementController.text = dialoguePackage.scenarioSupplement;
       _userOpinionController.text = dialoguePackage.userOpinion;
       _modificationController.text = dialoguePackage.modification;
+      
+      // 初始化回答生成数
+      setState(() {
+        _responseCount = dialoguePackage.responseCount.clamp(1, 5);
+      });
       
       // 记录调试信息
       debugPrint('已加载对话包数据:');
@@ -686,6 +694,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
             const SizedBox(height: 16),
             
             // 大输入框
+            // 内容输入
             SizedBox(
               height: 120,
               child: BaseTextArea(
@@ -699,6 +708,84 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
               ),
             ),
             const SizedBox(height: 12),
+            
+            // 回答生成数控制
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  '回答生成数',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                      width: 1,
+                    ),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // 减号按钮
+                      BaseElevatedButton(
+                        onPressed: _responseCount > 1 
+                            ? () => _sendResponseCountUpdate(_responseCount - 1)
+                            : null,
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        width: 32,
+                        height: 28,
+                        borderRadius: 4,
+                        backgroundColor: Colors.transparent,
+                        foregroundColor: Theme.of(context).colorScheme.onSurface,
+                        label: '-',
+                      ),
+                      
+                      // 数字显示
+                      Container(
+                        width: 40,
+                        height: 28,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          border: Border.symmetric(
+                            horizontal: BorderSide(
+                              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                              width: 1,
+                            ),
+                          ),
+                        ),
+                        child: Text(
+                          '$_responseCount',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      
+                      // 加号按钮
+                      BaseElevatedButton(
+                        onPressed: _responseCount < 5 
+                            ? () => _sendResponseCountUpdate(_responseCount + 1)
+                            : null,
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        width: 32,
+                        height: 28,
+                        borderRadius: 4,
+                        backgroundColor: Colors.transparent,
+                        foregroundColor: Theme.of(context).colorScheme.onSurface,
+                        label: '+',
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
             
             // 自动生成的一列按钮
             Column(
@@ -834,6 +921,37 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       debugPrint('已发送手动生成消息: ${json.encode(message)}');
     } catch (e) {
       debugPrint('发送手动生成消息时出错: $e');
+    }
+  }
+
+  // 发送回答生成数更新消息
+  void _sendResponseCountUpdate(int newCount) {
+    if (_webSocketChannel == null || _sessionId == null) {
+      debugPrint('WebSocket连接或session_id为空，无法发送回答生成数更新');
+      return;
+    }
+
+    try {
+      final message = {
+        'type': 'response_count_update',
+        'data': {
+          'session_id': _sessionId,
+          'response_count': newCount,
+        }
+      };
+
+      _webSocketChannel!.sink.add(json.encode(message));
+      debugPrint('已发送回答生成数更新: ${json.encode(message)}');
+      
+      // 更新本地状态
+      setState(() {
+        _responseCount = newCount;
+        if (_currentDialoguePackage != null) {
+          _currentDialoguePackage!.responseCount = newCount;
+        }
+      });
+    } catch (e) {
+      debugPrint('发送回答生成数更新时出错: $e');
     }
   }
 }
