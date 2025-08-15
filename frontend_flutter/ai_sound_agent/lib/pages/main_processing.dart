@@ -15,6 +15,8 @@ import 'dart:typed_data';
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:loading_indicator/loading_indicator.dart';
 import 'package:record/record.dart';
+import 'package:flutter_tts/flutter_tts.dart';
+import 'package:ai_sound_agent/widgets/shared/save_dialogue_popup.dart';
 
 class MainProcessingPage extends BasePage {
   const MainProcessingPage({super.key})
@@ -75,6 +77,9 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   String _recordingSender = '';
   // 移除未使用的 _isAudioInitialized 字段
 
+  // TTS相关状态
+  final FlutterTts _flutterTts = FlutterTts();
+
   final Map<LoadingStep, String> _stepDescriptions = {
     LoadingStep.readingFile: '正在读取对话文件...',
     LoadingStep.settingUpPage: '正在设置页面...',
@@ -87,11 +92,26 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   void initState() {
     super.initState();
     
+    // 初始化TTS
+    _initializeTts();
+    
     // 初始化默认角色并加载current.dp
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeDefaultRoles();
       _loadCurrentDialogue();
     });
+  }
+
+  // 初始化TTS
+  Future<void> _initializeTts() async {
+    try {
+      await _flutterTts.setLanguage("zh-CN");
+      await _flutterTts.setSpeechRate(0.5);
+      await _flutterTts.setVolume(1.0);
+      await _flutterTts.setPitch(1.0);
+    } catch (e) {
+      debugPrint('初始化TTS失败: $e');
+    }
   }
 
   Future<void> _loadCurrentDialogue() async {
@@ -622,6 +642,9 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
   @override
   void dispose() {
+    // 发送 conversation_end 消息并关闭 WebSocket 连接
+    _sendConversationEndAndClose();
+    
     // 清理计时器
     _stopUserOpinionTimer();
     
@@ -631,15 +654,86 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     }
     _audioRecorder.dispose();
     
+    // 停止TTS
+    _flutterTts.stop();
+    
     // 清理控制器
     _scenarioSupplementController.dispose();
     _userOpinionController.dispose();
     _modificationController.dispose();
-    
-    // 关闭WebSocket连接
-    _webSocketChannel?.sink.close();
+    _contentInputController.dispose();
     
     super.dispose();
+  }
+
+  // 发送 conversation_end 消息并关闭 WebSocket 连接
+  void _sendConversationEndAndClose() {
+    if (_webSocketChannel != null && _sessionId != null) {
+      try {
+        final message = {
+          'type': 'conversation_end',
+          'data': {
+            'session_id': _sessionId,
+          }
+        };
+        
+        _webSocketChannel!.sink.add(json.encode(message));
+        debugPrint('已发送 conversation_end 消息: ${json.encode(message)}');
+      } catch (e) {
+        debugPrint('发送 conversation_end 消息时出错: $e');
+      }
+    }
+    
+    // 关闭 WebSocket 连接
+    _webSocketChannel?.sink.close();
+    debugPrint('WebSocket 连接已关闭');
+  }
+
+  // 处理移置对话框并语音合成
+  Future<void> _handleMoveToDialogAndTTS() async {
+    final content = _contentInputController.text.trim();
+    if (content.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入内容后再执行此操作')),
+      );
+      return;
+    }
+
+    try {
+      // 获取当前用户名称
+      final userdata = Userdata();
+      await userdata.loadUserData();
+      final username = userdata.username;
+
+      // 将内容添加到对话框
+      if (_dialogueKey.currentState != null) {
+        _dialogueKey.currentState!.addMessage(
+          name: username,
+          content: content,
+          isMe: true,
+        );
+        debugPrint('已将内容添加到对话框: $content');
+      }
+
+      // 使用TTS语音合成
+      await _flutterTts.speak(content);
+      debugPrint('正在语音合成: $content');
+
+      // 清空内容输入框
+      _contentInputController.clear();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('内容已移置对话框并开始语音合成'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+    } catch (e) {
+      debugPrint('移置对话框并语音合成时出错: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('操作失败: $e')),
+      );
+    }
   }
 
   Widget _buildMainContent() {
@@ -695,12 +789,24 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
                   ],
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.clear_all, size: 18),
-                tooltip: '清空对话',
-                onPressed: _clearChat,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.save, size: 18),
+                    tooltip: '保存为对话包',
+                    onPressed: _saveDialoguePackage,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.clear_all, size: 18),
+                    tooltip: '清空对话',
+                    onPressed: _clearChat,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                ],
               ),
             ],
           ),
@@ -1069,6 +1175,17 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
                     }
                   },
                 ),
+                const SizedBox(height: 16),
+                
+                // 移置对话框并语音合成按钮
+                BaseElevatedButton.icon(
+                  onPressed: _handleMoveToDialogAndTTS,
+                  label: '移置对话框并语音合成',
+                  icon: const Icon(Icons.speaker_phone, size: 16),
+                  expanded: true,
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                ),
               ],
             ),
       ),
@@ -1279,6 +1396,56 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       backgroundColor: Theme.of(context).colorScheme.surface,
       foregroundColor: Theme.of(context).colorScheme.onSurface,
       label: suggestion,
+    );
+  }
+
+  // 保存对话包
+  void _saveDialoguePackage() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return SaveDialoguePopup(
+          onSave: (name) async {
+            try {
+              // 获取所有聊天消息
+              final chatMessages = _dialogueKey.currentState?.getAllMessages() ?? [];
+              
+              // 获取侧边栏数据
+              final scenarioDescription = _currentDialoguePackage?.scenarioDescription ?? '';
+              final scenarioSupplement = _scenarioSupplementController.text;
+              final userOpinion = _userOpinionController.text;
+              final modification = _modificationController.text;
+              final responseCount = _responseCount;
+              
+              // 创建新的对话包
+              final dpManager = DPManager();
+              await dpManager.createDpFromChatSelection(
+                name,
+                chatMessages,
+                scenarioDescription: scenarioDescription,
+                responseCount: responseCount,
+                modification: modification,
+                userOpinion: userOpinion,
+                scenarioSupplement: scenarioSupplement,
+              );
+              
+              // 显示成功消息
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('对话包保存成功')),
+                );
+              }
+            } catch (e) {
+              debugPrint('保存对话包时出错: $e');
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('保存对话包失败')),
+                );
+              }
+            }
+          },
+        );
+      },
     );
   }
 }
