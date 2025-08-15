@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:ai_sound_agent/widgets/shared/base.dart';
 import 'package:ai_sound_agent/widgets/shared/base_line_input.dart';
+import 'package:ai_sound_agent/widgets/shared/base_text_area.dart';
 import 'package:ai_sound_agent/widgets/chat_recording/chat_dialogue.dart';
 import 'package:ai_sound_agent/widgets/chat_recording/chat_input.dart';
 import 'package:ai_sound_agent/widgets/chat_recording/role_selector.dart';
@@ -9,9 +10,6 @@ import 'package:ai_sound_agent/services/dp_manager.dart';
 import 'package:ai_sound_agent/services/userdata_services.dart';
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
-import 'settings.dart';
-import 'device_test_page.dart';
-import 'advanced_settings.dart';
 
 class MainProcessingPage extends BasePage {
   const MainProcessingPage({super.key})
@@ -456,114 +454,105 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   Widget _buildSidebarMenu() {
     return Container(
       padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 40), // 顶部间距
-          
-          // 场景描述展示
-          Text(
-            '场景描述',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '当前对话场景的描述内容', // 这里后续会绑定实际的scenario_description
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 16),
-          
-          // 情景补充输入框
-          BaseLineInput(
-            label: '情景补充',
-            placeholder: '请输入情景补充信息',
-            onChanged: (value) {
-              // TODO: 处理情景补充输入
-            },
-          ),
-          const SizedBox(height: 16),
-          
-          // 分隔符
-          Divider(
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-            thickness: 1,
-          ),
-          const SizedBox(height: 16),
-          
-          // 用户意见输入框
-          BaseLineInput(
-            label: '用户意见',
-            placeholder: '请输入您的意见',
-            onChanged: (value) {
-              // TODO: 处理用户意见输入
-            },
-          ),
-          const SizedBox(height: 12),
-          
-          // 建议意见按钮行
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildSuggestionButton('建议1'),
-              _buildSuggestionButton('建议2'),
-              _buildSuggestionButton('建议3'),
-            ],
-          ),
-          const SizedBox(height: 16),
-          
-          // 分隔符
-          Divider(
-            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-            thickness: 1,
-          ),
-          const SizedBox(height: 16),
-          
-          // 大输入框
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                ),
-                borderRadius: BorderRadius.circular(8),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            
+            // 场景描述展示
+            Text(
+              '场景描述',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
               ),
-              child: TextField(
-                maxLines: null,
-                expands: true,
-                decoration: InputDecoration(
-                  hintText: '请输入内容...',
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.all(12),
-                ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '当前对话场景的描述内容', // 这里后续会绑定实际的scenario_description
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            
+            // 情景补充输入框
+            BaseLineInput(
+              label: '情景补充',
+              placeholder: '请输入情景补充信息',
+              onChanged: (value) {
+                // TODO: 处理情景补充输入
+              },
+            ),
+            const SizedBox(height: 16),
+            
+            // 分隔符
+            Divider(
+              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+              thickness: 1,
+            ),
+            const SizedBox(height: 16),
+            
+            // 用户意见输入框
+            BaseLineInput(
+              label: '用户意见',
+              placeholder: '请输入您的意见',
+              onChanged: (value) {
+                // TODO: 处理用户意见输入
+              },
+            ),
+            const SizedBox(height: 12),
+            
+            // 建议意见按钮行
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildSuggestionButton('建议1'),
+                _buildSuggestionButton('建议2'),
+                _buildSuggestionButton('建议3'),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // 分隔符
+            Divider(
+              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+              thickness: 1,
+            ),
+            const SizedBox(height: 16),
+            
+            // 大输入框
+            SizedBox(
+              height: 120,
+              child: BaseTextArea(
+                label: '内容输入',
+                placeholder: '请输入内容...',
+                maxLines: 5,
+                minLines: 3,
                 onChanged: (value) {
                   // TODO: 处理大输入框内容
                 },
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          
-          // 自动生成的一列按钮
-          Column(
-            children: [
-              _buildActionButton('操作按钮1'),
-              _buildActionButton('操作按钮2'),
-              _buildActionButton('操作按钮3'),
-            ],
-          ),
-          const SizedBox(height: 16),
-          
-          // 修改意见输入框
-          BaseLineInput(
-            label: '修改意见',
-            placeholder: '不满意？想改改？',
-            onChanged: (value) {
-              // TODO: 处理修改意见输入
-            },
-          ),
-        ],
+            const SizedBox(height: 12),
+            
+            // 自动生成的一列按钮
+            Column(
+              children: [
+                _buildActionButton('操作按钮1'),
+                _buildActionButton('操作按钮2'),
+                _buildActionButton('操作按钮3'),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // 修改意见输入框
+            BaseLineInput(
+              label: '修改意见',
+              placeholder: '不满意？想改改？',
+              onChanged: (value) {
+                // TODO: 处理修改意见输入
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
