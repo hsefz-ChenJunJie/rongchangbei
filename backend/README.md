@@ -176,6 +176,19 @@ curl http://localhost:8000/conversation/health
 # ws://localhost:8000/conversation
 ```
 
+#### 3.3 运行功能测试（推荐）
+```bash
+# 运行完整的功能验证测试套件
+cd ../tests/backend
+python run_all_tests.py
+
+# 或单独运行特定测试
+python test_audio_stream_fix.py      # 音频流处理测试
+python test_response_count_fix.py    # response_count更新测试
+```
+
+> 📋 **测试详情**: 完整的测试说明请参考 [`../tests/backend/README.md`](../tests/backend/README.md)
+
 ### 4. 开发环境配置调优
 
 #### 4.1 日志配置
@@ -553,7 +566,32 @@ pwd  # 应显示 */荣昶杯项目/backend
 ls -la app/  # 应能看到main.py文件
 ```
 
-#### 6. WebSocket连接失败
+#### 6. 音频流处理错误
+```bash
+# 错误现象：前端发送音频流时报错"会话的音频流未开始"
+# ✅ 已修复 (v1.2.1)：message_start事件现在会自动启动音频流处理
+
+# 验证修复：运行音频流测试
+cd ../tests/backend
+python test_audio_stream_fix.py
+
+# 如果仍有问题，检查STT服务状态
+curl http://localhost:8000/conversation/health
+```
+
+#### 7. LLM回答数量不响应更新
+```bash
+# 错误现象：发送response_count_update后，manual_generate仍返回固定数量
+# ✅ 已修复 (v1.2.1)：LLM现在能正确响应前端的数量设置
+
+# 验证修复：运行回答数量测试
+cd ../tests/backend
+python test_response_count_fix.py
+
+# 测试不同数量：应该看到2个→3个→5个建议的正确变化
+```
+
+#### 8. WebSocket连接失败
 ```bash
 # 检查防火墙设置
 sudo ufw allow 8000
@@ -561,9 +599,12 @@ sudo firewall-cmd --permanent --add-port=8000/tcp
 
 # 检查代理配置
 # 确保WebSocket升级头正确设置
+
+# 确认WebSocket端点正确
+# 正确地址：ws://localhost:8000/conversation
 ```
 
-#### 7. Docker容器启动失败
+#### 9. Docker容器启动失败
 ```bash
 # 查看详细错误信息
 docker-compose logs ai-backend

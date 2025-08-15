@@ -175,7 +175,8 @@ class LLMService:
             response = await self._call_llm(
                 prompt,
                 response_format="response",
-                max_tokens=800
+                max_tokens=800,
+                count=count
             )
             
             if response and "suggestions" in response:
@@ -261,7 +262,7 @@ class LLMService:
         
         return "\n".join(parts)
     
-    async def _call_llm(self, prompt: str, response_format: str = "auto", max_tokens: int = None) -> Optional[Dict[str, Any]]:
+    async def _call_llm(self, prompt: str, response_format: str = "auto", max_tokens: int = None, count: int = 3) -> Optional[Dict[str, Any]]:
         """
         调用LLM API
         
@@ -269,6 +270,7 @@ class LLMService:
             prompt: 提示词
             response_format: 响应格式类型
             max_tokens: 最大token数
+            count: 生成数量（用于response格式）
             
         Returns:
             Optional[Dict[str, Any]]: LLM响应
@@ -281,7 +283,7 @@ class LLMService:
                 if response_format == "opinion":
                     return {"suggestions": self._get_mock_opinions()}
                 else:
-                    return {"suggestions": self._get_mock_responses(3)}
+                    return {"suggestions": self._get_mock_responses(count)}
             
             # TODO: 实际的OpenRouter API调用
             # 这里应该实现真实的API调用逻辑
@@ -292,7 +294,7 @@ class LLMService:
             if response_format == "opinion":
                 return {"suggestions": self._get_mock_opinions()}
             else:
-                return {"suggestions": self._get_mock_responses(3)}
+                return {"suggestions": self._get_mock_responses(count)}
                 
         except Exception as e:
             logger.error(f"LLM API调用失败: {e}")
@@ -383,7 +385,7 @@ class OpenRouterLLMService(LLMService):
             logger.error(f"OpenRouter LLM服务初始化失败: {e}")
             return False
     
-    async def _call_llm(self, prompt: str, response_format: str = "auto", max_tokens: int = None) -> Optional[Dict[str, Any]]:
+    async def _call_llm(self, prompt: str, response_format: str = "auto", max_tokens: int = None, count: int = 3) -> Optional[Dict[str, Any]]:
         """真实的OpenRouter API调用"""
         if not self.api_client:
             return None

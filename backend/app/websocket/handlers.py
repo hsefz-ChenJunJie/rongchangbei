@@ -223,10 +223,23 @@ class WebSocketHandler:
         # 开始新消息
         temp_message_id = self.session_manager.start_message(session_id, sender)
         
+        # 启动STT音频流处理
+        if self.stt_service:
+            success = await self.stt_service.start_stream_processing(session_id)
+            if not success:
+                await self.send_error(
+                    client_id,
+                    ErrorCodes.STT_SERVICE_ERROR,
+                    "启动音频流处理失败",
+                    session_id=session_id
+                )
+                return
+            logger.info(f"已启动音频流处理: {session_id}")
+        
         # 更新状态
         await self.send_status_update(session_id, "recording_message", "开始录制消息")
         
-        logger.info(f"消息开始: {session_id}, 临时ID: {temp_message_id}")
+        logger.info(f"消息开始: {session_id}, 发送者: {sender}, 临时ID: {temp_message_id}")
     
     async def handle_audio_stream(self, client_id: str, event_data: Dict[str, Any]):
         """处理音频流事件"""

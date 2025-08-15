@@ -1,5 +1,38 @@
 # 更新日志
 
+## [v1.2.1] - 2025-08-15
+
+### 关键Bug修复
+- **修复**: 音频流处理失败问题 - 前端发送audio_stream事件时后端不再报错"会话的音频流未开始"
+- **修复**: response_count_update事件无效问题 - LLM回答数量现在能正确响应前端的数量设置
+- **改进**: 增强STT音频流生命周期管理，在message_start事件中自动启动音频流处理
+- **改进**: 优化LLM Mock服务的count参数处理逻辑，支持动态回答数量
+
+### 技术实现
+- 修改`WebSocketHandler.handle_message_start()`方法，添加STT音频流启动逻辑
+- 修改`LLMService._call_llm()`方法签名，添加count参数支持
+- 增加STT服务启动失败的错误处理和日志记录
+- 同步更新OpenRouterLLMService的方法签名以保持一致性
+
+### 测试体系建设
+- **新增**: 完整的后端测试套件 `/tests/backend/`
+- **新增**: 音频流处理专项测试 `test_audio_stream_fix.py`
+- **新增**: response_count更新专项测试 `test_response_count_fix.py` 
+- **新增**: 自动化测试运行器 `run_all_tests.py`
+- **新增**: 详细的测试文档和使用说明
+
+### 验证结果
+- ✅ 音频流处理测试通过：完整的message_start → audio_stream → message_end流程无错误
+- ✅ response_count测试通过：3个→5个→2个建议数量变化验证成功
+- ✅ 系统稳定性：修复提升了核心功能的稳定性，无向后兼容性问题
+
+### 影响评估
+- **兼容性**: ✅ 完全向后兼容，无API变更
+- **性能**: ✅ 无负面性能影响
+- **稳定性**: ✅ 显著提升音频和LLM功能稳定性
+
+---
+
 ## [v1.2.0] - 2025-08-14
 
 ### 历史消息ID处理优化
