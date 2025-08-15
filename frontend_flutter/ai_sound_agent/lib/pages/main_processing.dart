@@ -10,6 +10,7 @@ import 'package:ai_sound_agent/widgets/chat_recording/role_manager.dart';
 import 'package:ai_sound_agent/services/dp_manager.dart';
 import 'package:ai_sound_agent/services/userdata_services.dart';
 import 'dart:convert';
+import 'dart:async';  // 新增：导入Timer
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:loading_indicator/loading_indicator.dart';
 
@@ -51,6 +52,11 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   
   // 新增：存储建议关键词的列表
   List<String> _suggestionKeywords = ['建议1', '建议2', '建议3'];
+  
+  // 新增：用户意见相关状态
+  String _userOpinionBackup = '';
+  Timer? _userOpinionTimer;
+  bool _isUserOpinionTimerActive = false;
 
   final Map<LoadingStep, String> _stepDescriptions = {
     LoadingStep.readingFile: '正在读取对话文件...',
@@ -372,10 +378,17 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
   @override
   void dispose() {
-    _webSocketChannel?.sink.close();
+    // 清理计时器
+    _stopUserOpinionTimer();
+    
+    // 清理控制器
     _scenarioSupplementController.dispose();
     _userOpinionController.dispose();
     _modificationController.dispose();
+    
+    // 关闭WebSocket连接
+    _webSocketChannel?.sink.close();
+    
     super.dispose();
   }
 
@@ -626,7 +639,30 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
               placeholder: '请输入您的意见',
               controller: _userOpinionController,
               onChanged: (value) {
-                // TODO: 处理用户意见输入
+                // 当用户开始输入时启动计时器（如果尚未启动）
+                if (!_isUserOpinionTimerActive && value.isNotEmpty) {
+                  _startUserOpinionTimer();
+                }
+                
+                // 如果用户清空了输入，停止计时器
+                if (value.isEmpty && _isUserOpinionTimerActive) {
+                  _stopUserOpinionTimer();
+                  _userOpinionBackup = '';
+                }
+              },
+              onSubmitted: (value) {
+                final trimmedValue = value.trim();
+                if (trimmedValue.isNotEmpty && trimmedValue != _userOpinionBackup) {
+                  _sendManualGenerate(trimmedValue);
+                  _userOpinionBackup = trimmedValue;
+                }
+                
+                // 按Enter后清空输入框
+                _userOpinionController.clear();
+                
+                // 停止计时器
+                _stopUserOpinionTimer();
+                _userOpinionBackup = '';
               },
             ),
             const SizedBox(height: 12),
@@ -747,6 +783,57 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       // _scenarioSupplementController.clear();
     } catch (e) {
       debugPrint('发送情景补充时出错: $e');
+    }
+  }
+
+  // 启动用户意见计时器
+  void _startUserOpinionTimer() {
+    if (_isUserOpinionTimerActive) {
+      _userOpinionTimer?.cancel();
+    }
+    
+    _isUserOpinionTimerActive = true;
+    _userOpinionTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      _checkAndSendUserOpinion();
+    });
+  }
+
+  // 停止用户意见计时器
+  void _stopUserOpinionTimer() {
+    _userOpinionTimer?.cancel();
+    _isUserOpinionTimerActive = false;
+  }
+
+  // 检查用户意见变化并发送消息
+  void _checkAndSendUserOpinion() {
+    final currentOpinion = _userOpinionController.text.trim();
+    
+    if (currentOpinion.isNotEmpty && currentOpinion != _userOpinionBackup) {
+      _sendManualGenerate(currentOpinion);
+      _userOpinionBackup = currentOpinion;
+    }
+  }
+
+  // 发送手动生成消息
+  void _sendManualGenerate(String userOpinion) {
+    if (_webSocketChannel == null || _sessionId == null) {
+      debugPrint('WebSocket连接或session_id为空，无法发送手动生成消息');
+      return;
+    }
+
+    try {
+      final message = {
+        'type': 'manual_generate',
+        'data': {
+          'session_id': _sessionId,
+          'user_opinion': userOpinion,
+        }
+      };
+
+      _webSocketChannel!.sink.add(json.encode(message));
+      debugPrint('已发送手动生成消息: ${json.encode(message)}');
+    } catch (e) {
+      debugPrint('发送手动生成消息时出错: $e');
     }
   }
 }
