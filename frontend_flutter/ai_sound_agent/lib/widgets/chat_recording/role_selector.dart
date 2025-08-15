@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../shared/popup.dart';
 import 'role_manager.dart';
+import 'package:ai_sound_agent/services/theme_manager.dart';
 
 class ChatRole {
   final String id;
@@ -121,105 +122,136 @@ class RoleSelectorState extends State<RoleSelector> {
 
     await showDialog(
       context: context,
+      barrierDismissible: true,
       builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('添加新角色'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: '角色名称',
-                    hintText: '请输入角色名称',
-                  ),
-                  autofocus: true,
-                ),
-                const SizedBox(height: 16),
-                const Text('选择颜色:'),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+        builder: (context, setState) {
+          final screenWidth = MediaQuery.of(context).size.width;
+          final dialogWidth = screenWidth > 600 ? 500.0 : screenWidth * 0.9;
+          
+          return AlertDialog(
+            title: Text(
+              '添加新角色',
+              style: TextStyle(color: ThemeManager().darkTextColor),
+            ),
+            content: SizedBox(
+              width: dialogWidth,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Colors.red, Colors.blue, Colors.green, Colors.orange,
-                    Colors.purple, Colors.pink, Colors.teal, Colors.indigo,
-                    Colors.brown, Colors.grey
-                  ].map((color) => GestureDetector(
-                    onTap: () => setState(() => selectedColor = color),
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: color,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: selectedColor == color 
-                            ? Colors.black 
-                            : Colors.transparent,
-                          width: 2,
-                        ),
+                    TextField(
+                      controller: nameController,
+                      decoration: InputDecoration(
+                        labelText: '角色名称',
+                        hintText: '请输入角色名称',
+                        labelStyle: TextStyle(color: ThemeManager().darkTextColor),
+                        hintStyle: TextStyle(color: ThemeManager().darkTextColor.withValues(alpha: 0.6)),
                       ),
+                      style: TextStyle(color: ThemeManager().darkTextColor),
+                      autofocus: true,
                     ),
-                  )).toList(),
-                ),
-                const SizedBox(height: 16),
-                const Text('选择图标:'),
-                const SizedBox(height: 8),
-                SizedBox(
-                  height: 200,
-                  child: GridView.count(
-                    crossAxisCount: 4,
-                    shrinkWrap: true,
-                    children: [
-                      Icons.person, Icons.work, Icons.school, Icons.home,
-                      Icons.directions_car, Icons.phone, Icons.email, Icons.favorite,
-                      Icons.star, Icons.thumb_up, Icons.check, Icons.close,
-                      Icons.settings, Icons.search, Icons.delete, Icons.edit,
-                    ].map((icon) => GestureDetector(
-                      onTap: () => setState(() => selectedIcon = icon),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: selectedIcon == icon 
-                            ? Theme.of(context).primaryColor.withValues(alpha: 0.2)
-                            : null,
-                          borderRadius: BorderRadius.circular(8),
+                    const SizedBox(height: 16),
+                    Text(
+                      '选择颜色:',
+                      style: TextStyle(color: ThemeManager().darkTextColor),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        Colors.red, Colors.blue, Colors.green, Colors.orange,
+                        Colors.purple, Colors.pink, Colors.teal, Colors.indigo,
+                        Colors.brown, Colors.grey
+                      ].map((color) => GestureDetector(
+                        onTap: () => setState(() => selectedColor = color),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: selectedColor == color 
+                                ? Colors.black 
+                                : Colors.transparent,
+                              width: 2,
+                            ),
+                          ),
                         ),
-                        child: Icon(icon, color: selectedColor),
-                      ),
-                    )).toList(),
-                  ),
+                      )).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      '选择图标:',
+                      style: TextStyle(color: ThemeManager().darkTextColor),
+                    ),
+                    const SizedBox(height: 8),
+                    GridView.count(
+                      crossAxisCount: 4,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      childAspectRatio: 1.5,
+                      children: [
+                        Icons.person, Icons.work, Icons.school, Icons.home,
+                        Icons.directions_car, Icons.phone, Icons.email, Icons.favorite,
+                        Icons.star, Icons.thumb_up, Icons.check, Icons.close,
+                        Icons.settings, Icons.search, Icons.delete, Icons.edit,
+                      ].map((icon) => GestureDetector(
+                        onTap: () => setState(() => selectedIcon = icon),
+                        child: Container(
+                          margin: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: selectedIcon == icon 
+                              ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
+                              : null,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                              color: selectedIcon == icon 
+                                ? Theme.of(context).primaryColor
+                                : Colors.transparent,
+                              width: 1,
+                            ),
+                          ),
+                          child: Icon(icon, color: selectedColor, size: 24),
+                        ),
+                      )).toList(),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('取消'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (nameController.text.trim().isNotEmpty) {
-                  final newRole = ChatRole(
-                    id: 'custom_${DateTime.now().millisecondsSinceEpoch}',
-                    name: nameController.text.trim(),
-                    color: selectedColor,
-                    icon: selectedIcon,
-                  );
-                  addRole(newRole);
-                  Navigator.pop(context);
-                }
-              },
-              child: const Text('添加'),
-            ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  '取消',
+                  style: TextStyle(color: ThemeManager().darkTextColor),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  if (nameController.text.trim().isNotEmpty) {
+                    final newRole = ChatRole(
+                      id: 'custom_${DateTime.now().millisecondsSinceEpoch}',
+                      name: nameController.text.trim(),
+                      color: selectedColor,
+                      icon: selectedIcon,
+                    );
+                    addRole(newRole);
+                    Navigator.pop(context);
+                  }
+                },
+                child: Text(
+                  '添加',
+                  style: TextStyle(color: ThemeManager().lightTextColor),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
-    
-    _closeRoleSelector();
   }
 
   Widget _buildRoleSelectorContent() {
@@ -234,15 +266,16 @@ class RoleSelectorState extends State<RoleSelector> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
+                Text(
                   '选择角色',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
+                    color: ThemeManager().darkTextColor,
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.close),
+                  icon: Icon(Icons.close, color: ThemeManager().darkTextColor),
                   onPressed: _closeRoleSelector,
                 ),
               ],
@@ -255,9 +288,15 @@ class RoleSelectorState extends State<RoleSelector> {
                 itemBuilder: (context, index) {
                   if (index == roles.length) {
                     return ListTile(
-                      leading: const Icon(Icons.add),
-                      title: const Text('添加新角色'),
-                      onTap: _addRoleDialog,
+                      leading: Icon(Icons.add, color: ThemeManager().darkTextColor),
+                      title: Text(
+                        '添加新角色',
+                        style: TextStyle(color: ThemeManager().darkTextColor),
+                      ),
+                      onTap: () {
+                      _closeRoleSelector();
+                      Future.microtask(() => _addRoleDialog());
+                    },
                     );
                   }
                   
@@ -266,9 +305,13 @@ class RoleSelectorState extends State<RoleSelector> {
                   
                   return ListTile(
                     leading: Icon(role.icon, color: role.color),
-                    title: Text(role.name),
-                    trailing: isSelected ? const Icon(Icons.check) : null,
+                    title: Text(
+                      role.name,
+                      style: TextStyle(color: ThemeManager().darkTextColor),
+                    ),
+                    trailing: isSelected ? Icon(Icons.check, color: ThemeManager().darkTextColor) : null,
                     selected: isSelected,
+                    selectedTileColor: ThemeManager().lighterColor.withValues(alpha: 0.1),
                     onTap: () {
                       changeRole(role);
                       _closeRoleSelector();
@@ -309,7 +352,7 @@ class RoleSelectorState extends State<RoleSelector> {
                 Text(
                   currentRole.name,
                   style: TextStyle(
-                    color: currentRole.color,
+                    color: ThemeManager().darkTextColor,
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
                   ),
