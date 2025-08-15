@@ -8,8 +8,19 @@ WORKDIR /app
 ENV PYPI_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple"
 ENV PIP_TRUSTED_HOST="pypi.tuna.tsinghua.edu.cn"
 
+# 替换APT源为清华镜像源以提升下载速度
+RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources && \
+    sed -i 's/security.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources
+
+# 配置APT以加速下载
+RUN echo 'Acquire::http::Timeout "30";' >> /etc/apt/apt.conf.d/99timeout && \
+    echo 'Acquire::ftp::Timeout "30";' >> /etc/apt/apt.conf.d/99timeout && \
+    echo 'Acquire::Retries "3";' >> /etc/apt/apt.conf.d/99timeout && \
+    echo 'APT::Get::Assume-Yes "true";' >> /etc/apt/apt.conf.d/99timeout && \
+    echo 'APT::Install-Recommends "false";' >> /etc/apt/apt.conf.d/99timeout
+
 # 安装系统依赖（包括音频相关）
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     wget \
     unzip \
