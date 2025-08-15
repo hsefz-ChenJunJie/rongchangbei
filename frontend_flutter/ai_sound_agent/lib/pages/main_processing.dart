@@ -334,7 +334,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
             
             // 判断是否为"我自己"角色发送的消息
             bool isMe = false;
-            if (currentRole.name == '我自己') {
+            if (currentRole.id == 'user') {
               // 如果当前选择的是"我自己"角色，则认为是用户消息
               isMe = true;
             } else {
@@ -560,7 +560,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     await userdata.loadUserData();
     
     final currentRole = roleManager.currentRole;
-    if (currentRole.name == '我自己') {
+    if (currentRole.id == 'user') {
       return userdata.username;
     } else {
       return currentRole.name;
