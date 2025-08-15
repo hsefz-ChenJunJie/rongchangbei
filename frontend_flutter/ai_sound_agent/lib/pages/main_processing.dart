@@ -10,6 +10,7 @@ import 'package:ai_sound_agent/services/dp_manager.dart';
 import 'package:ai_sound_agent/services/userdata_services.dart';
 import 'dart:convert';
 import 'package:web_socket_channel/web_socket_channel.dart';
+import 'package:loading_indicator/loading_indicator.dart';
 
 class MainProcessingPage extends BasePage {
   const MainProcessingPage({super.key})
@@ -24,7 +25,14 @@ class MainProcessingPage extends BasePage {
   _MainProcessingPageState createState() => _MainProcessingPageState();
 }
 
-// ignore: library_private_types_in_public_api
+enum LoadingStep {
+  readingFile,
+  settingUpPage,
+  sendingStartRequest,
+  receivingSessionId,
+  completed,
+}
+
 class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   final GlobalKey<ChatDialogueState> _dialogueKey = GlobalKey<ChatDialogueState>();
   final GlobalKey<ChatInputState> _inputKey = GlobalKey<ChatInputState>();
@@ -32,6 +40,23 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   bool _isLoading = true;
   String? _sessionId;
   WebSocketChannel? _webSocketChannel;
+  LoadingStep _currentStep = LoadingStep.readingFile;
+
+  final TextEditingController _scenarioSupplementController = TextEditingController();
+  final TextEditingController _userOpinionController = TextEditingController();
+  final TextEditingController _modificationController = TextEditingController();
+
+  DialoguePackage? _currentDialoguePackage;
+
+
+
+  final Map<LoadingStep, String> _stepDescriptions = {
+    LoadingStep.readingFile: '正在读取对话文件...',
+    LoadingStep.settingUpPage: '正在设置页面...',
+    LoadingStep.sendingStartRequest: '正在发送开始对话请求...',
+    LoadingStep.receivingSessionId: '正在接收会话ID...',
+    LoadingStep.completed: '加载完成',
+  };
 
   @override
   void initState() {
@@ -48,11 +73,16 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     try {
       setState(() {
         _isLoading = true;
+        _currentStep = LoadingStep.readingFile;
       });
 
       // 初始化DPManager
       final dpManager = DPManager();
       await dpManager.init();
+
+      setState(() {
+        _currentStep = LoadingStep.settingUpPage;
+      });
 
       // 检查current.dp是否存在，如果不存在则创建
       if (!await dpManager.exists('current')) {
@@ -61,6 +91,21 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
       // 获取current.dp
       final dialoguePackage = await dpManager.getDp('current');
+      
+      // 保存对话包数据并填充侧边栏
+      _currentDialoguePackage = dialoguePackage;
+      
+      // 填充侧边栏输入框的值
+      _scenarioSupplementController.text = dialoguePackage.scenarioSupplement;
+      _userOpinionController.text = dialoguePackage.userOpinion;
+      _modificationController.text = dialoguePackage.modification;
+      
+      // 记录调试信息
+      debugPrint('已加载对话包数据:');
+      debugPrint('场景描述: ${dialoguePackage.scenarioDescription}');
+      debugPrint('情景补充: ${dialoguePackage.scenarioSupplement}');
+      debugPrint('用户意见: ${dialoguePackage.userOpinion}');
+      debugPrint('修改意见: ${dialoguePackage.modification}');
       
       // 转换为ChatMessage列表并添加到对话中
       final chatMessages = dpManager.toChatMessages(dialoguePackage);
@@ -88,6 +133,10 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       final username = userdata.username;
       final baseUrl = userdata.preferences['base_url'] ?? 'ws://localhost:8000/conservation';
 
+      setState(() {
+        _currentStep = LoadingStep.sendingStartRequest;
+      });
+
       // 建立持久WebSocket连接并发送对话启动数据包
       await _establishWebSocketConnection(
         baseUrl: baseUrl,
@@ -100,6 +149,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       debugPrint('加载current.dp或建立WebSocket连接时出错: $e');
     } finally {
       setState(() {
+        _currentStep = LoadingStep.completed;
         _isLoading = false;
       });
     }
@@ -162,8 +212,18 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         final sessionId = data['data']['session_id'] as String;
         setState(() {
           _sessionId = sessionId;
+          _currentStep = LoadingStep.receivingSessionId;
         });
         debugPrint('会话已创建，session_id: $sessionId');
+        
+        // 短暂延迟后标记为完成
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            setState(() {
+              _currentStep = LoadingStep.completed;
+            });
+          }
+        });
       }
       // 这里可以处理其他类型的WebSocket消息
     } catch (e) {
@@ -252,15 +312,45 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   @override
   Widget buildContent(BuildContext context) {
     if (_isLoading) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('正在加载对话...'),
-          ],
-        ),
+      return Stack(
+        children: [
+          // 主内容（在加载时不可见）
+          _buildMainLayout(),
+          
+          // 白色半透明遮罩
+          Container(
+            color: Colors.white.withOpacity(0.85),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // 加载动画 - 使用官方推荐的参数
+                  const SizedBox(
+                    width: 72,
+                    height: 72,
+                    child: LoadingIndicator(
+                      indicatorType: Indicator.ballSpinFadeLoader,
+                      colors: [Colors.blue, Colors.green, Colors.orange],
+                      strokeWidth: 2.0,
+                      backgroundColor: Colors.transparent,
+                      pathBackgroundColor: Colors.transparent,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  // 步骤提示文字
+                  Text(
+                    _stepDescriptions[_currentStep] ?? '加载中...',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Colors.black87,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       );
     }
     return _buildMainLayout();
@@ -269,6 +359,9 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   @override
   void dispose() {
     _webSocketChannel?.sink.close();
+    _scenarioSupplementController.dispose();
+    _userOpinionController.dispose();
+    _modificationController.dispose();
     super.dispose();
   }
 
@@ -468,7 +561,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              '当前对话场景的描述内容', // 这里后续会绑定实际的scenario_description
+              _currentDialoguePackage?.scenarioDescription ?? '当前对话场景的描述内容',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
@@ -477,6 +570,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
             BaseLineInput(
               label: '情景补充',
               placeholder: '请输入情景补充信息',
+              controller: _scenarioSupplementController,
               onChanged: (value) {
                 // TODO: 处理情景补充输入
               },
@@ -494,6 +588,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
             BaseLineInput(
               label: '用户意见',
               placeholder: '请输入您的意见',
+              controller: _userOpinionController,
               onChanged: (value) {
                 // TODO: 处理用户意见输入
               },
@@ -547,6 +642,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
             BaseLineInput(
               label: '修改意见',
               placeholder: '不满意？想改改？',
+              controller: _modificationController,
               onChanged: (value) {
                 // TODO: 处理修改意见输入
               },
