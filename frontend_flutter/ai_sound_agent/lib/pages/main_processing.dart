@@ -47,6 +47,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   final TextEditingController _scenarioSupplementController = TextEditingController();
   final TextEditingController _userOpinionController = TextEditingController();
   final TextEditingController _modificationController = TextEditingController();
+  final TextEditingController _contentInputController = TextEditingController(); // 新增：内容输入控制器
 
   DialoguePackage? _currentDialoguePackage;
   
@@ -60,6 +61,11 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   
   // 新增：回答生成数控制
   int _responseCount = 3; // 默认值，将从dialoguePackage读取
+  
+  // 新增：LLM响应相关状态
+  bool _isGeneratingResponse = false;
+  String _generatingMessage = '';
+  List<String> _responseSuggestions = [];
 
   final Map<LoadingStep, String> _stepDescriptions = {
     LoadingStep.readingFile: '正在读取对话文件...',
@@ -241,7 +247,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
           }
         });
       } else if (data['type'] == 'opinion_suggestions') {
-        // 新增：处理意见建议消息
+        // 处理意见建议消息
         final receivedSessionId = data['data']['session_id'] as String;
         final suggestions = List<String>.from(data['data']['suggestions'] as List);
         
@@ -251,6 +257,32 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
             _suggestionKeywords = suggestions;
           });
           debugPrint('已更新建议关键词: $suggestions');
+        }
+      } else if (data['type'] == 'status_update') {
+        // 处理状态更新消息
+        final receivedSessionId = data['data']['session_id'] as String;
+        final status = data['data']['status'] as String;
+        final messageText = data['data']['message'] as String? ?? '正在处理...';
+        
+        if (_sessionId == receivedSessionId && mounted) {
+          setState(() {
+            _isGeneratingResponse = true;
+            _generatingMessage = messageText;
+          });
+          debugPrint('状态更新: $status - $messageText');
+        }
+      } else if (data['type'] == 'llm_response') {
+        // 处理LLM响应消息
+        final receivedSessionId = data['data']['session_id'] as String;
+        final suggestions = List<String>.from(data['data']['suggestions'] as List);
+        final requestId = data['data']['request_id'] as String?;
+        
+        if (_sessionId == receivedSessionId && mounted) {
+          setState(() {
+            _isGeneratingResponse = false;
+            _responseSuggestions = suggestions;
+          });
+          debugPrint('收到LLM响应: $suggestions (request_id: $requestId)');
         }
       }
       // 这里可以处理其他类型的WebSocket消息
@@ -583,231 +615,252 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     return Container(
       padding: const EdgeInsets.all(16),
       child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            
-            // 场景描述展示
-            Text(
-              '场景描述',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _currentDialoguePackage?.scenarioDescription ?? '当前对话场景的描述内容',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 16),
-            
-            // 情景补充输入框
-            BaseLineInput(
-              label: '情景补充',
-              placeholder: '请输入情景补充信息; Enter发送',
-              controller: _scenarioSupplementController,
-              onChanged: (value) {
-                // TODO: 处理情景补充输入
-              },
-              onSubmitted: (value) {
-                // 当用户按下Enter键时发送情景补充并更新场景描述
-                final trimmedValue = value.trim();
-                if (trimmedValue.isNotEmpty && _sessionId != null) {
-                  // 发送WebSocket消息
-                  _sendScenarioSupplement(trimmedValue);
-                  
-                  // 将内容添加到场景描述
-                  setState(() {
-                    if (_currentDialoguePackage != null) {
-                      if (_currentDialoguePackage!.scenarioDescription.isEmpty) {
-                        _currentDialoguePackage!.scenarioDescription = trimmedValue;
-                      } else {
-                        _currentDialoguePackage!.scenarioDescription += '; $trimmedValue';
-                      }
-                    }
-                  });
-                  
-                  // 清空输入框
-                  _scenarioSupplementController.clear();
-                }
-              },
-            ),
-            const SizedBox(height: 16),
-            
-            // 分隔符
-            Divider(
-              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-              thickness: 1,
-            ),
-            const SizedBox(height: 16),
-            
-            // 用户意见输入框
-            BaseLineInput(
-              label: '用户意见',
-              placeholder: '请输入您的意见',
-              controller: _userOpinionController,
-              onChanged: (value) {
-                // 当用户开始输入时启动计时器（如果尚未启动）
-                if (!_isUserOpinionTimerActive && value.isNotEmpty) {
-                  _startUserOpinionTimer();
-                }
-                
-                // 如果用户清空了输入，停止计时器
-                if (value.isEmpty && _isUserOpinionTimerActive) {
-                  _stopUserOpinionTimer();
-                  _userOpinionBackup = '';
-                }
-              },
-              onSubmitted: (value) {
-                final trimmedValue = value.trim();
-                if (trimmedValue.isNotEmpty && trimmedValue != _userOpinionBackup) {
-                  _sendManualGenerate(trimmedValue);
-                  _userOpinionBackup = trimmedValue;
-                }
-                
-                // 按Enter后清空输入框
-                _userOpinionController.clear();
-                
-                // 停止计时器
-                _stopUserOpinionTimer();
-                _userOpinionBackup = '';
-              },
-            ),
-            const SizedBox(height: 12),
-            
-            // 建议意见按钮行
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildSuggestionButton(_suggestionKeywords.isNotEmpty ? _suggestionKeywords[0] : '建议1'),
-                _buildSuggestionButton(_suggestionKeywords.length > 1 ? _suggestionKeywords[1] : '建议2'),
-                _buildSuggestionButton(_suggestionKeywords.length > 2 ? _suggestionKeywords[2] : '建议3'),
-              ],
-            ),
-            const SizedBox(height: 16),
-            
-            // 分隔符
-            Divider(
-              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-              thickness: 1,
-            ),
-            const SizedBox(height: 16),
-            
-            // 大输入框
-            // 内容输入
-            SizedBox(
-              height: 120,
-              child: BaseTextArea(
-                label: '内容输入',
-                placeholder: '请输入内容...',
-                maxLines: 5,
-                minLines: 3,
-                onChanged: (value) {
-                  // TODO: 处理大输入框内容
-                },
-              ),
-            ),
-            const SizedBox(height: 12),
-            
-            // 回答生成数控制
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  '回答生成数',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                
+                // 场景描述展示
+                Text(
+                  '场景描述',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                      width: 1,
+                const SizedBox(height: 8),
+                Text(
+                  _currentDialoguePackage?.scenarioDescription ?? '当前对话场景的描述内容',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 16),
+                
+                // 情景补充输入框
+                BaseLineInput(
+                  label: '情景补充',
+                  placeholder: '请输入情景补充信息; Enter发送',
+                  controller: _scenarioSupplementController,
+                  onChanged: (value) {
+                    // TODO: 处理情景补充输入
+                  },
+                  onSubmitted: (value) {
+                    // 当用户按下Enter键时发送情景补充并更新场景描述
+                    final trimmedValue = value.trim();
+                    if (trimmedValue.isNotEmpty && _sessionId != null) {
+                      // 发送WebSocket消息
+                      _sendScenarioSupplement(trimmedValue);
+                      
+                      // 将内容添加到场景描述
+                      setState(() {
+                        if (_currentDialoguePackage != null) {
+                          if (_currentDialoguePackage!.scenarioDescription.isEmpty) {
+                            _currentDialoguePackage!.scenarioDescription = trimmedValue;
+                          } else {
+                            _currentDialoguePackage!.scenarioDescription += '; $trimmedValue';
+                          }
+                        }
+                      });
+                      
+                      // 清空输入框
+                      _scenarioSupplementController.clear();
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                
+                // 分隔符
+                Divider(
+                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                  thickness: 1,
+                ),
+                const SizedBox(height: 16),
+                
+                // 用户意见输入框
+                BaseLineInput(
+                  label: '用户意见',
+                  placeholder: '请输入您的意见',
+                  controller: _userOpinionController,
+                  onChanged: (value) {
+                    // 当用户开始输入时启动计时器（如果尚未启动）
+                    if (!_isUserOpinionTimerActive && value.isNotEmpty) {
+                      _startUserOpinionTimer();
+                    }
+                    
+                    // 如果用户清空了输入，停止计时器
+                    if (value.isEmpty && _isUserOpinionTimerActive) {
+                      _stopUserOpinionTimer();
+                      _userOpinionBackup = '';
+                    }
+                  },
+                  onSubmitted: (value) {
+                    final trimmedValue = value.trim();
+                    if (trimmedValue.isNotEmpty && trimmedValue != _userOpinionBackup) {
+                      _sendManualGenerate(trimmedValue);
+                      _userOpinionBackup = trimmedValue;
+                    }
+                    
+                    // 按Enter后清空输入框
+                    _userOpinionController.clear();
+                    
+                    // 停止计时器
+                    _stopUserOpinionTimer();
+                    _userOpinionBackup = '';
+                  },
+                ),
+                const SizedBox(height: 12),
+                
+                // 建议意见按钮行
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _buildSuggestionButton(_suggestionKeywords.isNotEmpty ? _suggestionKeywords[0] : '建议1'),
+                    _buildSuggestionButton(_suggestionKeywords.length > 1 ? _suggestionKeywords[1] : '建议2'),
+                    _buildSuggestionButton(_suggestionKeywords.length > 2 ? _suggestionKeywords[2] : '建议3'),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                
+                // 分隔符
+                Divider(
+                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                  thickness: 1,
+                ),
+                const SizedBox(height: 16),
+                
+                // 内容输入框
+                BaseTextArea(
+                  label: '内容输入',
+                  placeholder: '请输入内容...',
+                  maxLines: null, // 允许自动扩展
+                  minLines: 3,
+                  controller: _contentInputController, // 添加控制器
+                  onChanged: (value) {
+                    // TODO: 处理大输入框内容
+                  },
+                ),
+                const SizedBox(height: 8),
+                
+                // 状态提示文字
+                if (_isGeneratingResponse)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      _generatingMessage,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
+                      ),
                     ),
-                    borderRadius: BorderRadius.circular(4),
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                
+                // LLM响应建议按钮
+                if (_responseSuggestions.isNotEmpty)
+                  Column(
                     children: [
-                      // 减号按钮
-                      BaseElevatedButton(
-                        onPressed: _responseCount > 1 
-                            ? () => _sendResponseCountUpdate(_responseCount - 1)
-                            : null,
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        width: 32,
-                        height: 28,
-                        borderRadius: 4,
-                        backgroundColor: Colors.transparent,
-                        foregroundColor: Theme.of(context).colorScheme.onSurface,
-                        label: '-',
-                      ),
-                      
-                      // 数字显示
-                      Container(
-                        width: 40,
-                        height: 28,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          border: Border.symmetric(
-                            horizontal: BorderSide(
-                              color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                              width: 1,
-                            ),
-                          ),
-                        ),
-                        child: Text(
-                          '$_responseCount',
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      
-                      // 加号按钮
-                      BaseElevatedButton(
-                        onPressed: _responseCount < 5 
-                            ? () => _sendResponseCountUpdate(_responseCount + 1)
-                            : null,
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        width: 32,
-                        height: 28,
-                        borderRadius: 4,
-                        backgroundColor: Colors.transparent,
-                        foregroundColor: Theme.of(context).colorScheme.onSurface,
-                        label: '+',
-                      ),
+                      ..._responseSuggestions.map((suggestion) => 
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _buildLLMResponseButton(suggestion),
+                        )
+                      ).toList(),
+                      const SizedBox(height: 8),
                     ],
                   ),
+                const SizedBox(height: 4),
+                
+                // 回答生成数控制
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      '回答生成数',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                          width: 1,
+                        ),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          // 减号按钮
+                          BaseElevatedButton(
+                            onPressed: _responseCount > 1 
+                                ? () => _sendResponseCountUpdate(_responseCount - 1)
+                                : null,
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            width: 32,
+                            height: 28,
+                            borderRadius: 4,
+                            backgroundColor: Colors.transparent,
+                            foregroundColor: Theme.of(context).colorScheme.onSurface,
+                            label: '-',
+                          ),
+                          
+                          // 数字显示
+                          Container(
+                            width: 40,
+                            height: 28,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              border: Border.symmetric(
+                                horizontal: BorderSide(
+                                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                                  width: 1,
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              '$_responseCount',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          
+                          // 加号按钮
+                          BaseElevatedButton(
+                            onPressed: _responseCount < 5 
+                                ? () => _sendResponseCountUpdate(_responseCount + 1)
+                                : null,
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            width: 32,
+                            height: 28,
+                            borderRadius: 4,
+                            backgroundColor: Colors.transparent,
+                            foregroundColor: Theme.of(context).colorScheme.onSurface,
+                            label: '+',
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                
+                // 修改意见输入框
+                BaseLineInput(
+                  label: '修改意见',
+                  placeholder: '不满意？想改改？',
+                  controller: _modificationController,
+                  onChanged: (value) {
+                    // TODO: 处理修改意见输入
+                  },
+                  onSubmitted: (value) {
+                    // 当用户按下Enter键时发送修改建议
+                    if (value.trim().isNotEmpty) {
+                      _sendUserModification(value.trim());
+                    }
+                  },
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            
-            // 自动生成的一列按钮
-            Column(
-              children: [
-                _buildActionButton('操作按钮1'),
-                _buildActionButton('操作按钮2'),
-                _buildActionButton('操作按钮3'),
-              ],
-            ),
-            const SizedBox(height: 16),
-            
-            // 修改意见输入框
-            BaseLineInput(
-              label: '修改意见',
-              placeholder: '不满意？想改改？',
-              controller: _modificationController,
-              onChanged: (value) {
-                // TODO: 处理修改意见输入
-              },
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -834,7 +887,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
   // 操作按钮构建方法
   // 修改 _buildActionButton 方法以使用 BaseElevatedButton
-  Widget _buildActionButton(String text) {
+  Widget _buildResponseButton(String text) {
     return BaseElevatedButton(
       onPressed: () {
         // TODO: 处理操作按钮点击
@@ -946,13 +999,56 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       // 更新本地状态
       setState(() {
         _responseCount = newCount;
-        if (_currentDialoguePackage != null) {
-          _currentDialoguePackage!.responseCount = newCount;
-        }
       });
     } catch (e) {
       debugPrint('发送回答生成数更新时出错: $e');
     }
+  }
+
+  // 发送用户修改建议消息
+  void _sendUserModification(String modificationText) {
+    if (_webSocketChannel == null || _sessionId == null) {
+      debugPrint('WebSocket连接或session_id为空，无法发送用户修改建议');
+      return;
+    }
+
+    try {
+      final message = {
+        'type': 'user_modification',
+        'data': {
+          'session_id': _sessionId,
+          'modification': modificationText,
+        }
+      };
+
+      _webSocketChannel!.sink.add(json.encode(message));
+      debugPrint('已发送用户修改建议: ${json.encode(message)}');
+      
+      // 可选：发送后清空输入框
+      _modificationController.clear();
+    } catch (e) {
+      debugPrint('发送用户修改建议时出错: $e');
+    }
+  }
+
+  // 构建LLM响应建议按钮
+  Widget _buildLLMResponseButton(String suggestion) {
+    return BaseElevatedButton(
+      onPressed: () {
+        // 点击按钮将建议添加到内容输入框
+        if (_contentInputController.text.isEmpty) {
+          _contentInputController.text = suggestion;
+        } else {
+          _contentInputController.text = '${_contentInputController.text}\n$suggestion';
+        }
+      },
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      expanded: true,
+      borderRadius: 4,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      foregroundColor: Theme.of(context).colorScheme.onSurface,
+      label: suggestion,
+    );
   }
 }
 

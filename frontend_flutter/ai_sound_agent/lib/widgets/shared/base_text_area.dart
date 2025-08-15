@@ -159,93 +159,94 @@ class _BaseTextAreaState extends State<BaseTextArea> {
     final lighterColor = themeManager.lighterColor;
     final darkTextColor = themeManager.darkTextColor;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                color: widget.backgroundColor ?? lighterColor,
-                border: Border.all(
-                  color: _isFocused ? baseColor : darkerColor,
-                  width: widget.borderWidth,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SizedBox(
+          width: constraints.maxWidth,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: widget.backgroundColor ?? lighterColor,
+                  border: Border.all(
+                    color: _isFocused ? baseColor : darkerColor,
+                    width: widget.borderWidth,
+                  ),
+                  borderRadius: BorderRadius.circular(widget.borderRadius),
                 ),
-                borderRadius: BorderRadius.circular(widget.borderRadius),
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (widget.icon != null)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 12, top: 16),
-                      child: IconTheme(
-                        data: IconThemeData(
-                          color: darkTextColor.withValues(alpha: 0.6),
-                          size: 20,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (widget.icon != null)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 12, top: 16),
+                        child: IconTheme(
+                          data: IconThemeData(
+                            color: darkTextColor.withValues(alpha: 0.6),
+                            size: 20,
+                          ),
+                          child: widget.icon!,
                         ),
-                        child: widget.icon!,
                       ),
-                    ),
-                  Expanded(
-                    child: TextField(
-                      controller: _controller,
-                      focusNode: _focusNode,
-                      keyboardType: widget.keyboardType,
-                      inputFormatters: widget.inputFormatters,
-                      maxLines: widget.maxLines,
-                      minLines: widget.minLines,
-                      maxLength: widget.maxLength,
-                      enabled: widget.enabled,
-                      expands: widget.expands,
-                      textAlign: widget.textAlign,
-                      textAlignVertical: widget.textAlignVertical ?? TextAlignVertical.top,
-                      autofocus: widget.autofocus,
-                      onSubmitted: widget.onSubmitted,
-                      onTap: widget.onTap,
-                      style: widget.textStyle ?? TextStyle(
-                        color: darkTextColor,
-                        fontSize: 16,
-                        height: 1.5,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: widget.placeholder,
-                        hintStyle: widget.placeholderStyle ?? TextStyle(
-                          color: darkTextColor.withValues(alpha: 0.6),
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        focusNode: _focusNode,
+                        keyboardType: widget.keyboardType,
+                        inputFormatters: widget.inputFormatters,
+                        maxLines: widget.maxLines,
+                        minLines: widget.minLines,
+                        maxLength: widget.maxLength,
+                        enabled: widget.enabled,
+                        expands: widget.expands,
+                        textAlign: widget.textAlign,
+                        textAlignVertical: widget.textAlignVertical ?? TextAlignVertical.top,
+                        autofocus: widget.autofocus,
+                        onSubmitted: widget.onSubmitted,
+                        onTap: widget.onTap,
+                        style: widget.textStyle ?? TextStyle(
+                          color: darkTextColor,
                           fontSize: 16,
                           height: 1.5,
                         ),
-                        border: InputBorder.none,
-                        contentPadding: widget.contentPadding ?? EdgeInsets.all(widget.icon != null ? 12 : 16),
-                        counterText: widget.showCounter ? null : '',
-                        isDense: false,
+                        decoration: InputDecoration(
+                          hintText: widget.placeholder,
+                          hintStyle: widget.placeholderStyle ?? TextStyle(
+                            color: darkTextColor.withValues(alpha: 0.6),
+                            fontSize: 16,
+                            height: 1.5,
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: widget.contentPadding ?? EdgeInsets.all(widget.icon != null ? 12 : 16),
+                          counterText: widget.showCounter ? null : '',
+                          isDense: false,
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            Positioned(
-              left: 12,
-              top: -8,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                color: lighterColor,
-                child: Text(
-                  widget.label,
-                  style: widget.labelStyle ?? TextStyle(
-                    fontSize: 12,
-                    color: _isFocused ? baseColor : darkTextColor,
-                    fontWeight: FontWeight.w500,
+              Positioned(
+                left: 12,
+                top: -8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  color: lighterColor,
+                  child: Text(
+                    widget.label,
+                    style: widget.labelStyle ?? TextStyle(
+                      fontSize: 12,
+                      color: _isFocused ? baseColor : darkTextColor,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
-      ],
+            ],
+          ),
+        );
+      },
     );
   }
 }
