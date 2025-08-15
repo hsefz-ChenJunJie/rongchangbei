@@ -42,7 +42,7 @@ RUN pip install --no-cache-dir -i $PYPI_INDEX_URL uv
 # 创建非root用户
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
-# 复制requirements文件
+# 先复制requirements文件（利用缓存，只有依赖变化时才重新安装）
 COPY requirements.txt .
 
 # 使用 uv 安装Python依赖，配置镜像源
@@ -71,7 +71,7 @@ RUN uv pip install --system --no-cache -i $PYPI_INDEX_URL \
     pytest==7.4.3 \
     pytest-asyncio==0.21.1
 
-# 复制应用代码
+# 复制应用代码（最后复制，代码变化不会影响上面的缓存层）
 COPY . .
 
 # 创建必要的目录
