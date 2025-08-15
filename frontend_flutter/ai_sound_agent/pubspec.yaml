@@ -1,7 +1,7 @@
 name: ai_sound_agent
 description: "AI语音助手应用，提供语音识别、语音合成和智能对话功能"
 publish_to: 'none'
-version: 0.1.1+1
+version: 0.1.2+1
 
 environment:
   sdk: ^3.8.1
