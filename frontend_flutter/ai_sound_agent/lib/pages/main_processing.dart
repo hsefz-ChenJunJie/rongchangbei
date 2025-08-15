@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ai_sound_agent/widgets/shared/base.dart';
+import 'package:ai_sound_agent/widgets/shared/base_line_input.dart';
 import 'package:ai_sound_agent/widgets/chat_recording/chat_dialogue.dart';
 import 'package:ai_sound_agent/widgets/chat_recording/chat_input.dart';
 import 'package:ai_sound_agent/widgets/chat_recording/role_selector.dart';
@@ -459,47 +460,142 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 40), // 顶部间距
+          
+          // 场景描述展示
           Text(
-            '功能菜单',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            '场景描述',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.bold,
             ),
           ),
+          const SizedBox(height: 8),
+          Text(
+            '当前对话场景的描述内容', // 这里后续会绑定实际的scenario_description
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
           const SizedBox(height: 16),
-          ListTile(
-            leading: const Icon(Icons.settings),
-            title: const Text('设置'),
-            onTap: () {
-              _toggleSidebar();
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const Settings()),
-              );
+          
+          // 情景补充输入框
+          BaseLineInput(
+            label: '情景补充',
+            placeholder: '请输入情景补充信息',
+            onChanged: (value) {
+              // TODO: 处理情景补充输入
             },
           ),
-          ListTile(
-            leading: const Icon(Icons.devices),
-            title: const Text('设备测试'),
-            onTap: () {
-              _toggleSidebar();
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const DeviceTestPage()),
-              );
+          const SizedBox(height: 16),
+          
+          // 分隔符
+          Divider(
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+            thickness: 1,
+          ),
+          const SizedBox(height: 16),
+          
+          // 用户意见输入框
+          BaseLineInput(
+            label: '用户意见',
+            placeholder: '请输入您的意见',
+            onChanged: (value) {
+              // TODO: 处理用户意见输入
             },
           ),
-          ListTile(
-            leading: const Icon(Icons.tune),
-            title: const Text('高级设置'),
-            onTap: () {
-              _toggleSidebar();
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const AdvancedSettingsPage()),
-              );
+          const SizedBox(height: 12),
+          
+          // 建议意见按钮行
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildSuggestionButton('建议1'),
+              _buildSuggestionButton('建议2'),
+              _buildSuggestionButton('建议3'),
+            ],
+          ),
+          const SizedBox(height: 16),
+          
+          // 分隔符
+          Divider(
+            color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+            thickness: 1,
+          ),
+          const SizedBox(height: 16),
+          
+          // 大输入框
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: TextField(
+                maxLines: null,
+                expands: true,
+                decoration: InputDecoration(
+                  hintText: '请输入内容...',
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.all(12),
+                ),
+                onChanged: (value) {
+                  // TODO: 处理大输入框内容
+                },
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          
+          // 自动生成的一列按钮
+          Column(
+            children: [
+              _buildActionButton('操作按钮1'),
+              _buildActionButton('操作按钮2'),
+              _buildActionButton('操作按钮3'),
+            ],
+          ),
+          const SizedBox(height: 16),
+          
+          // 修改意见输入框
+          BaseLineInput(
+            label: '修改意见',
+            placeholder: '不满意？想改改？',
+            onChanged: (value) {
+              // TODO: 处理修改意见输入
             },
           ),
         ],
+      ),
+    );
+  }
+
+  // 建议意见按钮构建方法
+  Widget _buildSuggestionButton(String text) {
+    return ElevatedButton(
+      onPressed: () {
+        // TODO: 处理建议意见点击
+      },
+      style: ElevatedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        minimumSize: const Size(0, 32),
+        textStyle: const TextStyle(fontSize: 12),
+      ),
+      child: Text(text),
+    );
+  }
+
+  // 操作按钮构建方法
+  Widget _buildActionButton(String text) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: () {
+          // TODO: 处理操作按钮点击
+        },
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          textStyle: const TextStyle(fontSize: 14),
+        ),
+        child: Text(text),
       ),
     );
   }
