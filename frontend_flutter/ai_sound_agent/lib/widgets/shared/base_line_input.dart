@@ -26,6 +26,8 @@ class BaseLineInput extends StatefulWidget {
   final TextStyle? textStyle;
   final TextStyle? placeholderStyle;
   final Widget? icon;
+  final ValueChanged<String>? onSubmitted;
+  final FocusNode? focusNode;
 
   const BaseLineInput({
     Key? key,
@@ -52,6 +54,8 @@ class BaseLineInput extends StatefulWidget {
     this.textStyle,
     this.placeholderStyle,
     this.icon,
+    this.onSubmitted,
+    this.focusNode,
   }) : super(key: key);
 
   @override
@@ -60,6 +64,7 @@ class BaseLineInput extends StatefulWidget {
 
 class _BaseLineInputState extends State<BaseLineInput> {
   late TextEditingController _controller;
+  late FocusNode _focusNode;
   bool _isFocused = false;
   bool _hasText = false;
 
@@ -67,8 +72,10 @@ class _BaseLineInputState extends State<BaseLineInput> {
   void initState() {
     super.initState();
     _controller = widget.controller ?? TextEditingController(text: widget.text);
+    _focusNode = widget.focusNode ?? FocusNode();
     _hasText = widget.text.isNotEmpty;
     _controller.addListener(_handleTextChange);
+    _focusNode.addListener(_handleFocusChange);
   }
 
   @override
@@ -80,6 +87,8 @@ class _BaseLineInputState extends State<BaseLineInput> {
   }
 
   void _handleTextChange() {
+    if (!mounted) return;
+    
     final hasText = _controller.text.isNotEmpty;
     if (_hasText != hasText) {
       setState(() {
@@ -89,10 +98,23 @@ class _BaseLineInputState extends State<BaseLineInput> {
     widget.onChanged?.call(_controller.text);
   }
 
+  void _handleFocusChange() {
+    if (!mounted) return;
+    
+    setState(() {
+      _isFocused = _focusNode.hasFocus;
+    });
+  }
+
   @override
   void dispose() {
+    _controller.removeListener(_handleTextChange);
+    _focusNode.removeListener(_handleFocusChange);
     if (widget.controller == null) {
       _controller.dispose();
+    }
+    if (widget.focusNode == null) {
+      _focusNode.dispose();
     }
     super.dispose();
   }
@@ -107,6 +129,14 @@ class _BaseLineInputState extends State<BaseLineInput> {
     _controller.clear();
   }
 
+  void focus() {
+    FocusScope.of(context).requestFocus(_focusNode);
+  }
+
+  void unfocus() {
+    _focusNode.unfocus();
+  }
+
   @override
   Widget build(BuildContext context) {
     final themeManager = ThemeManager();
@@ -117,6 +147,7 @@ class _BaseLineInputState extends State<BaseLineInput> {
     
     return Focus(
       onFocusChange: (hasFocus) {
+        if (!mounted) return;
         setState(() {
           _isFocused = hasFocus;
         });
@@ -155,6 +186,8 @@ class _BaseLineInputState extends State<BaseLineInput> {
                     maxLines: widget.maxLines,
                     maxLength: widget.maxLength,
                     enabled: widget.enabled,
+                    focusNode: _focusNode,
+                    onSubmitted: widget.onSubmitted,
                     style: widget.textStyle ?? TextStyle(
                       color: darkTextColor,
                       fontSize: 16,

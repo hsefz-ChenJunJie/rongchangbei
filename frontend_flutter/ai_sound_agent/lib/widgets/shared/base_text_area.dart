@@ -101,6 +101,8 @@ class _BaseTextAreaState extends State<BaseTextArea> {
   }
 
   void _handleTextChange() {
+    if (!mounted) return;
+    
     final hasText = _controller.text.isNotEmpty;
     if (_hasText != hasText) {
       setState(() {
@@ -111,6 +113,8 @@ class _BaseTextAreaState extends State<BaseTextArea> {
   }
 
   void _handleFocusChange() {
+    if (!mounted) return;
+    
     setState(() {
       _isFocused = _focusNode.hasFocus;
     });

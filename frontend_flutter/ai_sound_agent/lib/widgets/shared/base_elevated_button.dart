@@ -33,7 +33,7 @@ class BaseElevatedButton extends StatelessWidget {
     this.width,
     this.height,
     this.expanded = false,
-  })  : assert(child != null || (icon != null && label != null)),
+  })  : assert(child != null || (icon != null || label != null)),
         super(key: key);
 
   const BaseElevatedButton.icon({
@@ -142,7 +142,7 @@ class BaseElevatedButton extends StatelessWidget {
         style: buttonStyle,
         child: child,
       );
-    } else {
+    } else if (icon != null && label != null) {
       button = ElevatedButton.icon(
         onPressed: onPressed,
         style: buttonStyle,
@@ -151,6 +151,28 @@ class BaseElevatedButton extends StatelessWidget {
           label!,
           style: const TextStyle(fontSize: 16),
         ),
+      );
+    } else if (label != null) {
+      button = ElevatedButton(
+        onPressed: onPressed,
+        style: buttonStyle,
+        child: Text(
+          label!,
+          style: const TextStyle(fontSize: 16),
+        ),
+      );
+    } else if (icon != null) {
+      button = ElevatedButton(
+        onPressed: onPressed,
+        style: buttonStyle,
+        child: icon,
+      );
+    } else {
+      // 如果所有可选参数都为null，创建一个空按钮
+      button = ElevatedButton(
+        onPressed: onPressed,
+        style: buttonStyle,
+        child: const SizedBox(),
       );
     }
 

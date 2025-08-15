@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:ai_sound_agent/widgets/shared/base.dart';
 import 'package:ai_sound_agent/widgets/shared/base_line_input.dart';
 import 'package:ai_sound_agent/widgets/shared/base_text_area.dart';
+import 'package:ai_sound_agent/widgets/shared/base_elevated_button.dart';  // 新增导入
 import 'package:ai_sound_agent/widgets/chat_recording/chat_dialogue.dart';
 import 'package:ai_sound_agent/widgets/chat_recording/chat_input.dart';
 import 'package:ai_sound_agent/widgets/chat_recording/role_selector.dart';
@@ -47,8 +48,9 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   final TextEditingController _modificationController = TextEditingController();
 
   DialoguePackage? _currentDialoguePackage;
-
-
+  
+  // 新增：存储建议关键词的列表
+  List<String> _suggestionKeywords = ['建议1', '建议2', '建议3'];
 
   final Map<LoadingStep, String> _stepDescriptions = {
     LoadingStep.readingFile: '正在读取对话文件...',
@@ -224,6 +226,18 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
             });
           }
         });
+      } else if (data['type'] == 'opinion_suggestions') {
+        // 新增：处理意见建议消息
+        final receivedSessionId = data['data']['session_id'] as String;
+        final suggestions = List<String>.from(data['data']['suggestions'] as List);
+        
+        // 检查session_id是否匹配
+        if (_sessionId == receivedSessionId && mounted) {
+          setState(() {
+            _suggestionKeywords = suggestions;
+          });
+          debugPrint('已更新建议关键词: $suggestions');
+        }
       }
       // 这里可以处理其他类型的WebSocket消息
     } catch (e) {
@@ -319,7 +333,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
           
           // 白色半透明遮罩
           Container(
-            color: Colors.white.withOpacity(0.85),
+            color: Colors.white.withValues(alpha: 0.85),
             child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -574,6 +588,12 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
               onChanged: (value) {
                 // TODO: 处理情景补充输入
               },
+              onSubmitted: (value) {
+                // 当用户按下Enter键时发送情景补充
+                if (value.trim().isNotEmpty && _sessionId != null) {
+                  _sendScenarioSupplement(value.trim());
+                }
+              },
             ),
             const SizedBox(height: 16),
             
@@ -599,9 +619,9 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _buildSuggestionButton('建议1'),
-                _buildSuggestionButton('建议2'),
-                _buildSuggestionButton('建议3'),
+                _buildSuggestionButton(_suggestionKeywords.isNotEmpty ? _suggestionKeywords[0] : '建议1'),
+                _buildSuggestionButton(_suggestionKeywords.length > 1 ? _suggestionKeywords[1] : '建议2'),
+                _buildSuggestionButton(_suggestionKeywords.length > 2 ? _suggestionKeywords[2] : '建议3'),
               ],
             ),
             const SizedBox(height: 16),
@@ -654,38 +674,64 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   }
 
   // 建议意见按钮构建方法
-  Widget _buildSuggestionButton(String text) {
-    return ElevatedButton(
+  // 修改 _buildSuggestionButton 方法以使用 BaseElevatedButton
+  Widget _buildSuggestionButton(String suggestionText) {
+    return BaseElevatedButton(
       onPressed: () {
-        // TODO: 处理建议意见点击
+        // 点击建议按钮时，将建议文本添加到用户意见输入框
+        if (_userOpinionController.text.isEmpty) {
+          _userOpinionController.text = suggestionText;
+        } else {
+          _userOpinionController.text = '${_userOpinionController.text} $suggestionText';
+        }
       },
-      style: ElevatedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        minimumSize: const Size(0, 32),
-        textStyle: const TextStyle(fontSize: 12),
-      ),
-      child: Text(text),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      width: 60,
+      height: 28,
+      borderRadius: 4,
+      label: suggestionText,
     );
   }
 
   // 操作按钮构建方法
+  // 修改 _buildActionButton 方法以使用 BaseElevatedButton
   Widget _buildActionButton(String text) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: () {
-          // TODO: 处理操作按钮点击
-        },
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          textStyle: const TextStyle(fontSize: 14),
-        ),
-        child: Text(text),
-      ),
+    return BaseElevatedButton(
+      onPressed: () {
+        // TODO: 处理操作按钮点击
+        debugPrint('操作按钮点击: $text');
+      },
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      expanded: true,
+      borderRadius: 4,
+      label: text,
     );
   }
 
-  
-}
+  // 发送情景补充消息到服务器
+  void _sendScenarioSupplement(String supplement) {
+    if (_webSocketChannel == null || _sessionId == null) {
+      debugPrint('WebSocket连接或session_id为空，无法发送情景补充');
+      return;
+    }
 
+    try {
+      final message = {
+        'type': 'scenario_supplement',
+        'data': {
+          'session_id': _sessionId,
+          'supplement': supplement,
+        }
+      };
+
+      _webSocketChannel!.sink.add(json.encode(message));
+      debugPrint('已发送情景补充: ${json.encode(message)}');
+      
+      // 可选：发送后清空输入框
+      // _scenarioSupplementController.clear();
+    } catch (e) {
+      debugPrint('发送情景补充时出错: $e');
+    }
+  }
+}
 
