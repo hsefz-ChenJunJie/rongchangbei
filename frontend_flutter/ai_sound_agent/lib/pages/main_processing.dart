@@ -73,7 +73,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   final AudioRecorder _audioRecorder = AudioRecorder();
   bool _isRecording = false;
   String _recordingSender = '';
-  bool _isAudioInitialized = false;
+  // 移除未使用的 _isAudioInitialized 字段
 
   final Map<LoadingStep, String> _stepDescriptions = {
     LoadingStep.readingFile: '正在读取对话文件...',
@@ -1095,20 +1095,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     );
   }
 
-  // 操作按钮构建方法
-  // 修改 _buildActionButton 方法以使用 BaseElevatedButton
-  Widget _buildResponseButton(String text) {
-    return BaseElevatedButton(
-      onPressed: () {
-        // TODO: 处理操作按钮点击
-        debugPrint('操作按钮点击: $text');
-      },
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      expanded: true,
-      borderRadius: 4,
-      label: text,
-    );
-  }
+
 
   // 发送情景补充消息到服务器
   void _sendScenarioSupplement(String supplement) {
@@ -1241,16 +1228,50 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     }
   }
 
+  // 发送用户选择的响应消息
+  Future<void> _sendUserSelectedResponse(String selectedContent) async {
+    if (_webSocketChannel == null || _sessionId == null) {
+      debugPrint('WebSocket连接或session_id为空，无法发送用户选择的响应');
+      return;
+    }
+
+    try {
+      // 获取用户名
+      final userdata = Userdata();
+      await userdata.loadUserData();
+      final username = userdata.username;
+
+      // 构建 user_selected_response 消息
+      final message = {
+        'type': 'user_selected_response',
+        'data': {
+          'session_id': _sessionId,
+          'selected_content': selectedContent,
+          'sender': username,
+        }
+      };
+
+      // 发送消息
+      _webSocketChannel!.sink.add(json.encode(message));
+      debugPrint('已发送用户选择的响应: ${json.encode(message)}');
+    } catch (e) {
+      debugPrint('发送用户选择的响应时出错: $e');
+    }
+  }
+
   // 构建LLM响应建议按钮
   Widget _buildLLMResponseButton(String suggestion) {
     return BaseElevatedButton(
-      onPressed: () {
+      onPressed: () async {
         // 点击按钮将建议添加到内容输入框
         if (_contentInputController.text.isEmpty) {
           _contentInputController.text = suggestion;
         } else {
           _contentInputController.text = '${_contentInputController.text}\n$suggestion';
         }
+        
+        // 通过 WebSocket 发送 user_selected_response 消息
+        await _sendUserSelectedResponse(suggestion);
       },
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       expanded: true,
