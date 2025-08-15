@@ -161,7 +161,20 @@ class DPManager {
       
       // 确保roles字段存在
       if (!defaultData.containsKey('roles')) {
-        defaultData['roles'] = [];
+        defaultData['roles'] = [
+          {
+            "id": "user",
+            "name": "我自己",
+            "color": 4283215701,
+            "icon": 57344
+          },
+          {
+            "id": "system",
+            "name": "system",
+            "color": 4278255360,
+            "icon": 57345
+          }
+        ];
       }
       
       // 保存到目标文件
@@ -185,7 +198,20 @@ class DPManager {
         "modification": "",
         "user_opinion": "", 
         "scenario_supplement": "",
-        "roles": [] // 添加默认的空roles字段
+        "roles": [
+          {
+            "id": "user",
+            "name": "我自己",
+            "color": 4283215701,
+            "icon": 57344
+          },
+          {
+            "id": "system",
+            "name": "system",
+            "color": 4278255360,
+            "icon": 57345
+          }
+        ]
       };
       
       await targetFile.writeAsString(json.encode(defaultData));
@@ -306,7 +332,20 @@ class DPManager {
       modification: '',
       userOpinion: '',
       scenarioSupplement: '',
-      roles: [], // 添加默认的空roles字段
+      roles: [
+        {
+          "id": "user",
+          "name": "我自己",
+          "color": 4283215701,
+          "icon": 57344
+        },
+        {
+          "id": "system",
+          "name": "system",
+          "color": 4278255360,
+          "icon": 57345
+        }
+      ], // 添加默认的roles字段
     );
 
     await saveDp(newDp);
@@ -338,7 +377,20 @@ class DPManager {
       modification: modification,
       userOpinion: userOpinion,
       scenarioSupplement: scenarioSupplement,
-      roles: [], // 添加默认的空roles字段
+      roles: [
+        {
+          "id": "user",
+          "name": "我自己",
+          "color": 4283215701,
+          "icon": 57344
+        },
+        {
+          "id": "system",
+          "name": "system",
+          "color": 4278255360,
+          "icon": 57345
+        }
+      ], // 添加默认的roles字段
     );
 
     await saveDp(newDp);

@@ -98,7 +98,20 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
         modification: '',
         userOpinion: '',
         scenarioSupplement: '',
-        roles: [],
+        roles: [
+          {
+            "id": "user",
+            "name": "我自己",
+            "color": 4278190335,
+            "icon": 57344
+          },
+          {
+            "id": "system",
+            "name": "system",
+            "color": 4278255360,
+            "icon": 57345
+          }
+        ],
       ),
       DialoguePackage(
         type: 'dialogue_package',
@@ -109,7 +122,20 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
         modification: '',
         userOpinion: '',
         scenarioSupplement: '',
-        roles: [],
+        roles: [
+          {
+            "id": "user",
+            "name": "我自己",
+            "color": 4278190335,
+            "icon": 57344
+          },
+          {
+            "id": "system",
+            "name": "system",
+            "color": 4278255360,
+            "icon": 57345
+          }
+        ],
       ),
       DialoguePackage(
         type: 'dialogue_package',
@@ -120,7 +146,20 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
         modification: '',
         userOpinion: '',
         scenarioSupplement: '',
-        roles: [],
+        roles: [
+          {
+            "id": "user",
+            "name": "我自己",
+            "color": 4278190335,
+            "icon": 57344
+          },
+          {
+            "id": "system",
+            "name": "system",
+            "color": 4278255360,
+            "icon": 57345
+          }
+        ],
       ),
     ];
     

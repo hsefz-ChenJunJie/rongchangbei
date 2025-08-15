@@ -17,13 +17,14 @@ class RoleManager extends ChangeNotifier {
 
   // 默认角色列表
   List<ChatRole> _roles = [
-    const ChatRole(id: 'me', name: '我自己', color: Colors.green, icon: Icons.person),
+    const ChatRole(id: 'user', name: '我自己', color: Colors.green, icon: Icons.person),
+    const ChatRole(id: 'system', name: 'system', color: Colors.blue, icon: Icons.settings),
     const ChatRole(id: 'boss', name: '老板', color: Colors.red, icon: Icons.business),
     const ChatRole(id: 'pm', name: '项目经理', color: Colors.orange, icon: Icons.group),
     const ChatRole(id: 'client', name: '客户', color: Colors.blue, icon: Icons.account_circle),
   ];
 
-  ChatRole _currentRole = const ChatRole(id: 'me', name: '我自己', color: Colors.green, icon: Icons.person);
+  ChatRole _currentRole = const ChatRole(id: 'user', name: '我自己', color: Colors.green, icon: Icons.person);
   
   // 监听器列表
   final List<VoidCallback> _listeners = [];
@@ -69,7 +70,8 @@ class RoleManager extends ChangeNotifier {
   /// 重置到默认角色配置
   void resetToDefaults() {
     _roles = [
-      const ChatRole(id: 'me', name: '我自己', color: Colors.green, icon: Icons.person),
+      const ChatRole(id: 'user', name: '我自己', color: Colors.green, icon: Icons.person),
+      const ChatRole(id: 'system', name: 'system', color: Colors.blue, icon: Icons.settings),
       const ChatRole(id: 'boss', name: '老板', color: Colors.red, icon: Icons.business),
       const ChatRole(id: 'pm', name: '项目经理', color: Colors.orange, icon: Icons.group),
       const ChatRole(id: 'client', name: '客户', color: Colors.blue, icon: Icons.account_circle),

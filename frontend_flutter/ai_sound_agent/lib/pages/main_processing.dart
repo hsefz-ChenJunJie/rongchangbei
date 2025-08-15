@@ -328,12 +328,26 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         if (_sessionId == receivedSessionId && mounted) {
           // 将消息添加到对话中
           if (_dialogueKey.currentState != null) {
+            // 获取当前角色
+            final roleManager = RoleManager.instance;
+            final currentRole = roleManager.currentRole;
+            
+            // 判断是否为"我自己"角色发送的消息
+            bool isMe = false;
+            if (currentRole.name == '我自己') {
+              // 如果当前选择的是"我自己"角色，则认为是用户消息
+              isMe = true;
+            } else {
+              // 否则根据sender判断
+              isMe = sender == userdata.username;
+            }
+            
             _dialogueKey.currentState!.addMessage(
               name: sender,
               content: content,
-              isMe: sender == userdata.username, // 根据sender判断是否是用户消息
+              isMe: isMe,
             );
-            debugPrint('已添加消息到对话: sender=$sender, content=$content, message_id=$messageId');
+            debugPrint('已添加消息到对话: sender=$sender, content=$content, message_id=$messageId, isMe=$isMe');
           } else {
             debugPrint('对话组件状态为null，无法添加消息');
           }
@@ -351,23 +365,16 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     // 添加默认角色（如果不存在）
     if (roleManager.allRoles.isEmpty) {
       roleManager.addRole(const ChatRole(
-        id: 'me',
-        name: '我',
+        id: 'user',
+        name: '我自己',
         color: Colors.green,
         icon: Icons.person,
       ));
       
       roleManager.addRole(const ChatRole(
-        id: 'ai',
-        name: 'AI助手',
-        color: Colors.blue,
-        icon: Icons.smart_toy,
-      ));
-      
-      roleManager.addRole(const ChatRole(
         id: 'system',
-        name: '系统',
-        color: Colors.orange,
+        name: 'system',
+        color: Colors.blue,
         icon: Icons.settings,
       ));
     }
@@ -772,14 +779,18 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       await userdata.loadUserData();
       final username = userdata.username;
 
+      // 获取当前角色
+      final roleManager = RoleManager.instance;
+      final currentRole = roleManager.currentRole;
+
       // 将内容添加到对话框
       if (_dialogueKey.currentState != null) {
         _dialogueKey.currentState!.addMessage(
-          name: username,
+          name: currentRole.name == '我自己' ? username : currentRole.name,
           content: content,
           isMe: true,
         );
-        debugPrint('已将内容添加到对话框: $content');
+        debugPrint('已将内容添加到对话框: $content, 角色: ${currentRole.name}');
       }
 
       // 使用TTS语音合成
