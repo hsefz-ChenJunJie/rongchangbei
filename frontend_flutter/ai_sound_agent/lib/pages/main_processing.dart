@@ -583,15 +583,31 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
             // 情景补充输入框
             BaseLineInput(
               label: '情景补充',
-              placeholder: '请输入情景补充信息',
+              placeholder: '请输入情景补充信息; Enter发送',
               controller: _scenarioSupplementController,
               onChanged: (value) {
                 // TODO: 处理情景补充输入
               },
               onSubmitted: (value) {
-                // 当用户按下Enter键时发送情景补充
-                if (value.trim().isNotEmpty && _sessionId != null) {
-                  _sendScenarioSupplement(value.trim());
+                // 当用户按下Enter键时发送情景补充并更新场景描述
+                final trimmedValue = value.trim();
+                if (trimmedValue.isNotEmpty && _sessionId != null) {
+                  // 发送WebSocket消息
+                  _sendScenarioSupplement(trimmedValue);
+                  
+                  // 将内容添加到场景描述
+                  setState(() {
+                    if (_currentDialoguePackage != null) {
+                      if (_currentDialoguePackage!.scenarioDescription.isEmpty) {
+                        _currentDialoguePackage!.scenarioDescription = trimmedValue;
+                      } else {
+                        _currentDialoguePackage!.scenarioDescription += '; $trimmedValue';
+                      }
+                    }
+                  });
+                  
+                  // 清空输入框
+                  _scenarioSupplementController.clear();
                 }
               },
             ),

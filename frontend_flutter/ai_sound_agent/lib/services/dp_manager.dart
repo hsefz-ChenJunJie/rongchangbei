@@ -8,7 +8,7 @@ class DialoguePackage {
   final String type;
   final String name;
   final int responseCount;
-  final String scenarioDescription;
+  String scenarioDescription;
   final List<Message> messages;
   final String modification;
   final String userOpinion;
