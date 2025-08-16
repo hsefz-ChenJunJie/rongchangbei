@@ -91,7 +91,9 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
     final samplePackages = [
       DialoguePackage(
         type: 'dialogue_package',
-        name: '商务谈判',
+        packageName: '商务谈判',
+        fileName: 'business_negotiation',
+        description: '模拟商务谈判场景，学习如何达成双赢协议',
         responseCount: 1,
         scenarioDescription: '模拟商务谈判场景，学习如何达成双赢协议',
         messages: [],
@@ -101,7 +103,9 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
       ),
       DialoguePackage(
         type: 'dialogue_package',
-        name: '面试技巧',
+        packageName: '面试技巧',
+        fileName: 'interview_skills',
+        description: '模拟求职面试，提升面试表现和沟通技巧',
         responseCount: 2,
         scenarioDescription: '模拟求职面试，提升面试表现和沟通技巧',
         messages: [],
@@ -111,7 +115,9 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
       ),
       DialoguePackage(
         type: 'dialogue_package',
-        name: '日常对话',
+        packageName: '日常对话',
+        fileName: 'daily_conversation',
+        description: '日常生活对话练习，提高日常交流能力',
         responseCount: 3,
         scenarioDescription: '日常生活对话练习，提高日常交流能力',
         messages: [],
@@ -134,7 +140,9 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
       // 创建新的current.dp，使用用户输入的场景描述和default的结构
       final currentPackage = DialoguePackage(
         type: defaultPackage.type,
-        name: 'current',
+        packageName: defaultPackage.packageName,
+        fileName: 'current',
+        description: defaultPackage.description,
         responseCount: defaultPackage.responseCount,
         scenarioDescription: scenarioDescription,
         messages: defaultPackage.messages,
@@ -149,7 +157,9 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
       // 如果default.dp不存在，创建一个基础的current.dp
       final currentPackage = DialoguePackage(
         type: 'dialogue_package',
-        name: 'current',
+        packageName: '默认对话包',
+        fileName: 'current',
+        description: '',
         responseCount: 3,
         scenarioDescription: scenarioDescription,
         messages: [],
@@ -162,15 +172,17 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
     }
   }
 
-  Future<void> _loadPackageToCurrent(String packageName) async {
+  Future<void> _loadPackageToCurrent(String fileName) async {
     try {
       // 读取选中的dp文件
-      final selectedPackage = await _dpManager.getDp(packageName);
+      final selectedPackage = await _dpManager.getDp(fileName);
       
-      // 创建current.dp，使用选中包的内容
+      // 创建current.dp，使用选中包的内容，但保留原来的packageName
       final currentPackage = DialoguePackage(
         type: 'dialogue_package',
-        name: 'current',
+        packageName: selectedPackage.packageName,
+        fileName: 'current',
+        description: selectedPackage.description,
         responseCount: selectedPackage.responseCount,
         scenarioDescription: selectedPackage.scenarioDescription,
         messages: selectedPackage.messages,
@@ -183,7 +195,7 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
       await _dpManager.saveDp(currentPackage);
       
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已加载对话包: ${selectedPackage.name}')),
+        SnackBar(content: Text('已加载对话包: ${selectedPackage.packageName}')),
       );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -296,7 +308,7 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
                   return InkWell(
                     onTap: () async {
                       // 处理卡片点击事件
-                      await _loadPackageToCurrent(package.name);
+                      await _loadPackageToCurrent(package.fileName);
                       // 跳转到main_processing.dart
                       Navigator.pushNamed(context, '/main-processing');
                     },
@@ -323,7 +335,7 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              package.name,
+                              package.packageName,
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
@@ -334,7 +346,7 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
                             const SizedBox(height: 8),
                             Expanded(
                               child: Text(
-                                package.scenarioDescription,
+                                package.description.isNotEmpty ? package.description : package.scenarioDescription,
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: Colors.grey,
@@ -345,7 +357,7 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              'llm每次${package.responseCount}条回复',
+                              '${package.fileName}.dp',
                               style: const TextStyle(
                                 fontSize: 11,
                                 color: Colors.blue,

@@ -1,6 +1,8 @@
 {
     "type": "dialogue_package",
-    "name": "default",
+    "package_name": "默认对话包",
+    "file_name": "default",
+    "description": "这是默认对话包",
     "response_count": 3,
     "scenario_description": "对话情景描述文本",
     "message": [

@@ -6,7 +6,9 @@ import 'package:flutter/foundation.dart';
 
 class DialoguePackage {
   final String type;
-  final String name;
+  final String packageName;
+  final String fileName;
+  final String description;
   final int responseCount;
   String scenarioDescription;
   final List<Message> messages;
@@ -16,7 +18,9 @@ class DialoguePackage {
 
   DialoguePackage({
     required this.type,
-    required this.name,
+    required this.packageName,
+    required this.fileName,
+    this.description = '',
     required this.responseCount,
     required this.scenarioDescription,
     required this.messages,
@@ -31,7 +35,9 @@ class DialoguePackage {
 
     return DialoguePackage(
       type: json['type'],
-      name: json['name'],
+      packageName: json['package_name'],
+      fileName: json['file_name'],
+      description: json['description'] ?? '',
       responseCount: json['response_count'],
       scenarioDescription: json['scenario_description'],
       messages: messages,
@@ -44,7 +50,9 @@ class DialoguePackage {
   Map<String, dynamic> toJson() {
     return {
       'type': type,
-      'name': name,
+      'package_name': packageName,
+      'file_name': fileName,
+      'description': description,
       'response_count': responseCount,
       'scenario_description': scenarioDescription,
       'message': messages.map((e) => e.toJson()).toList(),
@@ -53,6 +61,9 @@ class DialoguePackage {
       'scenario_supplement': scenarioSupplement,
     };
   }
+
+  // 向后兼容：提供旧的name属性访问
+  String get name => fileName;
 }
 
 class Message {
@@ -154,7 +165,9 @@ class DPManager {
       // 如果assets加载失败，使用内置默认数据
       final defaultData = {
         "type": "dialogue_package",
-        "name": "default",
+        "package_name": "默认对话包",
+        "file_name": "default",
+        "description": "",
         "response_count": 3,
         "scenario_description": "对话情景描述文本",
         "message": [
@@ -242,7 +255,7 @@ class DPManager {
 
   // 保存对话包
   Future<void> saveDp(DialoguePackage dp) async {
-    final dpPath = '${_dpDirectory.path}/${dp.name}.dp';
+    final dpPath = '${_dpDirectory.path}/${dp.fileName}.dp';
     final dpFile = File(dpPath);
     
     await dpFile.writeAsString(json.encode(dp.toJson()));
@@ -250,12 +263,12 @@ class DPManager {
   }
 
   // 删除对话包
-  Future<void> deleteDp(String name) async {
-    if (name == 'default' || name == 'current') {
+  Future<void> deleteDp(String fileName) async {
+    if (fileName == 'default' || fileName == 'current') {
       throw Exception('不能删除默认对话包');
     }
 
-    final dpPath = '${_dpDirectory.path}/$name.dp';
+    final dpPath = '${_dpDirectory.path}/$fileName.dp';
     final dpFile = File(dpPath);
 
     if (await dpFile.exists()) {
@@ -265,24 +278,28 @@ class DPManager {
   }
 
   // 检查对话包是否存在
-  Future<bool> exists(String name) async {
-    final dpPath = '${_dpDirectory.path}/$name.dp';
+  Future<bool> exists(String fileName) async {
+    final dpPath = '${_dpDirectory.path}/$fileName.dp';
     final dpFile = File(dpPath);
     return await dpFile.exists();
   }
 
   // 创建新的对话包
-  Future<DialoguePackage> createNewDp(String name, {
+  Future<DialoguePackage> createNewDp(String fileName, {
+    String packageName = '新对话包',
+    String description = '',
     String scenarioDescription = '新的对话情景',
     List<Message>? initialMessages,
   }) async {
-    if (await exists(name)) {
-      throw Exception('对话包已存在: $name');
+    if (await exists(fileName)) {
+      throw Exception('对话包已存在: $fileName');
     }
 
     final newDp = DialoguePackage(
       type: 'dialogue_package',
-      name: name,
+      packageName: packageName,
+      fileName: fileName,
+      description: description,
       responseCount: 0,
       scenarioDescription: scenarioDescription,
       messages: initialMessages ?? [],
@@ -297,8 +314,10 @@ class DPManager {
 
   // 从ChatDialogue的getSelection数据创建对话包
   Future<DialoguePackage> createDpFromChatSelection(
-    String name, 
+    String fileName, 
     List<Map<String, dynamic>> chatMessages, {
+    String packageName = '新对话包',
+    String description = '',
     String scenarioDescription = '从聊天记录创建的对话包',
     int responseCount = 0,
     String modification = '',
@@ -307,13 +326,15 @@ class DPManager {
   }) async {
     final messages = chatMessages.map((msg) => Message.fromSelection(msg)).toList();
     
-    if (await exists(name)) {
-      throw Exception('对话包已存在: $name');
+    if (await exists(fileName)) {
+      throw Exception('对话包已存在: $fileName');
     }
 
     final newDp = DialoguePackage(
       type: 'dialogue_package',
-      name: name,
+      packageName: packageName,
+      fileName: fileName,
+      description: description,
       responseCount: responseCount,
       scenarioDescription: scenarioDescription,
       messages: messages,
