@@ -34,6 +34,7 @@ SERVICE_GROUP="backend"
 INSTALL_DIR="/opt/ai-dialogue-backend"
 LOG_DIR="/var/log/ai-dialogue-backend"
 SERVICE_FILE="ai-dialogue-backend.service"
+CONDA_ENV="rongchang"  # 指定使用的conda环境名
 
 show_help() {
     cat << EOF
@@ -45,6 +46,7 @@ AI对话应用后端 - SystemD服务安装脚本
   -h, --help           显示此帮助信息
   -u, --user USER      指定服务运行用户 (默认: $SERVICE_USER)
   -d, --dir DIR        指定安装目录 (默认: $INSTALL_DIR)
+  -e, --env ENV        指定conda环境名 (默认: $CONDA_ENV)
   --uninstall          卸载服务
   --status             查看服务状态
   --logs               查看服务日志
@@ -59,7 +61,8 @@ AI对话应用后端 - SystemD服务安装脚本
 
 要求:
   - Ubuntu/Debian或CentOS/RHEL系统
-  - Python 3.12+
+  - Conda环境管理器 (miniconda/anaconda)
+  - 指定conda环境中包含Python 3.12+
   - sudo权限
 
 EOF
@@ -81,19 +84,47 @@ check_requirements() {
         exit 1
     fi
     
-    # 检查Python版本
-    if command -v python3.12 &> /dev/null; then
-        PYTHON_CMD="python3.12"
-    elif command -v python3 &> /dev/null; then
-        PYTHON_VERSION=$(python3 --version | cut -d' ' -f2 | cut -d'.' -f1,2)
-        if [[ $(echo "$PYTHON_VERSION >= 3.9" | bc -l) -eq 1 ]]; then
-            PYTHON_CMD="python3"
-        else
-            log_error "需要Python 3.9+，当前版本: $PYTHON_VERSION"
-            exit 1
-        fi
-    else
-        log_error "未找到Python 3.9+"
+    # 检查conda和指定环境
+    if ! command -v conda &> /dev/null; then
+        log_error "未找到conda，请先安装miniconda/anaconda"
+        exit 1
+    fi
+    
+    # 检查指定的conda环境是否存在
+    if ! conda env list | grep -q "^${CONDA_ENV} "; then
+        log_error "Conda环境 '${CONDA_ENV}' 不存在"
+        log_info "请创建环境: conda create -n ${CONDA_ENV} python=3.12"
+        exit 1
+    fi
+    
+    # 获取conda环境中的Python路径
+    CONDA_PREFIX=$(conda info --envs | grep "^${CONDA_ENV} " | awk '{print $2}')
+    if [[ -z "$CONDA_PREFIX" ]]; then
+        CONDA_PREFIX=$(conda info --envs | grep " ${CONDA_ENV} " | awk '{print $3}')
+    fi
+    
+    if [[ -z "$CONDA_PREFIX" ]]; then
+        log_error "无法获取conda环境 '${CONDA_ENV}' 的路径"
+        exit 1
+    fi
+    
+    PYTHON_CMD="${CONDA_PREFIX}/bin/python"
+    
+    # 验证Python路径存在
+    if [[ ! -f "$PYTHON_CMD" ]]; then
+        log_error "Python不存在于路径: $PYTHON_CMD"
+        exit 1
+    fi
+    
+    # 获取Python版本并正确比较版本号
+    PYTHON_VERSION=$($PYTHON_CMD --version 2>&1 | cut -d' ' -f2)
+    PYTHON_MAJOR=$(echo "$PYTHON_VERSION" | cut -d'.' -f1)
+    PYTHON_MINOR=$(echo "$PYTHON_VERSION" | cut -d'.' -f2)
+    
+    # 检查版本是否满足要求 (3.12+)
+    if [[ $PYTHON_MAJOR -lt 3 ]] || [[ $PYTHON_MAJOR -eq 3 && $PYTHON_MINOR -lt 12 ]]; then
+        log_error "需要Python 3.12+，conda环境 '${CONDA_ENV}' 中的版本: $PYTHON_VERSION"
+        log_info "请升级环境: conda install -n ${CONDA_ENV} python=3.12"
         exit 1
     fi
     
@@ -185,20 +216,20 @@ copy_project_files() {
 
 # 安装Python依赖
 install_python_deps() {
-    log_info "安装Python依赖..."
+    log_info "在conda环境 '${CONDA_ENV}' 中安装Python依赖..."
     
-    # 创建虚拟环境
-    sudo -u "$SERVICE_USER" "$PYTHON_CMD" -m venv "$INSTALL_DIR/venv"
+    # 获取conda环境中的pip路径
+    PIP_CMD="${CONDA_PREFIX}/bin/pip"
     
     # 升级pip
-    sudo -u "$SERVICE_USER" "$INSTALL_DIR/venv/bin/pip" install --upgrade pip
+    sudo -u "$SERVICE_USER" "$PIP_CMD" install --upgrade pip
     
     # 安装依赖
     if [[ -f "$INSTALL_DIR/requirements.txt" ]]; then
-        sudo -u "$SERVICE_USER" "$INSTALL_DIR/venv/bin/pip" install -r "$INSTALL_DIR/requirements.txt"
+        sudo -u "$SERVICE_USER" "$PIP_CMD" install -r "$INSTALL_DIR/requirements.txt"
     else
-        log_warning "未找到requirements.txt，手动安装依赖"
-        sudo -u "$SERVICE_USER" "$INSTALL_DIR/venv/bin/pip" install fastapi uvicorn websockets pydantic python-dotenv
+        log_warning "未找到requirements.txt，手动安装核心依赖"
+        sudo -u "$SERVICE_USER" "$PIP_CMD" install fastapi uvicorn websockets pydantic python-dotenv
     fi
     
     log_success "Python依赖安装完成"
@@ -347,6 +378,10 @@ main() {
                 ;;
             -d|--dir)
                 INSTALL_DIR="$2"
+                shift 2
+                ;;
+            -e|--env)
+                CONDA_ENV="$2"
                 shift 2
                 ;;
             --uninstall)
