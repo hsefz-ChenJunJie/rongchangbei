@@ -19,6 +19,8 @@ class HomePage extends BasePage {
 }
 
 class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver {
+  @override
+  int getInitialBottomNavIndex() => 0; // 首页索引为0
   final TextEditingController _dialogueController = TextEditingController();
   final DPManager _dpManager = DPManager();
   List<DialoguePackage> _recommendedPackages = [];

@@ -33,7 +33,13 @@ abstract class BasePageState<T extends BasePage> extends State<T> {
     // 使用 Provider 或直接使用 ChangeNotifierProvider 获取路由状态
     // 这里我们创建一个默认的路由状态实例
     _routeState = AppRouteState();
+    
+    // 初始化底部导航栏索引
+    _currentBottomNavIndex = getInitialBottomNavIndex();
   }
+  
+  // 子类可以重写这个方法来设置正确的底部导航栏索引
+  int getInitialBottomNavIndex() => 0;
 
   // 子类需要实现的内容区域
   Widget buildContent(BuildContext context);
@@ -54,8 +60,30 @@ abstract class BasePageState<T extends BasePage> extends State<T> {
 
   // 子类可以重写页面切换逻辑
   void onPageChange(int index) {
-    // 默认实现：打印日志
-    debugPrint('切换到页面: ${bottomNavItems[index].label}');
+    final routeName = bottomNavItems[index].label;
+    debugPrint('切换到页面: $routeName');
+    
+    // 根据索引导航到对应页面
+    switch (index) {
+      case 0: // 首页
+        Navigator.pushNamedAndRemoveUntil(
+          context, 
+          '/', 
+          (route) => false
+        );
+        break;
+      case 1: // 发现
+        Navigator.pushNamedAndRemoveUntil(
+          context, 
+          '/discover', 
+          (route) => false
+        );
+        break;
+      case 2: // 我的
+        // 暂时保留，后续可以添加个人中心页面
+        debugPrint('我的页面 - 待开发');
+        break;
+    }
   }
 
   // 跳转到设置页面
