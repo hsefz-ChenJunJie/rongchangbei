@@ -2,7 +2,7 @@
 
 ## 概述
 
-本文档提供AI对话应用后端的完整部署指南，包括开发环境部署和生产环境Docker部署两种方式。
+本文档提供AI对话应用后端的完整部署指南，包括开发环境部署和生产环境SystemD服务部署两种方式。
 
 ## 快速导航
 
@@ -10,18 +10,20 @@
 - 🚀 **[部署指南](#部署指南)** - 开发和生产环境部署
 - 🔧 **[故障排除](#故障排除)** - 常见问题解决方案
 - 🏗️ **[项目结构](#项目结构)** - 代码组织结构
+- ⚙️ **[SystemD服务](#systemd服务部署)** - 生产环境系统服务部署
 
 ## 系统要求
 
 ### 基础环境
-- Python 3.12+ （推荐3.12，3.9版本存在依赖兼容性问题）
+- Python 3.12+ （推荐3.12，3.9+可用）
 - Git
 - 网络连接（用于下载依赖和模型）
+- Linux系统（支持SystemD）
 
 ### 可选组件
-- Docker 和 Docker Compose（生产环境部署）
 - Vosk语音识别模型（真实STT服务）
 - OpenRouter API密钥（真实LLM服务）
+- Nginx（反向代理，生产环境推荐）
 
 ### 📋 重要配置说明
 
@@ -46,9 +48,9 @@ backend/
 ├── config/                # 配置管理
 ├── model/                 # AI模型存储
 ├── requirements.txt       # Python依赖
-├── Dockerfile            # Docker镜像构建
-├── docker-compose.yml    # Docker编排
-└── README.md            # 本文档
+├── ai-dialogue-backend.service  # SystemD服务配置
+├── install-service.sh     # 自动安装脚本
+└── README.md             # 本文档
 ```
 
 ---
@@ -65,10 +67,10 @@ cd 荣昶杯项目/backend
 
 #### 1.2 创建Python虚拟环境
 
-> ⚠️ **重要提醒**：本项目需要Python 3.12+。如果使用Python 3.9可能会遇到依赖兼容性问题。
+> ⚠️ **重要提醒**：本项目需要Python 3.9+，推荐使用Python 3.12。
 
 ```bash
-# 确认Python版本（必须3.12+）
+# 确认Python版本（必须3.9+）
 python --version
 
 # 使用venv
@@ -78,7 +80,7 @@ source venv/bin/activate  # Linux/Mac
 venv\Scripts\activate     # Windows
 
 # 使用conda/mamba（推荐）
-mamba create -n rongchang python=3.9
+mamba create -n rongchang python=3.12
 mamba activate rongchang
 ```
 
@@ -108,7 +110,7 @@ DEBUG=true
 LOG_LEVEL=INFO
 ```
 
-> 💡 **完整配置说明**: 查看 [CONFIGURATION.md](CONFIGURATION.md) 了解所有52个配置项的详细说明、默认值和最佳实践。
+> 💡 **完整配置说明**: 查看 [CONFIGURATION.md](CONFIGURATION.md) 了解所有配置项的详细说明、默认值和最佳实践。
 
 #### 2.2 下载Vosk模型（推荐）
 如果要使用真实的语音识别服务（推荐测试环境使用）：
@@ -214,118 +216,177 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ---
 
-## 方式二：Docker生产环境部署
+## 方式二：SystemD服务部署
 
-### 1. 环境准备
+### 1. 自动安装（推荐）
 
-#### 1.1 安装Docker
+使用提供的自动安装脚本，一键部署生产环境：
+
 ```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install docker.io docker-compose
+# 给脚本执行权限
+chmod +x install-service.sh
 
-# CentOS/RHEL
-sudo yum install docker docker-compose
+# 自动安装服务
+sudo ./install-service.sh
 
-# 启动Docker服务
-sudo systemctl start docker
-sudo systemctl enable docker
+# 或指定自定义参数
+sudo ./install-service.sh --user myuser --dir /opt/myapp
 ```
 
-#### 1.2 验证Docker安装
+安装脚本会自动完成以下步骤：
+1. 创建服务用户和组
+2. 创建必要目录结构
+3. 复制项目文件到生产目录
+4. 安装Python依赖
+5. 配置SystemD服务
+6. 启动并验证服务
+
+### 2. 手动安装
+
+如果需要手动控制安装过程：
+
+#### 2.1 创建服务用户
 ```bash
-docker --version
-docker-compose --version
+# 创建专用用户和组
+sudo groupadd --system backend
+sudo useradd --system --gid backend --create-home \
+    --home-dir /opt/ai-dialogue-backend --shell /bin/bash \
+    --comment "AI Dialogue Backend Service" backend
 ```
 
-### 2. 构建和部署
-
-#### 2.1 使用docker-compose快速部署
+#### 2.2 准备部署目录
 ```bash
-# 克隆项目
-git clone <your-repository-url>
-cd 荣昶杯项目/backend
+# 创建应用目录
+sudo mkdir -p /opt/ai-dialogue-backend
+sudo mkdir -p /var/log/ai-dialogue-backend
 
-# 构建并启动服务
-docker-compose up -d
+# 复制项目文件
+sudo cp -r app/ config/ requirements.txt /opt/ai-dialogue-backend/
+sudo cp -r model/ /opt/ai-dialogue-backend/ # 如果有模型文件
+
+# 设置权限
+sudo chown -R backend:backend /opt/ai-dialogue-backend
+sudo chown -R backend:backend /var/log/ai-dialogue-backend
+```
+
+#### 2.3 安装Python依赖
+```bash
+# 切换到服务用户
+sudo -u backend bash
+
+# 创建虚拟环境
+cd /opt/ai-dialogue-backend
+python3 -m venv venv
+source venv/bin/activate
+
+# 安装依赖
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# 退出服务用户会话
+exit
+```
+
+#### 2.4 配置SystemD服务
+```bash
+# 复制服务配置文件
+sudo cp ai-dialogue-backend.service /etc/systemd/system/
+
+# 重新加载systemd配置
+sudo systemctl daemon-reload
+
+# 启用服务（开机自启动）
+sudo systemctl enable ai-dialogue-backend
+
+# 启动服务
+sudo systemctl start ai-dialogue-backend
+```
+
+### 3. 服务管理
+
+#### 3.1 基本操作
+```bash
+# 启动服务
+sudo systemctl start ai-dialogue-backend
+
+# 停止服务
+sudo systemctl stop ai-dialogue-backend
+
+# 重启服务
+sudo systemctl restart ai-dialogue-backend
+
+# 重新加载配置（无需重启）
+sudo systemctl reload ai-dialogue-backend
 
 # 查看服务状态
-docker-compose ps
+sudo systemctl status ai-dialogue-backend
 
-# 查看日志
-docker-compose logs -f ai-backend
+# 查看服务是否开机自启动
+sudo systemctl is-enabled ai-dialogue-backend
 ```
 
-#### 2.2 手动Docker部署
+#### 3.2 日志查看
 ```bash
-# 构建镜像
-docker build -t ai-dialogue-backend .
+# 查看服务日志（实时）
+sudo journalctl -u ai-dialogue-backend -f
 
-# 运行容器
-docker run -d \
-  --name ai-backend \
-  -p 8000:8000 \
-  -e OPENROUTER_API_KEY=your_api_key \
-  -e LOG_LEVEL=INFO \
-  -v $(pwd)/model:/app/model \
-  ai-dialogue-backend
+# 查看最近的日志
+sudo journalctl -u ai-dialogue-backend -n 50
 
-# 查看容器状态
-docker ps
-docker logs ai-backend
+# 查看今天的日志
+sudo journalctl -u ai-dialogue-backend --since today
+
+# 查看应用日志文件
+sudo tail -f /var/log/ai-dialogue-backend/app.log
 ```
 
-### 3. 生产环境配置
-
-#### 3.1 环境变量配置
-创建 `.env.production` 文件：
+#### 3.3 配置修改
 ```bash
-# 生产环境核心配置
-DEBUG=false
-LOG_LEVEL=INFO
-LOG_FORMAT=json
-HOST=0.0.0.0
-PORT=8000
+# 编辑服务配置
+sudo systemctl edit ai-dialogue-backend
 
-# OpenRouter生产配置
-OPENROUTER_API_KEY=your_production_api_key
-OPENROUTER_MODEL=anthropic/claude-3-sonnet
-OPENROUTER_TEMPERATURE=0.3
-OPENROUTER_MAX_TOKENS=1000
+# 或直接编辑服务文件
+sudo nano /etc/systemd/system/ai-dialogue-backend.service
 
-# Vosk STT配置
-VOSK_MODEL_PATH=/app/model/vosk-model
-VOSK_SAMPLE_RATE=16000
-
-# 性能优化
-STT_TIMEOUT=20
-LLM_TIMEOUT=45
-WEBSOCKET_TIMEOUT=600
+# 修改后重新加载
+sudo systemctl daemon-reload
+sudo systemctl restart ai-dialogue-backend
 ```
 
-> 📖 **详细配置指南**: [CONFIGURATION.md](CONFIGURATION.md) 包含完整的生产环境配置最佳实践。
+### 4. 环境变量配置
 
-#### 3.2 数据持久化
+在生产环境中，您需要配置实际的API密钥和其他设置。编辑服务文件：
+
 ```bash
-# 创建数据卷
-docker volume create ai-backend-models
-docker volume create ai-backend-logs
-
-# 在docker-compose.yml中配置持久化
-volumes:
-  - ai-backend-models:/app/model
-  - ai-backend-logs:/app/logs
+sudo nano /etc/systemd/system/ai-dialogue-backend.service
 ```
 
-#### 3.3 反向代理配置（Nginx）
+修改Environment配置：
+```ini
+# 修改这些配置为您的实际值
+Environment=OPENROUTER_API_KEY=your_actual_api_key_here
+Environment=OPENROUTER_MODEL=anthropic/claude-3-sonnet
+Environment=DEBUG=false
+Environment=LOG_LEVEL=INFO
+```
+
+然后重新加载并重启服务：
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart ai-dialogue-backend
+```
+
+### 5. 反向代理配置（可选）
+
+#### 5.1 Nginx配置
 ```nginx
-# /etc/nginx/sites-available/ai-backend
+# /etc/nginx/sites-available/ai-dialogue-backend
 server {
     listen 80;
-    server_name your-api-domain.com;
+    server_name your-domain.com;
 
     location / {
-        proxy_pass http://localhost:8000;
+        proxy_pass http://127.0.0.1:8000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -333,53 +394,64 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # WebSocket特殊配置
-    location /ws/ {
-        proxy_pass http://localhost:8000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
+        
+        # WebSocket支持
         proxy_read_timeout 86400;
         proxy_send_timeout 86400;
     }
 }
 ```
 
-### 4. 生产环境优化
-
-#### 4.1 性能配置
+启用配置：
 ```bash
-# 在docker-compose.yml中设置资源限制
-services:
-  ai-backend:
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 4G
-        reservations:
-          memory: 2G
+sudo ln -s /etc/nginx/sites-available/ai-dialogue-backend /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
 ```
 
-#### 4.2 健康检查
+### 6. 服务监控
+
+#### 6.1 健康检查
 ```bash
-# 在Dockerfile中添加健康检查
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD curl -f http://localhost:8000/api/health || exit 1
+# 手动健康检查
+curl http://localhost:8000/
+curl http://localhost:8000/conversation/health
+
+# 设置定时健康检查
+echo "*/5 * * * * curl -f http://localhost:8000/ || systemctl restart ai-dialogue-backend" | sudo crontab -
 ```
 
-#### 4.3 日志管理
+#### 6.2 性能监控
 ```bash
-# 配置日志轮转
-# 在docker-compose.yml中
-logging:
-  driver: "json-file"
-  options:
-    max-size: "100m"
-    max-file: "5"
+# 查看资源使用
+sudo systemctl status ai-dialogue-backend
+ps aux | grep python
+
+# 查看端口监听
+sudo netstat -tlnp | grep :8000
+
+# 查看进程树
+sudo systemctl status ai-dialogue-backend --full
+```
+
+### 7. 卸载服务
+
+如果需要完全移除服务：
+
+```bash
+# 使用自动卸载脚本
+sudo ./install-service.sh --uninstall
+
+# 或手动卸载
+sudo systemctl stop ai-dialogue-backend
+sudo systemctl disable ai-dialogue-backend
+sudo rm /etc/systemd/system/ai-dialogue-backend.service
+sudo systemctl daemon-reload
+
+# 可选：删除用户和文件
+sudo userdel backend
+sudo rm -rf /opt/ai-dialogue-backend
+sudo rm -rf /var/log/ai-dialogue-backend
 ```
 
 ---
@@ -498,8 +570,8 @@ ws.onclose = function(event) {
 #### 1. 端口冲突
 ```bash
 # 检查端口占用
-lsof -i :8000
-netstat -tulpn | grep 8000
+sudo lsof -i :8000
+sudo netstat -tulpn | grep 8000
 
 # 解决方案：更改端口或停止冲突服务
 export PORT=8001
@@ -510,7 +582,7 @@ export PORT=8001
 # 检查当前Python版本
 python --version
 
-# 如果版本低于3.12，请升级Python
+# 如果版本低于3.9，请升级Python
 # Ubuntu/Debian
 sudo apt update && sudo apt install python3.12 python3.12-venv python3.12-dev
 
@@ -566,78 +638,82 @@ pwd  # 应显示 */荣昶杯项目/backend
 ls -la app/  # 应能看到main.py文件
 ```
 
-#### 6. 音频流处理错误
+#### 6. SystemD服务问题
+
+**服务启动失败：**
 ```bash
-# 错误现象：前端发送音频流时报错"会话的音频流未开始"
-# ✅ 已修复 (v1.2.1)：message_start事件现在会自动启动音频流处理
+# 查看详细错误信息
+sudo systemctl status ai-dialogue-backend -l
+sudo journalctl -u ai-dialogue-backend -n 50
 
-# 验证修复：运行音频流测试
-cd ../tests/backend
-python test_audio_stream_fix.py
+# 检查服务配置
+sudo systemctl cat ai-dialogue-backend
 
-# 如果仍有问题，检查STT服务状态
-curl http://localhost:8000/conversation/health
+# 验证配置语法
+sudo systemd-analyze verify /etc/systemd/system/ai-dialogue-backend.service
 ```
 
-#### 7. LLM回答数量不响应更新
+**权限问题：**
 ```bash
-# 错误现象：发送response_count_update后，manual_generate仍返回固定数量
-# ✅ 已修复 (v1.2.1)：LLM现在能正确响应前端的数量设置
+# 检查文件权限
+ls -la /opt/ai-dialogue-backend/
+ls -la /var/log/ai-dialogue-backend/
 
-# 验证修复：运行回答数量测试
-cd ../tests/backend
-python test_response_count_fix.py
-
-# 测试不同数量：应该看到2个→3个→5个建议的正确变化
+# 修复权限
+sudo chown -R backend:backend /opt/ai-dialogue-backend
+sudo chown -R backend:backend /var/log/ai-dialogue-backend
 ```
 
-#### 8. WebSocket连接失败
+**环境变量问题：**
+```bash
+# 检查服务中的环境变量
+sudo systemctl show ai-dialogue-backend -p Environment
+
+# 测试手动启动
+sudo -u backend bash
+cd /opt/ai-dialogue-backend
+source venv/bin/activate
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+#### 7. 网络连接问题
 ```bash
 # 检查防火墙设置
 sudo ufw allow 8000
 sudo firewall-cmd --permanent --add-port=8000/tcp
 
-# 检查代理配置
-# 确保WebSocket升级头正确设置
+# 检查服务绑定
+sudo netstat -tlnp | grep :8000
 
-# 确认WebSocket端点正确
-# 正确地址：ws://localhost:8000/conversation
-```
-
-#### 9. Docker容器启动失败
-```bash
-# 查看详细错误信息
-docker-compose logs ai-backend
-
-# 检查镜像构建
-docker build --no-cache -t ai-dialogue-backend .
-
-# 检查容器内部
-docker exec -it ai-backend /bin/bash
+# 确认服务监听正确的地址
+# 应该显示 0.0.0.0:8000 而不是 127.0.0.1:8000
 ```
 
 ### 日志调试
 
 #### 查看实时日志
 ```bash
-# 开发环境
-tail -f logs/app.log
+# SystemD服务日志
+sudo journalctl -u ai-dialogue-backend -f
 
-# Docker环境
-docker-compose logs -f ai-backend
+# 应用日志
+sudo tail -f /var/log/ai-dialogue-backend/app.log
 
 # 筛选特定级别日志
-docker-compose logs ai-backend | grep ERROR
+sudo journalctl -u ai-dialogue-backend | grep ERROR
 ```
 
 #### 性能监控
 ```bash
 # 系统资源使用
 htop
-docker stats
+ps aux | grep python
 
-# 应用性能
-curl http://localhost:8000/api/health
+# 服务状态
+sudo systemctl status ai-dialogue-backend
+
+# 网络连接
+sudo ss -tlnp | grep :8000
 ```
 
 ---
@@ -654,10 +730,15 @@ curl http://localhost:8000/api/health
 - 使用HTTPS和WSS协议
 - 限制跨域访问
 
-### 3. 容器安全
-- 定期更新基础镜像
-- 以非root用户运行容器
-- 扫描镜像安全漏洞
+### 3. 系统安全
+- 定期更新系统和依赖
+- 使用专用用户运行服务
+- 配置适当的文件权限
+
+### 4. 服务安全
+- 启用SystemD安全特性
+- 限制资源使用
+- 配置日志轮转
 
 ---
 
@@ -669,25 +750,32 @@ curl http://localhost:8000/api/health
 git pull origin main
 pip install -r requirements.txt --upgrade
 
-# Docker环境升级
-docker-compose down
-docker-compose pull
-docker-compose up -d
+# 生产环境升级
+cd /opt/ai-dialogue-backend
+sudo -u backend git pull origin main
+sudo -u backend ./venv/bin/pip install -r requirements.txt --upgrade
+sudo systemctl restart ai-dialogue-backend
 ```
 
 ### 备份和恢复
 ```bash
 # 备份配置和模型
-tar -czf backup-$(date +%Y%m%d).tar.gz model/ config/ .env
+sudo tar -czf backup-$(date +%Y%m%d).tar.gz \
+    /opt/ai-dialogue-backend/config/ \
+    /opt/ai-dialogue-backend/model/ \
+    /etc/systemd/system/ai-dialogue-backend.service
 
 # 恢复
-tar -xzf backup-20240101.tar.gz
+sudo tar -xzf backup-20240101.tar.gz -C /
+sudo systemctl daemon-reload
+sudo systemctl restart ai-dialogue-backend
 ```
 
 ### 监控和告警
 - 配置应用性能监控（APM）
 - 设置日志告警规则
 - 监控资源使用情况
+- 配置健康检查脚本
 
 ---
 
@@ -695,10 +783,31 @@ tar -xzf backup-20240101.tar.gz
 
 如有问题，请检查：
 1. 项目文档：`docs/`
-2. 应用日志：`logs/` 或 `docker-compose logs`
-3. 健康检查：`http://localhost:8000/api/health`
+2. 应用日志：`/var/log/ai-dialogue-backend/` 或 `sudo journalctl -u ai-dialogue-backend`
+3. 健康检查：`http://localhost:8000/`
 
 如需进一步协助，请提供：
 - 错误日志信息
 - 系统环境信息
 - 配置文件内容（隐藏敏感信息）
+
+**常用命令总结：**
+```bash
+# 服务管理
+sudo systemctl {start|stop|restart|status} ai-dialogue-backend
+
+# 日志查看  
+sudo journalctl -u ai-dialogue-backend -f
+
+# 健康检查
+curl http://localhost:8000/
+
+# 配置检查
+sudo systemctl cat ai-dialogue-backend
+
+# 自动安装
+sudo ./install-service.sh
+
+# 卸载服务
+sudo ./install-service.sh --uninstall
+```
