@@ -36,6 +36,15 @@ LOG_DIR="/var/log/ai-dialogue-backend"
 SERVICE_FILE="ai-dialogue-backend.service"
 CONDA_ENV="rongchang"  # 指定使用的conda环境名
 
+# 检测运行环境
+if [[ "$EUID" -eq 0 ]]; then
+    if [[ -z "$SUDO_USER" ]]; then
+        log_warning "检测到以root用户直接运行，某些功能可能受限"
+    else
+        log_info "检测到sudo环境，原用户: $SUDO_USER"
+    fi
+fi
+
 show_help() {
     cat << EOF
 AI对话应用后端 - SystemD服务安装脚本
@@ -85,14 +94,81 @@ check_requirements() {
         exit 1
     fi
     
-    # 检查conda和指定环境
-    if ! command -v conda &> /dev/null; then
+    # 检查conda - 考虑sudo环境
+    CONDA_COMMAND=""
+    
+    # 方法1：直接检查conda命令
+    if command -v conda &> /dev/null; then
+        CONDA_COMMAND="conda"
+        log_info "找到conda命令: $(which conda)"
+    else
+        # 方法2：在常见路径中查找conda
+        POSSIBLE_CONDA_PATHS=(
+            "/home/$SUDO_USER/miniconda3/bin/conda"
+            "/home/$SUDO_USER/anaconda3/bin/conda"
+            "/home/$SUDO_USER/.conda/bin/conda"
+            "/opt/conda/bin/conda"
+            "/usr/local/conda/bin/conda"
+            "/opt/miniconda3/bin/conda"
+            "/opt/anaconda3/bin/conda"
+        )
+        
+        # 如果是root用户，尝试获取原用户
+        if [[ -z "$SUDO_USER" ]] && [[ "$EUID" -eq 0 ]]; then
+            log_warning "以root用户运行，尝试检测原用户..."
+            # 从环境或进程中猜测原用户
+            ORIGINAL_USER=$(ps aux | grep -v root | head -n1 | awk '{print $1}' 2>/dev/null || echo "")
+            if [[ -n "$ORIGINAL_USER" && "$ORIGINAL_USER" != "USER" ]]; then
+                SUDO_USER="$ORIGINAL_USER"
+                log_info "检测到可能的原用户: $SUDO_USER"
+            fi
+        fi
+        
+        # 添加动态用户路径
+        if [[ -n "$SUDO_USER" ]]; then
+            POSSIBLE_CONDA_PATHS+=(
+                "/home/$SUDO_USER/miniconda3/bin/conda"
+                "/home/$SUDO_USER/anaconda3/bin/conda"
+                "/home/$SUDO_USER/.local/bin/conda"
+            )
+        fi
+        
+        for conda_path in "${POSSIBLE_CONDA_PATHS[@]}"; do
+            if [[ -f "$conda_path" && -x "$conda_path" ]]; then
+                CONDA_COMMAND="$conda_path"
+                log_info "在常见路径找到conda: $conda_path"
+                break
+            fi
+        done
+        
+        # 方法3：使用sudo -u 原用户执行conda
+        if [[ -z "$CONDA_COMMAND" && -n "$SUDO_USER" ]]; then
+            if sudo -u "$SUDO_USER" bash -c "command -v conda" &> /dev/null; then
+                CONDA_COMMAND="sudo -u $SUDO_USER bash -c"
+                log_info "通过sudo -u $SUDO_USER 找到conda"
+            fi
+        fi
+    fi
+    
+    if [[ -z "$CONDA_COMMAND" ]]; then
         log_error "未找到conda，请先安装miniconda/anaconda"
+        log_info "如果conda已安装但未找到，请尝试："
+        log_info "1. 检查conda是否在PATH中"
+        log_info "2. 或者提供conda的完整路径"
+        log_info "3. 确保当前用户有权限访问conda"
         exit 1
     fi
     
     # 检查指定的conda环境是否存在
-    if ! conda env list | grep -q "^${CONDA_ENV} "; then
+    # 使用找到的conda命令检查环境
+    ENV_CHECK_RESULT=""
+    if [[ "$CONDA_COMMAND" == "sudo -u $SUDO_USER bash -c" ]]; then
+        ENV_CHECK_RESULT=$(sudo -u "$SUDO_USER" bash -c "conda env list | grep '^${CONDA_ENV} '" 2>/dev/null || echo "")
+    else
+        ENV_CHECK_RESULT=$($CONDA_COMMAND env list | grep "^${CONDA_ENV} " 2>/dev/null || echo "")
+    fi
+    
+    if [[ -z "$ENV_CHECK_RESULT" ]]; then
         log_error "Conda环境 '${CONDA_ENV}' 不存在"
         log_info "请创建环境: conda create -n ${CONDA_ENV} python=3.12"
         exit 1
@@ -101,9 +177,19 @@ check_requirements() {
     # 获取conda环境中的Python路径 - 使用多种方法确保兼容性
     CONDA_PREFIX=""
     
+    # 定义执行conda命令的函数
+    run_conda_cmd() {
+        local cmd="$1"
+        if [[ "$CONDA_COMMAND" == "sudo -u $SUDO_USER bash -c" ]]; then
+            sudo -u "$SUDO_USER" bash -c "$cmd" 2>/dev/null || echo ""
+        else
+            $CONDA_COMMAND $cmd 2>/dev/null || echo ""
+        fi
+    }
+    
     # 方法1：使用conda info --envs（最常用方法）
     if [[ -z "$CONDA_PREFIX" ]]; then
-        CONDA_PREFIX=$(conda info --envs | grep "^${CONDA_ENV} " | awk '{print $2}')
+        CONDA_PREFIX=$(run_conda_cmd "conda info --envs" | grep "^${CONDA_ENV} " | awk '{print $2}')
         if [[ -n "$CONDA_PREFIX" ]]; then
             log_info "方法1成功：conda info --envs 获取路径 $CONDA_PREFIX"
         fi
@@ -111,7 +197,7 @@ check_requirements() {
     
     # 方法2：尝试不同的awk字段
     if [[ -z "$CONDA_PREFIX" ]]; then
-        CONDA_PREFIX=$(conda info --envs | grep " ${CONDA_ENV} " | awk '{print $3}')
+        CONDA_PREFIX=$(run_conda_cmd "conda info --envs" | grep " ${CONDA_ENV} " | awk '{print $3}')
         if [[ -n "$CONDA_PREFIX" ]]; then
             log_info "方法2成功：conda info --envs (字段3) 获取路径 $CONDA_PREFIX"
         fi
@@ -119,7 +205,7 @@ check_requirements() {
     
     # 方法3：使用conda env list
     if [[ -z "$CONDA_PREFIX" ]]; then
-        CONDA_PREFIX=$(conda env list | grep "^${CONDA_ENV} " | awk '{print $2}')
+        CONDA_PREFIX=$(run_conda_cmd "conda env list" | grep "^${CONDA_ENV} " | awk '{print $2}')
         if [[ -n "$CONDA_PREFIX" ]]; then
             log_info "方法3成功：conda env list 获取路径 $CONDA_PREFIX"
         fi
@@ -129,14 +215,26 @@ check_requirements() {
     if [[ -z "$CONDA_PREFIX" ]]; then
         # 创建临时脚本来获取激活后的CONDA_PREFIX
         TEMP_SCRIPT=$(mktemp)
-        cat << 'EOF' > "$TEMP_SCRIPT"
+        if [[ -n "$SUDO_USER" ]]; then
+            # 为原用户创建临时脚本
+            cat << EOF > "$TEMP_SCRIPT"
 #!/bin/bash
 source ~/.bashrc 2>/dev/null || true
 source ~/.zshrc 2>/dev/null || true
-eval "$(conda shell.bash hook)" 2>/dev/null || true
-conda activate ${CONDA_ENV} 2>/dev/null && echo "$CONDA_PREFIX"
+eval "\$(conda shell.bash hook)" 2>/dev/null || true
+conda activate ${CONDA_ENV} 2>/dev/null && echo "\$CONDA_PREFIX"
 EOF
-        CONDA_PREFIX=$(bash "$TEMP_SCRIPT")
+            CONDA_PREFIX=$(sudo -u "$SUDO_USER" bash "$TEMP_SCRIPT")
+        else
+            cat << EOF > "$TEMP_SCRIPT"
+#!/bin/bash
+source ~/.bashrc 2>/dev/null || true
+source ~/.zshrc 2>/dev/null || true
+eval "\$(conda shell.bash hook)" 2>/dev/null || true
+conda activate ${CONDA_ENV} 2>/dev/null && echo "\$CONDA_PREFIX"
+EOF
+            CONDA_PREFIX=$(bash "$TEMP_SCRIPT")
+        fi
         rm -f "$TEMP_SCRIPT"
         if [[ -n "$CONDA_PREFIX" ]]; then
             log_info "方法4成功：通过conda activate获取路径 $CONDA_PREFIX"
@@ -512,19 +610,52 @@ show_debug_info() {
         echo
         echo "Conda 信息:"
         conda info 2>&1 || echo "无法获取conda信息"
+    elif [[ -n "$SUDO_USER" ]]; then
+        echo "当前用户环境中Conda未找到，尝试检查原用户环境..."
+        ORIG_CONDA_PATH=$(sudo -u "$SUDO_USER" bash -c "command -v conda" 2>/dev/null || echo "")
+        if [[ -n "$ORIG_CONDA_PATH" ]]; then
+            echo "原用户的Conda路径: $ORIG_CONDA_PATH"
+            echo "原用户的Conda版本: $(sudo -u "$SUDO_USER" bash -c "conda --version" 2>&1)"
+            echo
+            echo "原用户的Conda环境列表:"
+            sudo -u "$SUDO_USER" bash -c "conda info --envs" 2>&1 || echo "无法获取conda环境列表"
+        else
+            echo "Conda 未找到（包括原用户环境）"
+        fi
     else
         echo "Conda 未找到"
     fi
     echo
     
     echo "=== 指定环境 '${CONDA_ENV}' 详情 ==="
-    if conda env list | grep -q "^${CONDA_ENV} "; then
+    
+    # 检查环境是否存在 - 兼容sudo环境
+    ENV_EXISTS=false
+    if command -v conda &> /dev/null; then
+        if conda env list | grep -q "^${CONDA_ENV} "; then
+            ENV_EXISTS=true
+        fi
+    elif [[ -n "$SUDO_USER" ]]; then
+        if sudo -u "$SUDO_USER" bash -c "conda env list" 2>/dev/null | grep -q "^${CONDA_ENV} "; then
+            ENV_EXISTS=true
+        fi
+    fi
+    
+    if [[ "$ENV_EXISTS" == "true" ]]; then
         echo "环境存在: ✓"
         
-        # 尝试获取环境路径
-        ENV_PATH=$(conda info --envs | grep "^${CONDA_ENV} " | awk '{print $2}')
-        if [[ -z "$ENV_PATH" ]]; then
-            ENV_PATH=$(conda info --envs | grep " ${CONDA_ENV} " | awk '{print $3}')
+        # 尝试获取环境路径 - 兼容sudo环境
+        ENV_PATH=""
+        if command -v conda &> /dev/null; then
+            ENV_PATH=$(conda info --envs | grep "^${CONDA_ENV} " | awk '{print $2}')
+            if [[ -z "$ENV_PATH" ]]; then
+                ENV_PATH=$(conda info --envs | grep " ${CONDA_ENV} " | awk '{print $3}')
+            fi
+        elif [[ -n "$SUDO_USER" ]]; then
+            ENV_PATH=$(sudo -u "$SUDO_USER" bash -c "conda info --envs" 2>/dev/null | grep "^${CONDA_ENV} " | awk '{print $2}')
+            if [[ -z "$ENV_PATH" ]]; then
+                ENV_PATH=$(sudo -u "$SUDO_USER" bash -c "conda info --envs" 2>/dev/null | grep " ${CONDA_ENV} " | awk '{print $3}')
+            fi
         fi
         
         if [[ -n "$ENV_PATH" ]]; then
