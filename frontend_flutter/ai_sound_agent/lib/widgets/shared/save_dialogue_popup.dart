@@ -5,49 +5,58 @@ import '../../services/theme_manager.dart';
 class SaveDialoguePopup extends StatefulWidget {
   final Function(String) onSave;
 
-  const SaveDialoguePopup({super.key, required this.onSave});
+  const SaveDialoguePopup({
+    super.key, 
+    required this.onSave,
+  });
 
   @override
   SaveDialoguePopupState createState() => SaveDialoguePopupState();
 }
 
 class SaveDialoguePopupState extends State<SaveDialoguePopup> {
-  final TextEditingController _nameController = TextEditingController(text: 'untitled');
+  final TextEditingController _fileNameController = TextEditingController(text: 'untitled');
   String _errorMessage = '';
 
   @override
   void initState() {
     super.initState();
     // 选择默认文本以便用户可以直接输入
-    _nameController.selection = TextSelection(baseOffset: 0, extentOffset: _nameController.text.length);
+    _fileNameController.selection = TextSelection(
+      baseOffset: 0, 
+      extentOffset: _fileNameController.text.length
+    );
   }
 
   @override
   void dispose() {
-    _nameController.dispose();
+    _fileNameController.dispose();
     super.dispose();
   }
 
-  // 验证名称是否符合要求（只能包含字母、数字和下划线）
-  bool _validateName(String name) {
-    if (name.isEmpty) {
-      return false;
+  // 验证文件名是否符合要求（字母、数字、下划线、连字符）
+  void _validateFileName(String value) {
+    final RegExp validPattern = RegExp(r'^[a-zA-Z0-9_-]+$');
+    if (value.isEmpty) {
+      setState(() {
+        _errorMessage = '文件名不能为空';
+      });
+    } else if (!validPattern.hasMatch(value)) {
+      setState(() {
+        _errorMessage = '文件名只能包含字母、数字、下划线和连字符';
+      });
+    } else {
+      setState(() {
+        _errorMessage = '';
+      });
     }
-    // 正则表达式匹配：只能包含字母、数字和下划线
-    final RegExp nameRegExp = RegExp(r'^[a-zA-Z0-9_]+$');
-    return nameRegExp.hasMatch(name);
   }
 
   void _handleSave() {
-    final String name = _nameController.text.trim();
-    
-    if (!_validateName(name)) {
-      setState(() {
-        _errorMessage = '名称只能包含字母、数字和下划线';
-      });
-      return;
-    }
-    
+    final String name = _fileNameController.text.trim();
+    _validateFileName(name);
+    if (_errorMessage.isNotEmpty) return;
+
     widget.onSave(name);
     Navigator.of(context).pop();
   }
@@ -78,18 +87,17 @@ class SaveDialoguePopupState extends State<SaveDialoguePopup> {
             ),
             const SizedBox(height: 16),
             TextField(
-              controller: _nameController,
+              controller: _fileNameController,
               decoration: InputDecoration(
-                labelText: '对话包名称',
-                hintText: '请输入名称（字母、数字、下划线）',
-                errorText: _errorMessage.isEmpty ? null : _errorMessage,
+                labelText: '文件名',
+                hintText: '请输入文件名',
                 border: const OutlineInputBorder(),
+                errorText: _errorMessage.isNotEmpty ? _errorMessage : null,
               ),
+              onChanged: _validateFileName,
               inputFormatters: [
-                // 限制输入字符
-                FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9_]')),
+                FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9_-]')),
               ],
-              onSubmitted: (_) => _handleSave(),
             ),
             const SizedBox(height: 16),
             Row(

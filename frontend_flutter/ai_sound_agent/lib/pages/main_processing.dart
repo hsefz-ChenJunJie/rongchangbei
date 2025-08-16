@@ -18,6 +18,7 @@ import 'package:loading_indicator/loading_indicator.dart';
 import 'package:record/record.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:ai_sound_agent/widgets/shared/save_dialogue_popup.dart';
+import 'package:ai_sound_agent/widgets/shared/edit_dialogue_info_popup.dart';
 
 class MainProcessingPage extends BasePage {
   const MainProcessingPage({super.key})
@@ -55,6 +56,10 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   final TextEditingController _contentInputController = TextEditingController(); // 新增：内容输入控制器
 
   DialoguePackage? _currentDialoguePackage;
+  
+  // 新增：对话标题和描述
+  String _dialogueTitle = '对话记录';
+  String _dialogueDescription = '';
   
   // 新增：存储建议关键词的列表
   List<String> _suggestionKeywords = ['建议1', '建议2', '建议3'];
@@ -142,6 +147,12 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       
       // 保存对话包数据并填充侧边栏
       _currentDialoguePackage = dialoguePackage;
+      
+      // 加载对话标题和描述
+      setState(() {
+        _dialogueTitle = dialoguePackage.packageName;
+        _dialogueDescription = dialoguePackage.description;
+      });
       
       // 填充侧边栏输入框的值
       _scenarioSupplementController.text = dialoguePackage.scenarioSupplement;
@@ -626,6 +637,9 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   }
 
   @override
+  String get title => _dialogueTitle;
+
+  @override
   Widget buildContent(BuildContext context) {
     if (_isLoading) {
       return Stack(
@@ -793,7 +807,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      '对话记录',
+                      _dialogueTitle,
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -825,6 +839,13 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  IconButton(
+                    icon: const Icon(Icons.edit, size: 18),
+                    tooltip: '编辑对话信息',
+                    onPressed: _editDialogueInfo,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
                   IconButton(
                     icon: const Icon(Icons.save, size: 18),
                     tooltip: '保存为对话包',
@@ -1432,13 +1453,37 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     );
   }
 
+  // 编辑对话信息
+  void _editDialogueInfo() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return EditDialogueInfoPopup(
+          initialTitle: _dialogueTitle,
+          initialDescription: _dialogueDescription,
+          onSave: (newTitle, newDescription) {
+            setState(() {
+              _dialogueTitle = newTitle;
+              _dialogueDescription = newDescription;
+            });
+            
+            // 保存成功后显示提示
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('对话信息已更新')),
+            );
+          },
+        );
+      },
+    );
+  }
+
   // 保存对话包
   void _saveDialoguePackage() {
     showDialog(
       context: context,
       builder: (BuildContext context) {
         return SaveDialoguePopup(
-          onSave: (name) async {
+          onSave: (fileName) async {
             try {
               // 获取所有聊天消息
               final chatMessages = _dialogueKey.currentState?.getAllMessages() ?? [];
@@ -1453,8 +1498,10 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
               // 创建新的对话包
               final dpManager = DPManager();
               await dpManager.createDpFromChatSelection(
-                name,
+                fileName,
                 chatMessages,
+                packageName: _dialogueTitle,
+                description: _dialogueDescription,
                 scenarioDescription: scenarioDescription,
                 responseCount: responseCount,
                 modification: modification,
