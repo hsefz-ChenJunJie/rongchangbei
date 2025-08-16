@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/theme_manager.dart';
+import 'role_selector.dart';
+import 'role_manager.dart';
 
 class ChatMessage {
   final String name;
@@ -15,6 +17,28 @@ class ChatMessage {
     required this.isMe,
     this.icon,
   }) : time = time ?? DateTime.now();
+
+  // 根据角色名称获取对应的角色信息
+  ChatRole? get role {
+    final roleManager = RoleManager.instance;
+    try {
+      return roleManager.allRoles.firstWhere(
+        (role) => role.name == name,
+      );
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // 获取角色对应的图标
+  IconData get effectiveIcon {
+    return role?.icon ?? icon ?? Icons.person;
+  }
+
+  // 获取角色对应的颜色
+  Color get effectiveColor {
+    return role?.color ?? Colors.blue;
+  }
 
   Map<String, dynamic> toJson() {
     return {
@@ -49,12 +73,23 @@ class ChatDialogueState extends State<ChatDialogue> {
     IconData? icon,
   }) {
     setState(() {
+      // 尝试从Role Manager获取角色信息
+      final roleManager = RoleManager.instance;
+      ChatRole? matchedRole;
+      try {
+        matchedRole = roleManager.allRoles.firstWhere(
+          (role) => role.name == name,
+        );
+      } catch (e) {
+        matchedRole = null;
+      }
+
       final newMessage = ChatMessage(
         name: name,
         content: content,
         time: time,
         isMe: isMe,
-        icon: icon ?? Icons.person,
+        icon: icon ?? matchedRole?.icon ?? Icons.person,
       );
       
       _messages.add(newMessage);
@@ -78,6 +113,7 @@ class ChatDialogueState extends State<ChatDialogue> {
   void addMessages(List<Map<String, dynamic>> messages) {
     debugPrint('开始添加 ${messages.length} 条消息到对话');
     
+    final roleManager = RoleManager.instance;
     final newMessages = messages.map((msg) {
       try {
         // 获取时间字符串
@@ -125,12 +161,34 @@ class ChatDialogueState extends State<ChatDialogue> {
         
         debugPrint('解析后的时间: $parsedTime');
         
+        final senderName = msg['name']?.toString() ?? '未知用户';
+        final isMe = msg['isMe'] as bool? ?? false;
+        
+        // 尝试从Role Manager获取角色图标
+        ChatRole? matchedRole;
+        try {
+          matchedRole = roleManager.allRoles.firstWhere(
+            (role) => role.name == senderName,
+          );
+        } catch (e) {
+          matchedRole = null;
+        }
+        
+        IconData effectiveIcon;
+        if (matchedRole != null) {
+          effectiveIcon = matchedRole.icon;
+        } else if (isMe) {
+          effectiveIcon = Icons.person;
+        } else {
+          effectiveIcon = Icons.smart_toy;
+        }
+        
         return ChatMessage(
-          name: msg['name']?.toString() ?? '未知用户',
+          name: senderName,
           content: msg['content']?.toString() ?? '',
           time: parsedTime,
-          isMe: msg['isMe'] as bool? ?? false,
-          icon: msg['isMe'] as bool? ?? false ? Icons.person : Icons.smart_toy,
+          isMe: isMe,
+          icon: effectiveIcon,
         );
       } catch (e) {
         debugPrint('处理消息时出错: $e');
@@ -392,11 +450,11 @@ class ChatDialogueState extends State<ChatDialogue> {
                 if (!isMe) ...[
                   CircleAvatar(
                     radius: 16,
-                    backgroundColor: baseColor.withValues(alpha: 0.2),
+                    backgroundColor: message.effectiveColor.withValues(alpha: 0.2),
                     child: Icon(
-                      message.icon ?? Icons.person,
+                      message.effectiveIcon,
                       size: 16,
-                      color: baseColor,
+                      color: message.effectiveColor,
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -431,15 +489,15 @@ class ChatDialogueState extends State<ChatDialogue> {
                         children: [
                           if (!isMe) ...[
                             Text(
-                              message.name,
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                                color: isMe 
-                                    ? Theme.of(context).colorScheme.onPrimary
-                                    : baseColor,
-                              ),
+                            message.name,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: isMe 
+                                  ? Theme.of(context).colorScheme.onPrimary
+                                  : message.effectiveColor,
                             ),
+                          ),
                             const SizedBox(height: 2),
                           ],
                           Text(
@@ -471,11 +529,11 @@ class ChatDialogueState extends State<ChatDialogue> {
                   const SizedBox(width: 8),
                   CircleAvatar(
                     radius: 16,
-                    backgroundColor: Colors.green[100],
+                    backgroundColor: message.effectiveColor.withValues(alpha: 0.2),
                     child: Icon(
-                      message.icon ?? Icons.person,
+                      message.effectiveIcon,
                       size: 16,
-                      color: Colors.green[700],
+                      color: message.effectiveColor,
                     ),
                   ),
                 ],
