@@ -28,9 +28,9 @@ const List<BottomNavItem> pagetiles = const [
     label: '首页',
   ),
   BottomNavItem(
-    icon: Icons.compass_calibration_outlined,
-    selectedIcon: Icons.compass_calibration,
-    label: '发现',
+    icon: Icons.favorite_outline,
+    selectedIcon: Icons.favorite,
+    label: '收藏',
   ),
   BottomNavItem(
     icon: Icons.person_outline,

@@ -150,9 +150,6 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         _responseCount = dialoguePackage.responseCount.clamp(1, 5);
       });
       
-      // 初始化角色管理器
-      _initializeRoleManager(dialoguePackage);
-      
       // 记录调试信息
       debugPrint('已加载对话包数据:');
       debugPrint('场景描述: ${dialoguePackage.scenarioDescription}');
@@ -328,26 +325,12 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         if (_sessionId == receivedSessionId && mounted) {
           // 将消息添加到对话中
           if (_dialogueKey.currentState != null) {
-            // 获取当前角色
-            final roleManager = RoleManager.instance;
-            final currentRole = roleManager.currentRole;
-            
-            // 判断是否为"我自己"角色发送的消息
-            bool isMe = false;
-            if (currentRole.id == 'user') {
-              // 如果当前选择的是"我自己"角色，则认为是用户消息
-              isMe = true;
-            } else {
-              // 否则根据sender判断
-              isMe = sender == userdata.username;
-            }
-            
             _dialogueKey.currentState!.addMessage(
               name: sender,
               content: content,
-              isMe: isMe,
+              isMe: sender == userdata.username, // 根据sender判断是否是用户消息
             );
-            debugPrint('已添加消息到对话: sender=$sender, content=$content, message_id=$messageId, isMe=$isMe');
+            debugPrint('已添加消息到对话: sender=$sender, content=$content, message_id=$messageId');
           } else {
             debugPrint('对话组件状态为null，无法添加消息');
           }
@@ -365,41 +348,25 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     // 添加默认角色（如果不存在）
     if (roleManager.allRoles.isEmpty) {
       roleManager.addRole(const ChatRole(
-        id: 'user',
-        name: '我自己',
+        id: 'me',
+        name: '我',
         color: Colors.green,
         icon: Icons.person,
       ));
       
       roleManager.addRole(const ChatRole(
-        id: 'system',
-        name: 'system',
+        id: 'ai',
+        name: 'AI助手',
         color: Colors.blue,
+        icon: Icons.smart_toy,
+      ));
+      
+      roleManager.addRole(const ChatRole(
+        id: 'system',
+        name: '系统',
+        color: Colors.orange,
         icon: Icons.settings,
       ));
-    }
-  }
-  
-  // 初始化角色管理器
-  void _initializeRoleManager(DialoguePackage dialoguePackage) {
-    final roleManager = RoleManager.instance;
-    
-    // 如果对话包中有角色数据，则使用这些数据初始化角色管理器
-    if (dialoguePackage.roles.isNotEmpty) {
-      final List<ChatRole> roles = dialoguePackage.roles.map((roleData) {
-        return ChatRole(
-          id: roleData['id'] as String,
-          name: roleData['name'] as String,
-          color: Color(roleData['color'] as int),
-          icon: IconData(roleData['icon'] as int, fontFamily: 'MaterialIcons'),
-        );
-      }).toList();
-      
-      // 设置角色管理器的角色列表
-      roleManager.initialize(initialRoles: roles);
-    } else {
-      // 如果没有角色数据，则使用默认角色
-      _initializeDefaultRoles();
     }
   }
 
@@ -410,44 +377,6 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
   void _clearChat() {
     _dialogueKey.currentState?.clear();
-  }
-
-  void _saveRolesToDialoguePackage() {
-    debugPrint('正在保存角色信息到对话包...');
-    
-    if (_currentDialoguePackage != null) {
-      // 获取当前角色信息
-      final roleManager = RoleManager.instance;
-      final roles = roleManager.allRoles.map((role) => {
-        'id': role.id,
-        'name': role.name,
-        'color': role.color.toARGB32(),
-        'icon': role.icon.codePoint,
-      }).toList();
-      
-      // 创建一个新的对话包实例，更新角色信息
-      final updatedDialoguePackage = DialoguePackage(
-        type: _currentDialoguePackage!.type,
-        name: _currentDialoguePackage!.name,
-        responseCount: _currentDialoguePackage!.responseCount,
-        scenarioDescription: _currentDialoguePackage!.scenarioDescription,
-        messages: _currentDialoguePackage!.messages,
-        modification: _currentDialoguePackage!.modification,
-        userOpinion: _currentDialoguePackage!.userOpinion,
-        scenarioSupplement: _currentDialoguePackage!.scenarioSupplement,
-        roles: roles, // 更新角色信息
-      );
-      
-      // 更新当前对话包引用
-      _currentDialoguePackage = updatedDialoguePackage;
-      
-      // 保存对话包
-      DPManager().saveDp(_currentDialoguePackage!);
-      
-      debugPrint('角色信息已保存到对话包');
-    } else {
-      debugPrint('无法保存角色信息：当前对话包为空');
-    }
   }
 
 
@@ -560,7 +489,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     await userdata.loadUserData();
     
     final currentRole = roleManager.currentRole;
-    if (currentRole.id == 'user') {
+    if (currentRole.name == '我自己') {
       return userdata.username;
     } else {
       return currentRole.name;
@@ -755,9 +684,6 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       }
     }
     
-    // 保存角色信息到对话包
-    _saveRolesToDialoguePackage();
-    
     // 关闭 WebSocket 连接
     _webSocketChannel?.sink.close();
     debugPrint('WebSocket 连接已关闭');
@@ -779,18 +705,14 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       await userdata.loadUserData();
       final username = userdata.username;
 
-      // 获取当前角色
-      final roleManager = RoleManager.instance;
-      final currentRole = roleManager.currentRole;
-
       // 将内容添加到对话框
       if (_dialogueKey.currentState != null) {
         _dialogueKey.currentState!.addMessage(
-          name: currentRole.name == '我自己' ? username : currentRole.name,
+          name: username,
           content: content,
           isMe: true,
         );
-        debugPrint('已将内容添加到对话框: $content, 角色: ${currentRole.name}');
+        debugPrint('已将内容添加到对话框: $content');
       }
 
       // 使用TTS语音合成

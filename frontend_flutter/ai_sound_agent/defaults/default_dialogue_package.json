@@ -14,19 +14,5 @@
     ],
     "modification": "",
     "user_opinion": "", 
-    "scenario_supplement": "",
-    "roles": [
-        {
-            "id": "user",
-            "name": "我自己",
-            "color": 4278190335,
-            "icon": 57344
-        },
-        {
-            "id": "system",
-            "name": "system",
-            "color": 4278255360,
-            "icon": 57345
-        }
-    ]
+    "scenario_supplement": ""
 }

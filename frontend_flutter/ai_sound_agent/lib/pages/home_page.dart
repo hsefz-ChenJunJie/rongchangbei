@@ -98,20 +98,6 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
         modification: '',
         userOpinion: '',
         scenarioSupplement: '',
-        roles: [
-          {
-            "id": "user",
-            "name": "我自己",
-            "color": 4278190335,
-            "icon": 57344
-          },
-          {
-            "id": "system",
-            "name": "system",
-            "color": 4278255360,
-            "icon": 57345
-          }
-        ],
       ),
       DialoguePackage(
         type: 'dialogue_package',
@@ -122,20 +108,6 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
         modification: '',
         userOpinion: '',
         scenarioSupplement: '',
-        roles: [
-          {
-            "id": "user",
-            "name": "我自己",
-            "color": 4278190335,
-            "icon": 57344
-          },
-          {
-            "id": "system",
-            "name": "system",
-            "color": 4278255360,
-            "icon": 57345
-          }
-        ],
       ),
       DialoguePackage(
         type: 'dialogue_package',
@@ -146,20 +118,6 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
         modification: '',
         userOpinion: '',
         scenarioSupplement: '',
-        roles: [
-          {
-            "id": "user",
-            "name": "我自己",
-            "color": 4278190335,
-            "icon": 57344
-          },
-          {
-            "id": "system",
-            "name": "system",
-            "color": 4278255360,
-            "icon": 57345
-          }
-        ],
       ),
     ];
     
@@ -183,7 +141,6 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
         modification: defaultPackage.modification,
         userOpinion: defaultPackage.userOpinion,
         scenarioSupplement: defaultPackage.scenarioSupplement,
-        roles: defaultPackage.roles,
       );
       
       // 保存为current.dp
@@ -199,7 +156,6 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
         modification: '',
         userOpinion: '',
         scenarioSupplement: '',
-        roles: [],
       );
       
       await _dpManager.saveDp(currentPackage);
@@ -221,7 +177,6 @@ class _HomePageState extends BasePageState<HomePage> with WidgetsBindingObserver
         modification: selectedPackage.modification,
         userOpinion: selectedPackage.userOpinion,
         scenarioSupplement: selectedPackage.scenarioSupplement,
-        roles: selectedPackage.roles,
       );
       
       // 保存为current.dp
