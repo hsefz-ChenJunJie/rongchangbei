@@ -20,8 +20,6 @@ services:
       - OPENROUTER_API_KEY=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
       - OPENROUTER_MODEL=qwen/qwen3-235b-a22b:free
       - OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-      - OPENROUTER_TEMPERATURE=0.7
-      - OPENROUTER_MAX_TOKENS=800
       
       # STT服务配置 - 开发环境使用Mock模式
       - USE_REAL_VOSK=false
@@ -50,8 +48,9 @@ services:
       # 性能配置
       - MAX_WORKERS=4
     volumes:
-      # 🔥 关键：挂载源代码目录实现热重载
-      - .:/app:rw
+      # 🔥 关键：只挂载源代码目录实现热重载
+      - ./app:/app/app:rw
+      - ./config:/app/config:rw
       # 挂载本地模型目录（如果有的话）
       - ./model:/app/model:ro
       # 开发环境日志挂载到本地
@@ -111,7 +110,7 @@ networks:
   ai-network-dev:
     driver: bridge
 
-volumes:
+# volumes:
   # postgres-dev-data:
   #   driver: local
   # redis-dev-data:
