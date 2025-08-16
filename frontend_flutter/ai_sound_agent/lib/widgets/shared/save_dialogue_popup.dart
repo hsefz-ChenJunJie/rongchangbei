@@ -72,49 +72,52 @@ class SaveDialoguePopupState extends State<SaveDialoguePopup> {
       ),
       child: Container(
         width: 300,
-        height: 200,
+        constraints: const BoxConstraints(maxHeight: 280),
         padding: const EdgeInsets.all(20),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '保存对话包',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: themeManager.darkTextColor,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _fileNameController,
-              decoration: InputDecoration(
-                labelText: '文件名',
-                hintText: '请输入文件名',
-                border: const OutlineInputBorder(),
-                errorText: _errorMessage.isNotEmpty ? _errorMessage : null,
-              ),
-              onChanged: _validateFileName,
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9_-]')),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '保存对话包',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: themeManager.darkTextColor,
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: _handleSave,
-                  child: const Text('保存'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _fileNameController,
+                decoration: InputDecoration(
+                  labelText: '文件名',
+                  hintText: '请输入文件名',
+                  border: const OutlineInputBorder(),
+                  errorText: _errorMessage.isNotEmpty ? _errorMessage : null,
+                  errorMaxLines: 2,
                 ),
-              ],
-            ),
-          ],
+                onChanged: _validateFileName,
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[a-zA-Z0-9_-]')),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text('取消',style: theme.textTheme.titleMedium?.copyWith(color: themeManager.lightTextColor)),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: _handleSave,
+                    child: Text('保存',style: theme.textTheme.titleMedium?.copyWith(color: themeManager.lightTextColor)),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

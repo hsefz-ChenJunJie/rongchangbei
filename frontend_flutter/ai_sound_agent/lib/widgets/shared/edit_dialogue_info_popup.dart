@@ -54,6 +54,7 @@ class EditDialogueInfoPopupState extends State<EditDialogueInfoPopup> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final themeManager = ThemeManager();
     
     return Dialog(
@@ -95,12 +96,12 @@ class EditDialogueInfoPopupState extends State<EditDialogueInfoPopup> {
               children: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('取消'),
+                  child: Text('取消',style: theme.textTheme.titleMedium?.copyWith(color: themeManager.lightTextColor)),
                 ),
                 const SizedBox(width: 12),
                 ElevatedButton(
                   onPressed: _handleSave,
-                  child: const Text('保存'),
+                  child: Text('保存',style: theme.textTheme.titleMedium?.copyWith(color: themeManager.lightTextColor)),
                 ),
               ],
             ),
