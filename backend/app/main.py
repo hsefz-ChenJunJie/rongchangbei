@@ -176,7 +176,7 @@ async def conversation_health_check():
     
     return {
         "status": overall_status,
-        "timestamp": time.time(),
+        "timestamp": datetime.now().isoformat(),
         "service": "对话服务",
         "version": "1.0.0",
         "services": services_status

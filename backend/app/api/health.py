@@ -19,7 +19,7 @@ async def root_health_check():
     """
     return {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now().isoformat(),
         "service": "AI对话应用后端总服务",
         "version": "1.0.0",
         "description": "后端进程运行正常，各服务状态良好"
