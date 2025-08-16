@@ -5,8 +5,9 @@ import asyncio
 import base64
 import logging
 from typing import Dict, Optional, Any, List
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
+import time
 
 from config.settings import settings
 
@@ -20,6 +21,12 @@ class STTService:
         self.is_initialized = False
         self.model = None
         self.active_streams: Dict[str, Dict[str, Any]] = {}
+        self.cleanup_task = None
+        
+        # 缓冲区和背压控制配置
+        self.max_buffer_size = settings.audio_buffer_max_size
+        self.cleanup_interval = settings.audio_buffer_cleanup_interval
+        self.max_chunks_per_second = settings.audio_max_chunks_per_second
         
     async def initialize(self) -> bool:
         """
@@ -37,6 +44,10 @@ class STTService:
             await asyncio.sleep(0.1)
             
             self.is_initialized = True
+            
+            # 启动缓冲区清理任务
+            self.cleanup_task = asyncio.create_task(self._cleanup_buffer_loop())
+            
             logger.info("STT服务初始化完成")
             
             return True
@@ -48,6 +59,14 @@ class STTService:
     async def shutdown(self):
         """关闭STT服务"""
         try:
+            # 停止清理任务
+            if self.cleanup_task and not self.cleanup_task.done():
+                self.cleanup_task.cancel()
+                try:
+                    await self.cleanup_task
+                except asyncio.CancelledError:
+                    pass
+            
             # 停止所有活动流
             session_ids = list(self.active_streams.keys())
             for session_id in session_ids:
@@ -86,7 +105,11 @@ class STTService:
                 "audio_chunks": [],
                 "partial_results": [],
                 "final_result": None,
-                "total_bytes": 0
+                "total_bytes": 0,
+                "last_cleanup": datetime.utcnow(),
+                "chunk_timestamps": [],  # 记录每个chunk的时间戳（用于背压控制）
+                "rejected_chunks": 0,    # 因背压被拒绝的chunk数量
+                "last_chunk_time": None
             }
             
             logger.info(f"开始音频流处理: {session_id}")
@@ -119,10 +142,50 @@ class STTService:
             # 解码音频数据
             audio_data = base64.b64decode(audio_chunk_base64)
             
-            # 更新流状态
+            # 获取流状态
             stream_info = self.active_streams[session_id]
+            current_time = time.time()
+            
+            # 背压控制：检查每秒chunk数量
+            now = datetime.utcnow()
+            chunk_timestamps = stream_info["chunk_timestamps"]
+            
+            # 清理1秒前的时间戳
+            cutoff_time = now - timedelta(seconds=1)
+            chunk_timestamps[:] = [ts for ts in chunk_timestamps if ts > cutoff_time]
+            
+            # 检查是否超过每秒最大chunk数量
+            if len(chunk_timestamps) >= self.max_chunks_per_second:
+                stream_info["rejected_chunks"] += 1
+                logger.warning(f"音频流背压控制触发 {session_id}: 当前每秒chunk数量 {len(chunk_timestamps)}, 拒绝第 {stream_info['rejected_chunks']} 个chunk")
+                return {
+                    "backpressure": True,
+                    "message": f"超过每秒最大chunk数量限制 ({self.max_chunks_per_second})",
+                    "rejected_count": stream_info["rejected_chunks"]
+                }
+            
+            # 缓冲区大小检查
+            new_total_bytes = stream_info["total_bytes"] + len(audio_data)
+            if new_total_bytes > self.max_buffer_size:
+                # 强制清理旧的audio_chunks以释放内存
+                self._cleanup_old_chunks(stream_info)
+                new_total_bytes = stream_info["total_bytes"] + len(audio_data)
+                
+                # 如果清理后仍然超限，拒绝这个chunk
+                if new_total_bytes > self.max_buffer_size:
+                    stream_info["rejected_chunks"] += 1
+                    logger.warning(f"音频缓冲区已满 {session_id}: 当前 {stream_info['total_bytes']} 字节, 最大 {self.max_buffer_size} 字节")
+                    return {
+                        "buffer_full": True,
+                        "message": f"音频缓冲区已满 (当前: {stream_info['total_bytes']}, 最大: {self.max_buffer_size})",
+                        "rejected_count": stream_info["rejected_chunks"]
+                    }
+            
+            # 更新流状态
             stream_info["audio_chunks"].append(audio_data)
             stream_info["total_bytes"] += len(audio_data)
+            stream_info["chunk_timestamps"].append(now)
+            stream_info["last_chunk_time"] = current_time
             
             # TODO: 实际的Vosk音频处理
             # 目前返回Mock结果
@@ -218,6 +281,59 @@ class STTService:
             logger.error(f"获取最终转录失败 {session_id}: {e}")
             return None
     
+    def _cleanup_old_chunks(self, stream_info: Dict[str, Any]):
+        """
+        清理旧的音频块以释放内存
+        
+        Args:
+            stream_info: 流状态信息
+        """
+        chunks = stream_info["audio_chunks"]
+        if len(chunks) > 50:  # 保留最近50个chunk
+            # 计算要删除的chunk数量
+            chunks_to_remove = len(chunks) - 50
+            removed_chunks = chunks[:chunks_to_remove]
+            
+            # 更新状态
+            stream_info["audio_chunks"] = chunks[chunks_to_remove:]
+            
+            # 重新计算总字节数
+            stream_info["total_bytes"] = sum(len(chunk) for chunk in stream_info["audio_chunks"])
+            
+            removed_bytes = sum(len(chunk) for chunk in removed_chunks)
+            logger.debug(f"清理了 {chunks_to_remove} 个旧音频块，释放 {removed_bytes} 字节内存")
+    
+    async def _cleanup_buffer_loop(self):
+        """
+        定期清理缓冲区的后台任务
+        """
+        while True:
+            try:
+                await asyncio.sleep(self.cleanup_interval)
+                
+                if not self.active_streams:
+                    continue
+                
+                current_time = datetime.utcnow()
+                cleanup_count = 0
+                
+                for session_id, stream_info in self.active_streams.items():
+                    # 检查是否需要清理
+                    time_since_cleanup = current_time - stream_info["last_cleanup"]
+                    if time_since_cleanup.total_seconds() > self.cleanup_interval:
+                        self._cleanup_old_chunks(stream_info)
+                        stream_info["last_cleanup"] = current_time
+                        cleanup_count += 1
+                
+                if cleanup_count > 0:
+                    logger.debug(f"定期清理完成，清理了 {cleanup_count} 个活动流的缓冲区")
+                    
+            except asyncio.CancelledError:
+                logger.info("缓冲区清理任务已停止")
+                break
+            except Exception as e:
+                logger.error(f"缓冲区清理任务出错: {e}")
+    
     def get_stream_status(self, session_id: str) -> Optional[Dict[str, Any]]:
         """
         获取音频流状态
@@ -239,7 +355,11 @@ class STTService:
             "chunk_count": len(stream_info["audio_chunks"]),
             "total_bytes": stream_info["total_bytes"],
             "partial_result_count": len(stream_info["partial_results"]),
-            "duration_seconds": (datetime.utcnow() - stream_info["start_time"]).total_seconds()
+            "duration_seconds": (datetime.utcnow() - stream_info["start_time"]).total_seconds(),
+            "rejected_chunks": stream_info["rejected_chunks"],
+            "chunks_per_second_current": len(stream_info["chunk_timestamps"]),
+            "last_chunk_time": stream_info["last_chunk_time"],
+            "buffer_usage_percent": round((stream_info["total_bytes"] / self.max_buffer_size) * 100, 2)
         }
     
     def get_all_stream_status(self) -> List[Dict[str, Any]]:
@@ -276,6 +396,9 @@ class STTService:
         Returns:
             Dict[str, Any]: 健康状态信息
         """
+        total_buffer_usage = sum(stream["total_bytes"] for stream in self.active_streams.values())
+        total_rejected_chunks = sum(stream["rejected_chunks"] for stream in self.active_streams.values())
+        
         return {
             "service": "STT",
             "status": "healthy" if self.is_initialized else "unhealthy",
@@ -283,7 +406,17 @@ class STTService:
             "active_streams": len(self.active_streams),
             "model_path": settings.vosk_model_path,
             "sample_rate": settings.vosk_sample_rate,
-            "mode": "mock"  # 标识当前为Mock模式
+            "mode": "mock",  # 标识当前为Mock模式
+            "buffer_config": {
+                "max_buffer_size": self.max_buffer_size,
+                "cleanup_interval": self.cleanup_interval,
+                "max_chunks_per_second": self.max_chunks_per_second
+            },
+            "buffer_usage": {
+                "total_bytes": total_buffer_usage,
+                "usage_percent": round((total_buffer_usage / self.max_buffer_size) * 100, 2),
+                "total_rejected_chunks": total_rejected_chunks
+            }
         }
 
 

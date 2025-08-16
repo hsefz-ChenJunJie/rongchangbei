@@ -54,7 +54,10 @@ class Settings(BaseSettings):
     # Timeout Settings (seconds)
     stt_timeout: int = Field(default=30, description="STT服务超时时间")
     llm_timeout: int = Field(default=30, description="LLM服务超时时间")
-    websocket_timeout: int = Field(default=300, description="WebSocket连接超时时间")
+    websocket_timeout: int = Field(default=600, description="WebSocket连接超时时间")
+    websocket_ping_interval: int = Field(default=30, description="WebSocket心跳间隔时间")
+    websocket_ping_timeout: int = Field(default=10, description="WebSocket心跳超时时间")
+    websocket_max_message_size: int = Field(default=16*1024*1024, description="WebSocket最大消息大小")
     timeout: int = Field(default=60, description="通用超时时间")
     
     # Logging Configuration
@@ -68,6 +71,9 @@ class Settings(BaseSettings):
     audio_chunk_size: int = Field(default=4096, description="音频数据块大小")
     audio_sample_rate: int = Field(default=16000, description="音频采样率")
     audio_channels: int = Field(default=1, description="音频声道数")
+    audio_buffer_max_size: int = Field(default=50*1024*1024, description="音频缓冲区最大大小(50MB)")
+    audio_buffer_cleanup_interval: int = Field(default=10, description="音频缓冲区清理间隔(秒)")
+    audio_max_chunks_per_second: int = Field(default=100, description="每秒最大音频块数量(背压控制)")
     
     # Performance Configuration
     max_workers: int = Field(default=4, description="最大工作线程数")

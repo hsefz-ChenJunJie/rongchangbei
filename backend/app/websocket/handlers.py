@@ -4,7 +4,10 @@ WebSocket事件处理器
 import json
 import uuid
 import logging
+import asyncio
+import time
 from typing import Dict, Any, Optional
+from datetime import datetime, timedelta
 from fastapi import WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
@@ -28,10 +31,14 @@ class WebSocketHandler:
     
     def __init__(self):
         self.active_connections: Dict[str, WebSocket] = {}
+        self.connection_info: Dict[str, Dict[str, Any]] = {}  # 连接状态信息
         self.session_manager = None  # 将在初始化时注入
         self.stt_service = None      # 将在初始化时注入
         self.llm_service = None      # 将在初始化时注入
         self.request_manager = None  # 将在初始化时注入
+        self.heartbeat_task = None   # 心跳检查任务
+        self.heartbeat_interval = 30  # 心跳间隔（秒）
+        self.connection_timeout = 300  # 连接超时时间（秒）
     
     def set_services(self, session_manager, stt_service=None, llm_service=None, request_manager=None):
         """注入服务依赖"""
@@ -48,13 +55,39 @@ class WebSocketHandler:
         """接受WebSocket连接"""
         await websocket.accept()
         self.active_connections[client_id] = websocket
+        
+        # 记录连接信息
+        self.connection_info[client_id] = {
+            "connected_at": datetime.utcnow(),
+            "last_activity": datetime.utcnow(),
+            "message_count": 0,
+            "error_count": 0,
+            "session_ids": [],
+            "is_healthy": True
+        }
+        
+        # 启动心跳检查（如果还没有启动）
+        if self.heartbeat_task is None or self.heartbeat_task.done():
+            self.heartbeat_task = asyncio.create_task(self._heartbeat_loop())
+        
         logger.info(f"WebSocket连接建立: {client_id}")
     
     def disconnect(self, client_id: str):
         """断开WebSocket连接"""
         if client_id in self.active_connections:
             del self.active_connections[client_id]
-            logger.info(f"WebSocket连接断开: {client_id}")
+        
+        # 清理连接信息并记录统计
+        if client_id in self.connection_info:
+            info = self.connection_info[client_id]
+            duration = (datetime.utcnow() - info["connected_at"]).total_seconds()
+            logger.info(
+                f"WebSocket连接断开: {client_id}, "
+                f"持续时间: {duration:.1f}秒, "
+                f"消息数: {info['message_count']}, "
+                f"错误数: {info['error_count']}"
+            )
+            del self.connection_info[client_id]
     
     async def send_event(self, client_id: str, event: OutgoingEvent):
         """发送事件到客户端"""
@@ -64,9 +97,22 @@ class WebSocketHandler:
                 event_dict = event.dict()
                 await websocket.send_text(json.dumps(event_dict, ensure_ascii=False))
                 logger.debug(f"发送事件到 {client_id}: {event.type}")
+                
+                # 更新连接活动时间
+                if client_id in self.connection_info:
+                    self.connection_info[client_id]["last_activity"] = datetime.utcnow()
+                    
             except Exception as e:
                 logger.error(f"发送事件失败 {client_id}: {e}")
+                
+                # 更新错误计数
+                if client_id in self.connection_info:
+                    self.connection_info[client_id]["error_count"] += 1
+                    self.connection_info[client_id]["is_healthy"] = False
+                
                 self.disconnect(client_id)
+        else:
+            logger.warning(f"尝试向不存在的连接发送事件: {client_id}")
     
     # ===============================
     # 事件处理主循环
@@ -78,31 +124,52 @@ class WebSocketHandler:
         
         try:
             while True:
-                # 接收消息
-                data = await websocket.receive_text()
                 try:
-                    message = json.loads(data)
-                    await self.handle_event(client_id, message)
-                except json.JSONDecodeError as e:
-                    await self.send_error(
-                        client_id, 
-                        ErrorCodes.INVALID_EVENT_DATA,
-                        "无效的JSON格式",
-                        str(e)
+                    # 接收消息（带超时）
+                    data = await asyncio.wait_for(
+                        websocket.receive_text(), 
+                        timeout=self.connection_timeout
                     )
-                except Exception as e:
-                    logger.error(f"处理事件时发生错误: {e}")
-                    await self.send_error(
-                        client_id,
-                        ErrorCodes.INTERNAL_ERROR,
-                        "服务器内部错误",
-                        str(e)
-                    )
-        
-        except WebSocketDisconnect:
-            self.disconnect(client_id)
+                    
+                    # 更新活动时间和消息计数
+                    if client_id in self.connection_info:
+                        info = self.connection_info[client_id]
+                        info["last_activity"] = datetime.utcnow()
+                        info["message_count"] += 1
+                    
+                    try:
+                        message = json.loads(data)
+                        await self.handle_event(client_id, message)
+                    except json.JSONDecodeError as e:
+                        if client_id in self.connection_info:
+                            self.connection_info[client_id]["error_count"] += 1
+                        await self.send_error(
+                            client_id, 
+                            ErrorCodes.INVALID_EVENT_DATA,
+                            "无效的JSON格式",
+                            str(e)
+                        )
+                    except Exception as e:
+                        if client_id in self.connection_info:
+                            self.connection_info[client_id]["error_count"] += 1
+                        logger.error(f"处理事件时发生错误: {e}")
+                        await self.send_error(
+                            client_id,
+                            ErrorCodes.INTERNAL_ERROR,
+                            "服务器内部错误",
+                            str(e)
+                        )
+                        
+                except asyncio.TimeoutError:
+                    logger.warning(f"WebSocket连接超时: {client_id}")
+                    break
+                except WebSocketDisconnect:
+                    logger.info(f"WebSocket客户端主动断开: {client_id}")
+                    break
+                    
         except Exception as e:
-            logger.error(f"WebSocket连接错误: {e}")
+            logger.error(f"WebSocket连接错误 {client_id}: {e}")
+        finally:
             self.disconnect(client_id)
     
     async def handle_event(self, client_id: str, message: Dict[str, Any]):
@@ -549,3 +616,125 @@ class WebSocketHandler:
             )
         )
         await self.send_event(client_id, event)
+    
+    # ===============================
+    # 连接监控和心跳管理
+    # ===============================
+    
+    async def _heartbeat_loop(self):
+        """心跳检查循环"""
+        while True:
+            try:
+                await asyncio.sleep(self.heartbeat_interval)
+                
+                if not self.active_connections:
+                    continue
+                
+                current_time = datetime.utcnow()
+                stale_connections = []
+                
+                # 检查所有连接的活动时间
+                for client_id, info in self.connection_info.items():
+                    last_activity = info["last_activity"]
+                    inactive_duration = (current_time - last_activity).total_seconds()
+                    
+                    # 如果连接长时间无活动，标记为需要清理
+                    if inactive_duration > self.connection_timeout:
+                        stale_connections.append(client_id)
+                        logger.warning(
+                            f"连接 {client_id} 长时间无活动 ({inactive_duration:.1f}秒)，准备清理"
+                        )
+                    elif inactive_duration > self.heartbeat_interval * 2:
+                        # 发送心跳ping
+                        try:
+                            websocket = self.active_connections.get(client_id)
+                            if websocket:
+                                await websocket.ping()
+                                logger.debug(f"发送心跳到 {client_id}")
+                        except Exception as e:
+                            logger.warning(f"心跳发送失败 {client_id}: {e}")
+                            stale_connections.append(client_id)
+                
+                # 清理无效连接
+                for client_id in stale_connections:
+                    try:
+                        websocket = self.active_connections.get(client_id)
+                        if websocket:
+                            await websocket.close()
+                    except Exception as e:
+                        logger.debug(f"关闭无效连接时出错 {client_id}: {e}")
+                    finally:
+                        self.disconnect(client_id)
+                
+                if stale_connections:
+                    logger.info(f"清理了 {len(stale_connections)} 个无效连接")
+                    
+            except asyncio.CancelledError:
+                logger.info("心跳检查任务已停止")
+                break
+            except Exception as e:
+                logger.error(f"心跳检查出错: {e}")
+    
+    def get_connection_stats(self) -> Dict[str, Any]:
+        """获取连接统计信息"""
+        current_time = datetime.utcnow()
+        total_connections = len(self.active_connections)
+        healthy_connections = 0
+        total_messages = 0
+        total_errors = 0
+        
+        connection_details = []
+        
+        for client_id, info in self.connection_info.items():
+            duration = (current_time - info["connected_at"]).total_seconds()
+            last_activity_age = (current_time - info["last_activity"]).total_seconds()
+            
+            if info["is_healthy"] and last_activity_age < self.connection_timeout:
+                healthy_connections += 1
+            
+            total_messages += info["message_count"]
+            total_errors += info["error_count"]
+            
+            connection_details.append({
+                "client_id": client_id,
+                "connected_duration": round(duration, 1),
+                "last_activity_age": round(last_activity_age, 1),
+                "message_count": info["message_count"],
+                "error_count": info["error_count"],
+                "is_healthy": info["is_healthy"],
+                "session_count": len(info["session_ids"])
+            })
+        
+        return {
+            "total_connections": total_connections,
+            "healthy_connections": healthy_connections,
+            "total_messages": total_messages,
+            "total_errors": total_errors,
+            "error_rate": round(total_errors / max(total_messages, 1) * 100, 2),
+            "heartbeat_interval": self.heartbeat_interval,
+            "connection_timeout": self.connection_timeout,
+            "connections": connection_details
+        }
+    
+    async def shutdown(self):
+        """优雅关闭WebSocket处理器"""
+        # 停止心跳任务
+        if self.heartbeat_task and not self.heartbeat_task.done():
+            self.heartbeat_task.cancel()
+            try:
+                await self.heartbeat_task
+            except asyncio.CancelledError:
+                pass
+        
+        # 关闭所有连接
+        client_ids = list(self.active_connections.keys())
+        for client_id in client_ids:
+            try:
+                websocket = self.active_connections[client_id]
+                await websocket.close()
+            except Exception as e:
+                logger.debug(f"关闭连接时出错 {client_id}: {e}")
+            finally:
+                self.disconnect(client_id)
+        
+        logger.info("WebSocket处理器已关闭")

@@ -192,5 +192,9 @@ if __name__ == "__main__":
         host=settings.host,
         port=settings.port,
         reload=settings.debug,
-        log_level=settings.log_level.lower()
+        log_level=settings.log_level.lower(),
+        ws_ping_interval=settings.websocket_ping_interval,
+        ws_ping_timeout=settings.websocket_ping_timeout,
+        ws_max_size=settings.websocket_max_message_size,
+        timeout_keep_alive=settings.websocket_timeout
     )
