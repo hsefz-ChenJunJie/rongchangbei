@@ -8,6 +8,7 @@ import 'package:ai_sound_agent/widgets/chat_recording/chat_input.dart';
 import 'package:ai_sound_agent/widgets/chat_recording/role_selector.dart';
 import 'package:ai_sound_agent/widgets/chat_recording/role_manager.dart';
 import 'package:ai_sound_agent/services/dp_manager.dart';
+import 'package:ai_sound_agent/services/theme_manager.dart';
 import 'package:ai_sound_agent/services/userdata_services.dart';
 import 'dart:convert';
 import 'dart:async';  // 新增：导入Timer
@@ -163,6 +164,9 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       final chatMessages = dpManager.toChatMessages(dialoguePackage);
       debugPrint('从DP加载的消息数量: ${chatMessages.length}');
       debugPrint('消息内容: $chatMessages');
+      
+      // 根据对话消息自动添加新角色
+      _autoAddRolesFromMessages(chatMessages);
       
       if (chatMessages.isNotEmpty) {
         // 延迟添加消息，确保组件已完全加载
@@ -333,6 +337,9 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
               isMe: sender == userdata.username, // 根据sender判断是否是用户消息
             );
             debugPrint('已添加消息到对话: sender=$sender, content=$content, message_id=$messageId');
+            
+            // 自动为新发送者添加角色
+            _autoAddRoleFromSender(sender);
           } else {
             debugPrint('对话组件状态为null，无法添加消息');
           }
@@ -1473,6 +1480,119 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         );
       },
     );
+  }
+}
+
+
+// 根据对话消息自动添加新角色
+void _autoAddRolesFromMessages(List<Map<String, dynamic>> messages) {
+  final roleManager = RoleManager.instance;
+  final themeManager = ThemeManager();
+  final baseColor = themeManager.baseColor;
+
+  // 收集所有唯一的发送者名称
+  final uniqueSenders = <String>{};
+  for (final message in messages) {
+    final senderName = message['name']?.toString() ?? '';
+    if (senderName.isNotEmpty && senderName != '未知用户' && senderName != '错误用户') {
+      uniqueSenders.add(senderName);
+    }
+  }
+
+  // 为每个新发送者创建角色
+  for (final senderName in uniqueSenders) {
+  // 检查是否已存在该角色
+    final existingRole = roleManager.allRoles.any((role) => role.name == senderName);
+    if (!existingRole && senderName != 'system') {
+
+      // 根据发送者名称确定图标和颜色
+      IconData icon;
+      Color color = baseColor;
+
+      // 特殊角色处理
+      switch (senderName.toLowerCase()) {
+        case 'system':
+          icon = Icons.settings;
+          color = Colors.orange;
+          break;
+        case 'tips':
+          icon = Icons.lightbulb;
+          color = Colors.yellow;
+          break;
+        case 'document':
+          icon = Icons.description;
+          color = Colors.blue;
+          break;
+        default:
+          icon = Icons.work; // 默认使用公文包图标
+      }
+
+      // 创建新角色
+      final newRole = ChatRole(
+        id: senderName.toLowerCase().replaceAll(' ', '_'),
+        name: senderName,
+        color: color,
+        icon: icon,
+      );
+
+      // 添加角色到管理器
+      roleManager.addRole(newRole);
+      debugPrint('已自动添加新角色: $senderName');
+    }
+  }
+}
+
+
+
+
+
+// 根据单个发送者自动添加角色
+// 根据单个发送者自动添加角色
+void _autoAddRoleFromSender(String senderName) {
+  if (senderName.isEmpty || senderName == '未知用户' || senderName == '错误用户') {
+    return;
+  }
+
+  final roleManager = RoleManager.instance;
+  final themeManager = ThemeManager();
+  final baseColor = themeManager.baseColor;
+
+  // 检查是否已存在该角色
+  final existingRole = roleManager.allRoles.any((role) => role.name == senderName);
+  if (!existingRole && senderName != 'system') {
+    // 根据发送者名称确定图标和颜色
+    IconData icon;
+    Color color = baseColor;
+
+    // 特殊角色处理
+    switch (senderName.toLowerCase()) {
+      case 'system':
+        icon = Icons.settings;
+        color = Colors.orange;
+        break;
+      case 'tips':
+        icon = Icons.lightbulb;
+        color = Colors.yellow;
+        break;
+      case 'document':
+        icon = Icons.description;
+        color = Colors.blue;
+        break;
+      default:
+        icon = Icons.work; // 默认使用公文包图标
+    }
+
+    // 创建新角色
+    final newRole = ChatRole(
+      id: senderName.toLowerCase().replaceAll(' ', '_'),
+      name: senderName,
+      color: color,
+      icon: icon,
+    );
+
+    // 添加角色到管理器
+    roleManager.addRole(newRole);
+    debugPrint('已自动添加新角色: $senderName');
   }
 }
 
