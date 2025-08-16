@@ -75,7 +75,9 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   final AudioRecorder _audioRecorder = AudioRecorder();
   bool _isRecording = false;
   String _recordingSender = '';
-  // 移除未使用的 _isAudioInitialized 字段
+  
+  // 新增：音频流订阅
+  StreamSubscription<List<int>>? _audioStreamSubscription;
 
   // TTS相关状态
   final FlutterTts _flutterTts = FlutterTts();
@@ -456,16 +458,25 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
   Future<void> _stopRecording() async {
     try {
-      // 停止录音
-      await _audioRecorder.stop();
-
+      debugPrint('正在停止录音...');
+      
+      // 先标记为不录音，防止继续发送数据
       setState(() {
         _isRecording = false;
       });
 
+      // 取消音频流订阅
+      await _audioStreamSubscription?.cancel();
+      _audioStreamSubscription = null;
+
+      // 停止录音
+      await _audioRecorder.stop();
+      
       // 发送message_end消息
       _sendMessageEnd();
 
+      debugPrint('录音已停止');
+      
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('录音已结束'),
@@ -523,9 +534,12 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
   void _startAudioStreamListener(Stream<List<int>> stream) {
     List<int> audioBuffer = [];
-    const int chunkSize = 16000; // 大约1秒的16kHz单声道PCM数据
+    const int chunkSize = 1024; // 大约1秒的16kHz单声道PCM数据
     
-    stream.listen((chunk) {
+    // 取消之前的订阅
+    _audioStreamSubscription?.cancel();
+    
+    _audioStreamSubscription = stream.listen((chunk) {
       if (!_isRecording) return;
       
       audioBuffer.addAll(chunk);
@@ -537,10 +551,21 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       }
     }, onError: (error) {
       debugPrint('音频流错误: $error');
+      if (_isRecording) {
+        _stopRecording(); // 出错时自动停止录音
+      }
     }, onDone: () {
+      debugPrint('音频流结束');
       // 音频流结束，发送剩余的音频数据
-      if (audioBuffer.isNotEmpty) {
+      if (audioBuffer.isNotEmpty && _isRecording) {
         _sendBufferedAudioChunk(audioBuffer);
+      }
+      
+      // 确保录音状态已更新
+      if (_isRecording) {
+        setState(() {
+          _isRecording = false;
+        });
       }
     });
   }
@@ -648,10 +673,11 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     // 清理计时器
     _stopUserOpinionTimer();
     
-    // 停止录音
+    // 停止录音和音频流
     if (_isRecording) {
       _audioRecorder.stop();
     }
+    _audioStreamSubscription?.cancel();
     _audioRecorder.dispose();
     
     // 停止TTS
