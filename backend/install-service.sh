@@ -457,15 +457,66 @@ install_python_deps() {
     # 获取conda环境中的pip路径
     PIP_CMD="${CONDA_PREFIX}/bin/pip"
     
-    # 升级pip
-    sudo -u "$SERVICE_USER" "$PIP_CMD" install --upgrade pip
+    # 检查conda环境所有者，决定安装策略
+    CONDA_OWNER=$(stat -c %U "$CONDA_PREFIX" 2>/dev/null || stat -f %Su "$CONDA_PREFIX" 2>/dev/null || echo "unknown")
+    log_info "Conda环境所有者: $CONDA_OWNER"
     
-    # 安装依赖
-    if [[ -f "$INSTALL_DIR/requirements.txt" ]]; then
-        sudo -u "$SERVICE_USER" "$PIP_CMD" install -r "$INSTALL_DIR/requirements.txt"
+    if [[ -n "$SUDO_USER" && "$CONDA_OWNER" == "$SUDO_USER" ]]; then
+        # 以原用户身份安装依赖（推荐方式）
+        log_info "以原用户 $SUDO_USER 身份安装依赖"
+        
+        # 升级pip
+        sudo -u "$SUDO_USER" bash -c "
+            source ~/.bashrc 2>/dev/null || true
+            source ~/.zshrc 2>/dev/null || true
+            '$PIP_CMD' install --upgrade pip
+        "
+        
+        # 安装依赖
+        if [[ -f "$INSTALL_DIR/requirements.txt" ]]; then
+            sudo -u "$SUDO_USER" bash -c "
+                source ~/.bashrc 2>/dev/null || true
+                source ~/.zshrc 2>/dev/null || true
+                '$PIP_CMD' install -r '$INSTALL_DIR/requirements.txt'
+            "
+        else
+            log_warning "未找到requirements.txt，手动安装核心依赖"
+            sudo -u "$SUDO_USER" bash -c "
+                source ~/.bashrc 2>/dev/null || true
+                source ~/.zshrc 2>/dev/null || true
+                '$PIP_CMD' install fastapi uvicorn websockets pydantic python-dotenv
+            "
+        fi
+        
+        # 为service用户创建conda环境访问权限
+        log_info "配置service用户对conda环境的访问权限..."
+        
+        # 将service用户添加到原用户的组（如果可能）
+        if getent group "$SUDO_USER" >/dev/null 2>&1; then
+            usermod -a -G "$SUDO_USER" "$SERVICE_USER" 2>/dev/null || true
+        fi
+        
+        # 设置conda环境的组访问权限
+        if [[ -d "$CONDA_PREFIX" ]]; then
+            # 为conda环境目录设置组读取和执行权限
+            chmod -R g+rX "$CONDA_PREFIX" 2>/dev/null || true
+            log_info "已设置conda环境组访问权限"
+        fi
+        
     else
-        log_warning "未找到requirements.txt，手动安装核心依赖"
-        sudo -u "$SERVICE_USER" "$PIP_CMD" install fastapi uvicorn websockets pydantic python-dotenv
+        # 回退到原有方式（可能需要权限调整）
+        log_warning "无法确定conda环境所有者，尝试直接安装..."
+        
+        # 升级pip
+        sudo -u "$SERVICE_USER" "$PIP_CMD" install --upgrade pip
+        
+        # 安装依赖
+        if [[ -f "$INSTALL_DIR/requirements.txt" ]]; then
+            sudo -u "$SERVICE_USER" "$PIP_CMD" install -r "$INSTALL_DIR/requirements.txt"
+        else
+            log_warning "未找到requirements.txt，手动安装核心依赖"
+            sudo -u "$SERVICE_USER" "$PIP_CMD" install fastapi uvicorn websockets pydantic python-dotenv
+        fi
     fi
     
     log_success "Python依赖安装完成"
