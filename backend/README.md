@@ -2,23 +2,23 @@
 
 ## 概述
 
-本文档提供AI对话应用后端的完整部署指南，包括开发环境部署和生产环境SystemD服务部署两种方式。
+本文档提供AI对话应用后端的完整部署指南，包括开发环境部署和生产环境Docker部署两种方式。
 
 ## 快速导航
 
 - 📋 **[详细配置说明](CONFIGURATION.md)** - 所有配置项的完整说明
 - 🚀 **[部署指南](#部署指南)** - 开发和生产环境部署
+- 🐳 **[Docker部署](#docker部署)** - 容器化生产环境部署（推荐）
 - 🔧 **[故障排除](#故障排除)** - 常见问题解决方案
 - 🏗️ **[项目结构](#项目结构)** - 代码组织结构
-- ⚙️ **[SystemD服务](#systemd服务部署)** - 生产环境系统服务部署
 
 ## 系统要求
 
 ### 基础环境
-- Python 3.12+ （推荐3.12，3.9+可用）
+- **开发环境**: Python 3.12+ （推荐3.12，3.9+可用）
+- **生产环境**: Docker 20.0+ + Docker Compose 2.0+
 - Git
 - 网络连接（用于下载依赖和模型）
-- Linux系统（支持SystemD）
 
 ### 可选组件
 - Vosk语音识别模型（真实STT服务）
@@ -48,9 +48,11 @@ backend/
 ├── config/                # 配置管理
 ├── model/                 # AI模型存储
 ├── requirements.txt       # Python依赖
-├── ai-dialogue-backend.service  # SystemD服务配置
-├── install-service.sh     # 自动安装脚本
-└── README.md             # 本文档
+├── Dockerfile            # Docker镜像构建配置
+├── docker-compose.yml    # Docker Compose服务编排
+├── deploy-docker.sh      # Docker部署脚本
+├── .env.example         # 环境变量示例
+└── README.md            # 本文档
 ```
 
 ---
@@ -216,169 +218,163 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 ---
 
-## 方式二：SystemD服务部署
+## 方式二：Docker部署（推荐生产环境）
 
-### 1. 自动安装（推荐）
+### 1. 快速部署
 
-使用提供的自动安装脚本，一键部署生产环境：
+使用提供的部署脚本，一键部署容器化服务：
 
 ```bash
 # 给脚本执行权限
-chmod +x install-service.sh
+chmod +x deploy-docker.sh
 
-# 自动安装服务
-sudo ./install-service.sh
+# 一键部署（自动启用加速优化）
+./deploy-docker.sh
 
-# 或指定自定义参数
-sudo ./install-service.sh --user myuser --dir /opt/myapp
+# 或者手动使用 Docker Compose
+export DOCKER_BUILDKIT=1  # 启用BuildKit
+docker compose up -d --build
 ```
 
-安装脚本会自动完成以下步骤：
-1. 创建服务用户和组
-2. 创建必要目录结构
-3. 复制项目文件到生产目录
-4. 安装Python依赖
-5. 配置SystemD服务
-6. 启动并验证服务
+**🚀 性能优化特性：**
+- ✅ **apt镜像加速**: 使用阿里云镜像源
+- ✅ **pip镜像加速**: 使用清华大学镜像源  
+- ✅ **uv包管理器**: 比pip快10-100倍的Python包安装
+- ✅ **BuildKit缓存**: 智能层缓存，大幅减少重复构建时间
+- ✅ **多阶段构建**: 最小化最终镜像体积
+- ✅ **缓存挂载**: 依赖安装缓存持久化
 
-### 2. 手动安装
+### 2. 环境配置
 
-如果需要手动控制安装过程：
-
-#### 2.1 创建服务用户
+#### 2.1 环境变量设置
 ```bash
-# 创建专用用户和组
-sudo groupadd --system backend
-sudo useradd --system --gid backend --create-home \
-    --home-dir /opt/ai-dialogue-backend --shell /bin/bash \
-    --comment "AI Dialogue Backend Service" backend
+# 复制环境变量示例文件
+cp .env.example .env
+
+# 编辑环境变量配置
+nano .env
 ```
 
-#### 2.2 准备部署目录
+配置示例：
 ```bash
-# 创建应用目录
-sudo mkdir -p /opt/ai-dialogue-backend
-sudo mkdir -p /var/log/ai-dialogue-backend
+# LLM服务配置
+OPENROUTER_API_KEY=sk-or-v1-your-actual-api-key-here
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_MODEL=qwen/qwen3-235b-a22b:free
 
-# 复制项目文件
-sudo cp -r app/ config/ requirements.txt /opt/ai-dialogue-backend/
-sudo cp -r model/ /opt/ai-dialogue-backend/ # 如果有模型文件
+# STT服务配置
+USE_REAL_VOSK=false
+VOSK_MODEL_PATH=/app/model/vosk-model
 
-# 设置权限
-sudo chown -R backend:backend /opt/ai-dialogue-backend
-sudo chown -R backend:backend /var/log/ai-dialogue-backend
+# 基础配置
+DEBUG=false
+LOG_LEVEL=INFO
 ```
 
-#### 2.3 安装Python依赖
+#### 2.2 模型文件配置（可选）
+如果使用Vosk语音识别：
 ```bash
-# 切换到服务用户
-sudo -u backend bash
+# 创建模型目录
+mkdir -p model/vosk-model
 
-# 创建虚拟环境
-cd /opt/ai-dialogue-backend
-python3 -m venv venv
-source venv/bin/activate
+# 下载中文模型
+cd model/vosk-model
+wget https://alphacephei.com/vosk/models/vosk-model-cn-0.22.zip
+unzip vosk-model-cn-0.22.zip
+mv vosk-model-cn-0.22/* .
+rm -rf vosk-model-cn-0.22*
 
-# 安装依赖
-pip install --upgrade pip
-pip install -r requirements.txt
-
-# 退出服务用户会话
-exit
+# 验证模型结构
+ls -la  # 应该看到 am/, conf/, graph/, ivector/ 目录
 ```
 
-#### 2.4 配置SystemD服务
-```bash
-# 复制服务配置文件
-sudo cp ai-dialogue-backend.service /etc/systemd/system/
-
-# 重新加载systemd配置
-sudo systemctl daemon-reload
-
-# 启用服务（开机自启动）
-sudo systemctl enable ai-dialogue-backend
-
-# 启动服务
-sudo systemctl start ai-dialogue-backend
-```
-
-### 3. 服务管理
+### 3. 容器管理
 
 #### 3.1 基本操作
 ```bash
 # 启动服务
-sudo systemctl start ai-dialogue-backend
+./deploy-docker.sh
+# 或
+docker compose up -d
 
 # 停止服务
-sudo systemctl stop ai-dialogue-backend
+./deploy-docker.sh --stop
+# 或
+docker compose down
 
 # 重启服务
-sudo systemctl restart ai-dialogue-backend
-
-# 重新加载配置（无需重启）
-sudo systemctl reload ai-dialogue-backend
+./deploy-docker.sh --restart
+# 或
+docker compose restart
 
 # 查看服务状态
-sudo systemctl status ai-dialogue-backend
-
-# 查看服务是否开机自启动
-sudo systemctl is-enabled ai-dialogue-backend
+./deploy-docker.sh --status
+# 或
+docker compose ps
 ```
 
 #### 3.2 日志查看
 ```bash
-# 查看服务日志（实时）
-sudo journalctl -u ai-dialogue-backend -f
+# 查看实时日志
+./deploy-docker.sh --logs
+# 或
+docker compose logs -f
 
-# 查看最近的日志
-sudo journalctl -u ai-dialogue-backend -n 50
+# 查看容器状态
+docker compose ps
 
-# 查看今天的日志
-sudo journalctl -u ai-dialogue-backend --since today
-
-# 查看应用日志文件
-sudo tail -f /var/log/ai-dialogue-backend/app.log
+# 查看最近日志
+docker compose logs --tail=50
 ```
 
-#### 3.3 配置修改
+#### 3.3 强制重新构建
 ```bash
-# 编辑服务配置
-sudo systemctl edit ai-dialogue-backend
+# 强制重建镜像（使用优化构建）
+./deploy-docker.sh --build --no-cache
 
-# 或直接编辑服务文件
-sudo nano /etc/systemd/system/ai-dialogue-backend.service
+# 使用多阶段构建（进一步优化镜像大小）
+docker build -f Dockerfile.multi-stage -t ai-dialogue-backend .
 
-# 修改后重新加载
-sudo systemctl daemon-reload
-sudo systemctl restart ai-dialogue-backend
+# 或手动操作
+docker compose down
+docker compose build --no-cache
+docker compose up -d
 ```
 
-### 4. 环境变量配置
+**⚡ 构建性能对比：**
+| 方式 | 首次构建时间 | 重新构建时间 | 镜像大小 |
+|------|-------------|-------------|----------|
+| 传统pip | ~8-12分钟 | ~5-8分钟 | ~800MB |
+| uv + 镜像加速 | ~2-4分钟 | ~30秒-2分钟 | ~600MB |
+| 多阶段构建 | ~3-5分钟 | ~1-3分钟 | ~400MB |
 
-在生产环境中，您需要配置实际的API密钥和其他设置。编辑服务文件：
+### 4. 服务监控
 
+#### 4.1 健康检查
 ```bash
-sudo nano /etc/systemd/system/ai-dialogue-backend.service
+# 手动健康检查
+curl http://localhost:8000/
+curl http://localhost:8000/conversation/health
+
+# 查看容器健康状态
+docker compose ps
 ```
 
-修改Environment配置：
-```ini
-# 修改这些配置为您的实际值
-Environment=OPENROUTER_API_KEY=your_actual_api_key_here
-Environment=OPENROUTER_MODEL=anthropic/claude-3-sonnet
-Environment=DEBUG=false
-Environment=LOG_LEVEL=INFO
-```
-
-然后重新加载并重启服务：
+#### 4.2 性能监控
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl restart ai-dialogue-backend
+# 查看容器资源使用
+docker stats
+
+# 查看容器详细信息
+docker compose exec ai-dialogue-backend ps aux
+
+# 查看端口映射
+docker compose port ai-dialogue-backend 8000
 ```
 
-### 5. 反向代理配置（可选）
+### 5. 生产环境配置
 
-#### 5.1 Nginx配置
+#### 5.1 Nginx反向代理
 ```nginx
 # /etc/nginx/sites-available/ai-dialogue-backend
 server {
@@ -402,56 +398,102 @@ server {
 }
 ```
 
-启用配置：
+#### 5.2 SSL/TLS配置
 ```bash
-sudo ln -s /etc/nginx/sites-available/ai-dialogue-backend /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
+# 使用 Let's Encrypt
+sudo apt install certbot python3-certbot-nginx
+sudo certbot --nginx -d your-domain.com
 ```
 
-### 6. 服务监控
+### 6. 数据持久化
 
-#### 6.1 健康检查
-```bash
-# 手动健康检查
-curl http://localhost:8000/
-curl http://localhost:8000/conversation/health
-
-# 设置定时健康检查
-echo "*/5 * * * * curl -f http://localhost:8000/ || systemctl restart ai-dialogue-backend" | sudo crontab -
+#### 6.1 日志持久化
+```yaml
+# docker-compose.yml 中已配置
+volumes:
+  - ./logs:/app/logs        # 日志目录映射到主机
+  - ./model:/app/model:ro   # 模型目录只读映射
 ```
 
-#### 6.2 性能监控
+#### 6.2 备份和恢复
 ```bash
-# 查看资源使用
-sudo systemctl status ai-dialogue-backend
-ps aux | grep python
+# 备份配置和日志
+tar -czf backup-$(date +%Y%m%d).tar.gz \
+    .env docker-compose.yml Dockerfile \
+    logs/ model/
 
-# 查看端口监听
-sudo netstat -tlnp | grep :8000
-
-# 查看进程树
-sudo systemctl status ai-dialogue-backend --full
+# 恢复
+tar -xzf backup-20240101.tar.gz
+docker compose up -d
 ```
 
-### 7. 卸载服务
+### 7. 多环境部署
 
-如果需要完全移除服务：
-
+#### 7.1 开发环境
 ```bash
-# 使用自动卸载脚本
-sudo ./install-service.sh --uninstall
+# 使用开发配置
+cp .env.example .env.dev
+# 编辑 .env.dev 设置 DEBUG=true
+docker compose -f docker-compose.yml --env-file .env.dev up -d
+```
 
-# 或手动卸载
-sudo systemctl stop ai-dialogue-backend
-sudo systemctl disable ai-dialogue-backend
-sudo rm /etc/systemd/system/ai-dialogue-backend.service
-sudo systemctl daemon-reload
+#### 7.2 生产环境
+```bash
+# 使用生产配置
+cp .env.example .env.prod
+# 编辑 .env.prod 设置生产参数
+docker compose -f docker-compose.yml --env-file .env.prod up -d
+```
 
-# 可选：删除用户和文件
-sudo userdel backend
-sudo rm -rf /opt/ai-dialogue-backend
-sudo rm -rf /var/log/ai-dialogue-backend
+### 8. 故障排除
+
+#### 8.1 容器无法启动
+```bash
+# 查看构建日志
+docker compose build --no-cache
+
+# 查看启动日志
+docker compose logs ai-dialogue-backend
+
+# 进入容器调试
+docker compose exec ai-dialogue-backend bash
+```
+
+#### 8.2 网络连接问题
+```bash
+# 检查端口映射
+docker compose ps
+docker port ai-dialogue-backend
+
+# 检查容器网络
+docker network ls
+docker network inspect backend_ai-dialogue-network
+```
+
+### 9. 升级和维护
+
+#### 9.1 应用升级
+```bash
+# 拉取最新代码
+git pull origin main
+
+# 重新构建并部署
+./deploy-docker.sh --build
+
+# 或手动操作
+docker compose down
+docker compose build
+docker compose up -d
+```
+
+#### 9.2 清理资源
+```bash
+# 清理未使用的镜像和容器
+./deploy-docker.sh --clean
+
+# 或手动清理
+docker system prune -f
+docker volume prune -f
 ```
 
 ---
@@ -638,42 +680,44 @@ pwd  # 应显示 */荣昶杯项目/backend
 ls -la app/  # 应能看到main.py文件
 ```
 
-#### 6. SystemD服务问题
+#### 6. Docker服务问题
 
-**服务启动失败：**
+**容器启动失败：**
 ```bash
 # 查看详细错误信息
-sudo systemctl status ai-dialogue-backend -l
-sudo journalctl -u ai-dialogue-backend -n 50
+docker compose logs ai-dialogue-backend
 
-# 检查服务配置
-sudo systemctl cat ai-dialogue-backend
+# 检查容器状态
+docker compose ps
 
-# 验证配置语法
-sudo systemd-analyze verify /etc/systemd/system/ai-dialogue-backend.service
+# 查看镜像构建日志
+docker compose build --no-cache
+
+# 进入容器调试
+docker compose exec ai-dialogue-backend bash
 ```
 
 **权限问题：**
 ```bash
 # 检查文件权限
-ls -la /opt/ai-dialogue-backend/
-ls -la /var/log/ai-dialogue-backend/
+ls -la logs/
+ls -la model/
 
 # 修复权限
-sudo chown -R backend:backend /opt/ai-dialogue-backend
-sudo chown -R backend:backend /var/log/ai-dialogue-backend
+chmod -R 755 logs/
+chmod -R 755 model/
 ```
 
 **环境变量问题：**
 ```bash
-# 检查服务中的环境变量
-sudo systemctl show ai-dialogue-backend -p Environment
+# 检查环境变量文件
+cat .env
+
+# 查看容器中的环境变量
+docker compose exec ai-dialogue-backend env | grep -E "(OPENROUTER|VOSK|LOG)"
 
 # 测试手动启动
-sudo -u backend bash
-cd /opt/ai-dialogue-backend
-source venv/bin/activate
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+docker compose exec ai-dialogue-backend python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 #### 7. 网络连接问题
@@ -682,10 +726,12 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 sudo ufw allow 8000
 sudo firewall-cmd --permanent --add-port=8000/tcp
 
-# 检查服务绑定
-sudo netstat -tlnp | grep :8000
+# 检查容器端口映射
+docker compose ps
+docker compose port ai-dialogue-backend 8000
 
 # 确认服务监听正确的地址
+sudo netstat -tlnp | grep :8000
 # 应该显示 0.0.0.0:8000 而不是 127.0.0.1:8000
 ```
 
@@ -693,24 +739,26 @@ sudo netstat -tlnp | grep :8000
 
 #### 查看实时日志
 ```bash
-# SystemD服务日志
-sudo journalctl -u ai-dialogue-backend -f
+# Docker容器日志
+docker compose logs -f ai-dialogue-backend
 
-# 应用日志
-sudo tail -f /var/log/ai-dialogue-backend/app.log
+# 应用日志文件
+tail -f logs/app.log
 
 # 筛选特定级别日志
-sudo journalctl -u ai-dialogue-backend | grep ERROR
+docker compose logs ai-dialogue-backend | grep ERROR
 ```
 
 #### 性能监控
 ```bash
-# 系统资源使用
-htop
-ps aux | grep python
+# 容器资源使用
+docker stats ai-dialogue-backend
 
-# 服务状态
-sudo systemctl status ai-dialogue-backend
+# 容器内进程
+docker compose exec ai-dialogue-backend ps aux
+
+# 容器状态
+docker compose ps
 
 # 网络连接
 sudo ss -tlnp | grep :8000
@@ -792,22 +840,33 @@ sudo systemctl restart ai-dialogue-backend
 - 配置文件内容（隐藏敏感信息）
 
 **常用命令总结：**
+
+**开发环境：**
 ```bash
-# 服务管理
-sudo systemctl {start|stop|restart|status} ai-dialogue-backend
+# 启动开发服务
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+# 健康检查
+curl http://localhost:8000/
+```
+
+**Docker部署：**
+```bash
+# 一键部署
+./deploy-docker.sh
+
+# 容器管理
+docker compose {up -d|down|restart|ps}
 
 # 日志查看  
-sudo journalctl -u ai-dialogue-backend -f
+docker compose logs -f ai-dialogue-backend
 
 # 健康检查
 curl http://localhost:8000/
 
-# 配置检查
-sudo systemctl cat ai-dialogue-backend
+# 重新构建
+./deploy-docker.sh --build --no-cache
 
-# 自动安装
-sudo ./install-service.sh
-
-# 卸载服务
-sudo ./install-service.sh --uninstall
+# 停止服务
+./deploy-docker.sh --stop
 ```
