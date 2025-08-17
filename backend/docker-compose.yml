@@ -18,6 +18,7 @@ services:
       - PORT=8000
       - DEBUG=false
       - LOG_LEVEL=INFO
+      - TZ=Asia/Shanghai
       
       # LLM服务配置
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-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}

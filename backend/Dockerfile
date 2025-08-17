@@ -10,7 +10,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_LINK_MODE=copy \
     # 中文环境支持
     LANG=C.UTF-8 \
-    LC_ALL=C.UTF-8
+    LC_ALL=C.UTF-8 \
+    # 时区设置
+    TZ=Asia/Shanghai
 
 # 配置apt镜像源（阿里云镜像）
 RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
@@ -22,6 +24,8 @@ RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     ca-certificates \
+    # 时区数据包
+    tzdata \
     # PortAudio依赖（pyaudio需要）
     portaudio19-dev \
     libasound2-dev \

@@ -27,6 +27,7 @@ wave==0.0.2
 python-multipart==0.0.6
 python-dotenv==1.0.0
 typing-extensions==4.8.0
+pytz==2023.3
 
 # Logging
 structlog==23.2.0

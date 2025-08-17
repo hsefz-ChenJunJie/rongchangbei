@@ -9,6 +9,7 @@ import json
 import time
 from datetime import datetime
 from typing import Dict, Any
+import pytz
 
 from config.settings import settings
 from app.api.health import router as health_router
@@ -180,12 +181,17 @@ async def conversation_health_check():
     all_healthy = all(status == "healthy" for status in services_status.values())
     overall_status = "healthy" if all_healthy else "degraded"
     
+    # 使用中国时区
+    china_tz = pytz.timezone('Asia/Shanghai')
+    current_time = datetime.now(china_tz)
+    
     return {
         "status": overall_status,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": current_time.isoformat(),
         "service": "对话服务",
         "version": "1.0.0",
-        "services": services_status
+        "services": services_status,
+        "timezone": "Asia/Shanghai"
     }
 
 
