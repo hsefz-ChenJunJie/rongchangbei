@@ -6,15 +6,15 @@ Wants=network.target
 
 [Service]
 Type=simple
-User=backend
-Group=backend
+User=HwHiAiUser
+Group=HwHiAiUser
 WorkingDirectory=/home/HwHiAiUser/rongchangbei/backend
 # 将在安装时替换为正确的Python路径
 Environment=PYTHONPATH=/home/HwHiAiUser/rongchangbei/backend
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONDONTWRITEBYTECODE=1
 
-# 基础配置
+# 基础配
 Environment=HOST=0.0.0.0
 Environment=PORT=8000
 Environment=DEBUG=false

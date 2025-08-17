@@ -29,8 +29,14 @@ log_error() {
 
 # 配置变量
 SERVICE_NAME="ai-dialogue-backend"
-SERVICE_USER="backend"
-SERVICE_GROUP="backend"
+# 使用实际的用户而不是创建新用户
+if [[ -n "$SUDO_USER" ]]; then
+    SERVICE_USER="$SUDO_USER"
+    SERVICE_GROUP="$SUDO_USER"
+else
+    SERVICE_USER="$(whoami)"
+    SERVICE_GROUP="$(id -gn)"
+fi
 # 使用当前项目目录，无需复制文件
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 INSTALL_DIR="$SCRIPT_DIR"  # 直接使用当前目录
@@ -379,27 +385,23 @@ EOF
     log_success "系统要求检查通过"
 }
 
-# 创建用户和组
-create_user() {
-    log_info "创建服务用户和组..."
+# 验证用户和组
+verify_user() {
+    log_info "验证服务用户: $SERVICE_USER"
     
-    # 创建组
-    if ! getent group "$SERVICE_GROUP" &> /dev/null; then
-        sudo groupadd --system "$SERVICE_GROUP"
-        log_info "已创建组: $SERVICE_GROUP"
-    else
-        log_info "组已存在: $SERVICE_GROUP"
-    fi
-    
-    # 创建用户
+    # 检查用户是否存在
     if ! getent passwd "$SERVICE_USER" &> /dev/null; then
-        sudo useradd --system --gid "$SERVICE_GROUP" --create-home \
-            --home-dir "$INSTALL_DIR" --shell /bin/bash \
-            --comment "AI Dialogue Backend Service" "$SERVICE_USER"
-        log_info "已创建用户: $SERVICE_USER"
-    else
-        log_info "用户已存在: $SERVICE_USER"
+        log_error "用户 $SERVICE_USER 不存在"
+        exit 1
     fi
+    
+    # 检查组是否存在
+    if ! getent group "$SERVICE_GROUP" &> /dev/null; then
+        log_warning "组 $SERVICE_GROUP 不存在，将使用用户的主组"
+        SERVICE_GROUP="$(id -gn "$SERVICE_USER")"
+    fi
+    
+    log_success "服务将以用户 $SERVICE_USER (组: $SERVICE_GROUP) 运行"
 }
 
 # 创建目录结构
@@ -409,25 +411,13 @@ create_directories() {
     # 创建日志目录（项目内）
     mkdir -p "$LOG_DIR"
     
-    # 设置当前项目目录权限，让service用户可以访问
-    # 注意：我们不改变项目文件所有权，只确保service用户可以读取
+    # 确保日志目录权限正确
     if [[ -n "$SUDO_USER" ]]; then
-        # 将service用户添加到原用户的组
-        if getent group "$SUDO_USER" >/dev/null 2>&1; then
-            sudo usermod -a -G "$SUDO_USER" "$SERVICE_USER" 2>/dev/null || true
-        fi
-        
-        # 设置目录权限让组成员可以访问
-        chmod g+rx "$INSTALL_DIR" 2>/dev/null || true
-        chmod -R g+rX "$INSTALL_DIR/app" 2>/dev/null || true
-        chmod -R g+rX "$INSTALL_DIR/config" 2>/dev/null || true
-        
-        # logs目录需要写权限
-        chown "$SUDO_USER:$SERVICE_GROUP" "$LOG_DIR" 2>/dev/null || true
-        chmod g+rwx "$LOG_DIR" 2>/dev/null || true
+        chown "$SERVICE_USER:$SERVICE_GROUP" "$LOG_DIR" 2>/dev/null || true
     fi
+    chmod 755 "$LOG_DIR" 2>/dev/null || true
     
-    log_success "目录权限配置完成"
+    log_success "目录创建完成"
 }
 
 # 验证项目文件
@@ -462,12 +452,12 @@ install_python_deps() {
     CONDA_OWNER=$(stat -c %U "$CONDA_PREFIX" 2>/dev/null || stat -f %Su "$CONDA_PREFIX" 2>/dev/null || echo "unknown")
     log_info "Conda环境所有者: $CONDA_OWNER"
     
-    if [[ -n "$SUDO_USER" && "$CONDA_OWNER" == "$SUDO_USER" ]]; then
-        # 以原用户身份安装依赖（推荐方式）
-        log_info "以原用户 $SUDO_USER 身份安装依赖"
+    if [[ -n "$SUDO_USER" ]]; then
+        # 以原用户身份安装依赖
+        log_info "以用户 $SERVICE_USER 身份安装依赖"
         
         # 升级pip
-        sudo -u "$SUDO_USER" bash -c "
+        sudo -u "$SERVICE_USER" bash -c "
             source ~/.bashrc 2>/dev/null || true
             source ~/.zshrc 2>/dev/null || true
             '$PIP_CMD' install --upgrade pip
@@ -478,33 +468,18 @@ install_python_deps() {
             # 直接从项目目录读取requirements.txt
             log_info "从项目目录读取requirements.txt: $INSTALL_DIR/requirements.txt"
             
-            sudo -u "$SUDO_USER" bash -c "
+            sudo -u "$SERVICE_USER" bash -c "
                 source ~/.bashrc 2>/dev/null || true
                 source ~/.zshrc 2>/dev/null || true
                 '$PIP_CMD' install -r '$INSTALL_DIR/requirements.txt'
             "
         else
             log_warning "未找到requirements.txt，手动安装核心依赖"
-            sudo -u "$SUDO_USER" bash -c "
+            sudo -u "$SERVICE_USER" bash -c "
                 source ~/.bashrc 2>/dev/null || true
                 source ~/.zshrc 2>/dev/null || true
                 '$PIP_CMD' install fastapi uvicorn websockets pydantic python-dotenv
             "
-        fi
-        
-        # 为service用户创建conda环境访问权限
-        log_info "配置service用户对conda环境的访问权限..."
-        
-        # 将service用户添加到原用户的组（如果可能）
-        if getent group "$SUDO_USER" >/dev/null 2>&1; then
-            usermod -a -G "$SUDO_USER" "$SERVICE_USER" 2>/dev/null || true
-        fi
-        
-        # 设置conda环境的组访问权限
-        if [[ -d "$CONDA_PREFIX" ]]; then
-            # 为conda环境目录设置组读取和执行权限
-            chmod -R g+rX "$CONDA_PREFIX" 2>/dev/null || true
-            log_info "已设置conda环境组访问权限"
         fi
         
     else
@@ -548,6 +523,8 @@ configure_service() {
     # 替换服务文件中的路径和配置
     sed \
         -e "s|/opt/ai-dialogue-backend/venv/bin/python|$PYTHON_CMD|g" \
+        -e "s|User=HwHiAiUser|User=$SERVICE_USER|g" \
+        -e "s|Group=HwHiAiUser|Group=$SERVICE_GROUP|g" \
         -e "s|WorkingDirectory=/home/HwHiAiUser/rongchangbei/backend|WorkingDirectory=$INSTALL_DIR|g" \
         -e "s|Environment=PYTHONPATH=/home/HwHiAiUser/rongchangbei/backend|Environment=PYTHONPATH=$INSTALL_DIR|g" \
         -e "s|VOSK_MODEL_PATH=/home/HwHiAiUser/rongchangbei/backend/model|VOSK_MODEL_PATH=$INSTALL_DIR/model|g" \
@@ -918,7 +895,7 @@ main() {
         echo
         
         check_requirements
-        create_user
+        verify_user
         create_directories
         verify_project_files
         install_python_deps
