@@ -214,10 +214,9 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
     } catch (e) {
       debugPrint('加载current.dp或建立WebSocket连接时出错: $e');
-    } finally {
       setState(() {
-        _currentStep = LoadingStep.completed;
         _isLoading = false;
+        _currentStep = LoadingStep.completed;
       });
     }
   }
@@ -234,6 +233,15 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         Uri.parse(baseUrl),
       );
 
+      // 添加连接超时处理
+      await _webSocketChannel!.ready.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          debugPrint('WebSocket连接超时');
+          throw TimeoutException('WebSocket连接超时');
+        },
+      );
+
       // 监听WebSocket消息
       _webSocketChannel!.stream.listen(
         (message) {
@@ -241,12 +249,24 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         },
         onError: (error) {
           debugPrint('WebSocket错误: $error');
+          if (mounted && _isLoading) {
+            setState(() {
+              _isLoading = false;
+              _currentStep = LoadingStep.completed;
+            });
+          }
         },
         onDone: () {
           debugPrint('WebSocket连接关闭');
-          setState(() {
-            _sessionId = null;
-          });
+          if (mounted) {
+            setState(() {
+              _sessionId = null;
+              if (_isLoading) {
+                _isLoading = false;
+                _currentStep = LoadingStep.completed;
+              }
+            });
+          }
         },
       );
 
@@ -267,6 +287,12 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       
     } catch (e) {
       debugPrint('WebSocket连接错误: $e');
+      if (mounted && _isLoading) {
+        setState(() {
+          _isLoading = false;
+          _currentStep = LoadingStep.completed;
+        });
+      }
     }
   }
 
@@ -283,14 +309,13 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         });
         debugPrint('会话已创建，session_id: $sessionId');
         
-        // 短暂延迟后标记为完成
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) {
-            setState(() {
-              _currentStep = LoadingStep.completed;
-            });
-          }
-        });
+        // 收到session_created消息后才标记为完成
+        if (mounted) {
+          setState(() {
+            _currentStep = LoadingStep.completed;
+            _isLoading = false;
+          });
+        }
       } else if (data['type'] == 'opinion_suggestions') {
         // 处理意见建议消息
         final receivedSessionId = data['data']['session_id'] as String;
@@ -823,8 +848,8 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
-                          _sessionId!.length > 20 
-                              ? '${_sessionId!.substring(0, 20)}...'
+                          _sessionId!.length > 5 
+                              ? '${_sessionId!.substring(0, 5)}...'
                               : _sessionId!,
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: Colors.white,
