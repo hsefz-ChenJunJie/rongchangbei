@@ -22,6 +22,11 @@ RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     ca-certificates \
+    # PortAudio依赖（pyaudio需要）
+    portaudio19-dev \
+    libasound2-dev \
+    # 其他音频相关依赖
+    libsndfile1-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
