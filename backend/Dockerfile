@@ -16,14 +16,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
     sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
 
-# 安装系统依赖和uv（单层优化）
+# 安装系统依赖
 RUN apt-get update && apt-get install -y \
     curl \
     gcc \
     g++ \
     ca-certificates \
-    && curl -LsSf https://astral.sh/uv/install.sh | sh \
-    && mv /root/.cargo/bin/uv /usr/local/bin/ \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
@@ -33,10 +31,11 @@ WORKDIR /app
 # 创建uv缓存目录和应用目录
 RUN mkdir -p /tmp/uv-cache /app/logs
 
-# 配置pip镜像源（全局配置）
+# 配置pip镜像源并安装uv
 RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/ && \
     pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn && \
-    pip config set global.timeout 60
+    pip config set global.timeout 60 && \
+    pip install --no-cache-dir uv
 
 # 复制 requirements.txt（利用Docker层缓存）
 COPY requirements.txt .
