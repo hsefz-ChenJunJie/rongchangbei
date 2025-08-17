@@ -8,9 +8,9 @@ Wants=network.target
 Type=simple
 User=backend
 Group=backend
-WorkingDirectory=/opt/ai-dialogue-backend
+WorkingDirectory=/home/HwHiAiUser/rongchangbei/backend
 # 将在安装时替换为正确的Python路径
-Environment=PYTHONPATH=/opt/ai-dialogue-backend
+Environment=PYTHONPATH=/home/HwHiAiUser/rongchangbei/backend
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONDONTWRITEBYTECODE=1
 
@@ -27,7 +27,7 @@ Environment=OPENROUTER_MODEL=qwen/qwen3-235b-a22b:free
 
 # STT服务配置
 Environment=USE_REAL_VOSK=true
-Environment=VOSK_MODEL_PATH=/opt/ai-dialogue-backend/model/vosk-model
+Environment=VOSK_MODEL_PATH=/home/HwHiAiUser/rongchangbei/backend/model/vosk-model
 Environment=VOSK_SAMPLE_RATE=16000
 
 # 安全配置
@@ -40,7 +40,7 @@ Environment=WEBSOCKET_TIMEOUT=600
 Environment=MAX_WORKERS=8
 
 # 日志配置
-Environment=LOG_FILE=/var/log/ai-dialogue-backend/app.log
+Environment=LOG_FILE=/home/HwHiAiUser/rongchangbei/backend/logs/app.log
 Environment=LOG_MAX_SIZE=100MB
 Environment=LOG_BACKUP_COUNT=10
 Environment=LOG_FORMAT=json
@@ -61,7 +61,7 @@ LimitNPROC=4096
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/log/ai-dialogue-backend /opt/ai-dialogue-backend/logs
+ReadWritePaths=/home/HwHiAiUser/rongchangbei/backend/logs
 PrivateTmp=true
 ProtectKernelTunables=true
 ProtectControlGroups=true
