@@ -49,11 +49,17 @@ async def lifespan(app: FastAPI):
         logger.info("会话管理器初始化完成")
         
         # 初始化STT服务
-        stt_service = create_stt_service()
-        if await stt_service.initialize():
-            logger.info("STT服务初始化完成")
-        else:
-            logger.warning("STT服务初始化失败，继续运行")
+        try:
+            stt_service = create_stt_service()
+            if await stt_service.initialize():
+                logger.info("STT服务初始化完成")
+            else:
+                logger.warning("STT服务初始化失败，继续运行")
+        except Exception as e:
+            logger.error(f"STT服务创建失败: {e}，使用备用Mock服务")
+            from app.services.stt_service import STTService
+            stt_service = STTService()
+            await stt_service.initialize()
         
         # 初始化LLM服务
         llm_service = create_llm_service()

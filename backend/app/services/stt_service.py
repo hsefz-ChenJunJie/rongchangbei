@@ -575,10 +575,14 @@ def create_stt_service() -> STTService:
     Returns:
         STTService: STT服务实例
     """
-    # 可以通过环境变量或配置文件控制
-    use_real_vosk = getattr(settings, 'use_real_vosk', False)
+    # 从配置文件读取使用真实Vosk的设置
+    use_real_vosk = settings.use_real_vosk
+    
+    logger.info(f"STT服务配置: use_real_vosk={use_real_vosk}")
     
     if use_real_vosk:
+        logger.info("使用真实Vosk STT服务")
         return VoskSTTService()
     else:
+        logger.info("使用Mock STT服务")
         return STTService()  # Mock版本
