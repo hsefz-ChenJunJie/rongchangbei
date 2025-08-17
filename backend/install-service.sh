@@ -545,13 +545,43 @@ install_python_deps() {
 configure_service() {
     log_info "配置systemd服务..."
     
-    # 复制服务文件
-    if [[ -f "$SERVICE_FILE" ]]; then
-        sudo cp "$SERVICE_FILE" "/etc/systemd/system/"
-    else
-        log_error "未找到服务文件: $SERVICE_FILE"
+    # 获取当前脚本所在目录
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    
+    # 检查服务文件是否存在
+    if [[ ! -f "$SCRIPT_DIR/$SERVICE_FILE" ]]; then
+        log_error "未找到服务文件: $SCRIPT_DIR/$SERVICE_FILE"
         exit 1
     fi
+    
+    # 修复服务文件中的Python路径和目录路径
+    log_info "修复服务文件中的Python路径: $PYTHON_CMD"
+    
+    # 创建临时文件进行路径替换
+    TEMP_SERVICE_FILE=$(mktemp)
+    
+    # 替换服务文件中的路径和配置
+    sed \
+        -e "s|/opt/ai-dialogue-backend/venv/bin/python|$PYTHON_CMD|g" \
+        -e "s|WorkingDirectory=/opt/ai-dialogue-backend|WorkingDirectory=$INSTALL_DIR|g" \
+        -e "s|Environment=PATH=/opt/ai-dialogue-backend/venv/bin.*|Environment=PYTHONPATH=$INSTALL_DIR|g" \
+        -e "s|Environment=PYTHONPATH=/opt/ai-dialogue-backend|Environment=PYTHONPATH=$INSTALL_DIR|g" \
+        -e "s|VOSK_MODEL_PATH=/opt/ai-dialogue-backend/model|VOSK_MODEL_PATH=$INSTALL_DIR/model|g" \
+        -e "s|LOG_FILE=/var/log/ai-dialogue-backend|LOG_FILE=$LOG_DIR|g" \
+        -e "s|ReadWritePaths=/var/log/ai-dialogue-backend /opt/ai-dialogue-backend/logs|ReadWritePaths=$LOG_DIR $INSTALL_DIR/logs|g" \
+        "$SCRIPT_DIR/$SERVICE_FILE" > "$TEMP_SERVICE_FILE"
+    
+    # 更新原始服务文件
+    cp "$TEMP_SERVICE_FILE" "$SCRIPT_DIR/$SERVICE_FILE"
+    rm -f "$TEMP_SERVICE_FILE"
+    
+    log_info "已更新服务文件中的路径配置"
+    
+    # 复制服务文件到systemd目录
+    sudo cp "$SCRIPT_DIR/$SERVICE_FILE" "/etc/systemd/system/"
+    
+    log_info "使用的Python路径: $PYTHON_CMD"
+    log_info "工作目录: $INSTALL_DIR"
     
     # 重新加载systemd
     sudo systemctl daemon-reload

@@ -9,7 +9,7 @@ Type=simple
 User=backend
 Group=backend
 WorkingDirectory=/opt/ai-dialogue-backend
-Environment=PATH=/opt/ai-dialogue-backend/venv/bin:/usr/local/bin:/usr/bin:/bin
+# 将在安装时替换为正确的Python路径
 Environment=PYTHONPATH=/opt/ai-dialogue-backend
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONDONTWRITEBYTECODE=1
@@ -45,7 +45,7 @@ Environment=LOG_MAX_SIZE=100MB
 Environment=LOG_BACKUP_COUNT=10
 Environment=LOG_FORMAT=json
 
-# 启动命令
+# 启动命令 - 将在安装时自动替换为正确的conda环境Python路径
 ExecStart=/opt/ai-dialogue-backend/venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ExecReload=/bin/kill -HUP $MAINPID
 KillMode=mixed
