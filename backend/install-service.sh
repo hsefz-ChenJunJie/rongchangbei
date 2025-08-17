@@ -31,8 +31,10 @@ log_error() {
 SERVICE_NAME="ai-dialogue-backend"
 SERVICE_USER="backend"
 SERVICE_GROUP="backend"
-INSTALL_DIR="/opt/ai-dialogue-backend"
-LOG_DIR="/var/log/ai-dialogue-backend"
+# 使用当前项目目录，无需复制文件
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INSTALL_DIR="$SCRIPT_DIR"  # 直接使用当前目录
+LOG_DIR="$SCRIPT_DIR/logs"  # 使用项目内的logs目录
 SERVICE_FILE="ai-dialogue-backend.service"
 CONDA_ENV="rongchang"  # 指定使用的conda环境名
 
@@ -402,52 +404,51 @@ create_user() {
 
 # 创建目录结构
 create_directories() {
-    log_info "创建目录结构..."
+    log_info "创建必要目录..."
     
-    # 安装目录
-    sudo mkdir -p "$INSTALL_DIR"
+    # 创建日志目录（项目内）
+    mkdir -p "$LOG_DIR"
     
-    # 日志目录
-    sudo mkdir -p "$LOG_DIR"
+    # 设置当前项目目录权限，让service用户可以访问
+    # 注意：我们不改变项目文件所有权，只确保service用户可以读取
+    if [[ -n "$SUDO_USER" ]]; then
+        # 将service用户添加到原用户的组
+        if getent group "$SUDO_USER" >/dev/null 2>&1; then
+            sudo usermod -a -G "$SUDO_USER" "$SERVICE_USER" 2>/dev/null || true
+        fi
+        
+        # 设置目录权限让组成员可以访问
+        chmod g+rx "$INSTALL_DIR" 2>/dev/null || true
+        chmod -R g+rX "$INSTALL_DIR/app" 2>/dev/null || true
+        chmod -R g+rX "$INSTALL_DIR/config" 2>/dev/null || true
+        
+        # logs目录需要写权限
+        chown "$SUDO_USER:$SERVICE_GROUP" "$LOG_DIR" 2>/dev/null || true
+        chmod g+rwx "$LOG_DIR" 2>/dev/null || true
+    fi
     
-    # 模型目录
-    sudo mkdir -p "$INSTALL_DIR/model"
-    
-    # 配置目录
-    sudo mkdir -p "$INSTALL_DIR/config"
-    
-    # 设置权限
-    sudo chown -R "$SERVICE_USER:$SERVICE_GROUP" "$INSTALL_DIR"
-    sudo chown -R "$SERVICE_USER:$SERVICE_GROUP" "$LOG_DIR"
-    
-    log_success "目录结构创建完成"
+    log_success "目录权限配置完成"
 }
 
-# 复制项目文件
-copy_project_files() {
-    log_info "复制项目文件..."
+# 验证项目文件
+verify_project_files() {
+    log_info "验证项目文件..."
     
-    # 获取当前脚本所在目录
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    # 检查必要文件是否存在
+    REQUIRED_FILES=(
+        "$INSTALL_DIR/app"
+        "$INSTALL_DIR/config"
+        "$INSTALL_DIR/requirements.txt"
+    )
     
-    # 复制应用代码
-    sudo cp -r "$SCRIPT_DIR/app" "$INSTALL_DIR/"
-    sudo cp -r "$SCRIPT_DIR/config" "$INSTALL_DIR/"
+    for file in "${REQUIRED_FILES[@]}"; do
+        if [[ ! -e "$file" ]]; then
+            log_error "缺少必要文件: $file"
+            exit 1
+        fi
+    done
     
-    # 复制配置文件
-    if [[ -f "$SCRIPT_DIR/requirements.txt" ]]; then
-        sudo cp "$SCRIPT_DIR/requirements.txt" "$INSTALL_DIR/"
-    fi
-    
-    # 复制模型文件（如果存在）
-    if [[ -d "$SCRIPT_DIR/model" ]]; then
-        sudo cp -r "$SCRIPT_DIR/model"/* "$INSTALL_DIR/model/"
-    fi
-    
-    # 设置权限
-    sudo chown -R "$SERVICE_USER:$SERVICE_GROUP" "$INSTALL_DIR"
-    
-    log_success "项目文件复制完成"
+    log_success "项目文件验证完成"
 }
 
 # 安装Python依赖
@@ -473,31 +474,15 @@ install_python_deps() {
         "
         
         # 安装依赖
-        # 获取当前脚本所在目录（源目录）
-        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-        
-        if [[ -f "$SCRIPT_DIR/requirements.txt" ]]; then
-            # 直接从源目录读取requirements.txt，避免权限问题
-            log_info "从源目录读取requirements.txt: $SCRIPT_DIR/requirements.txt"
-            
-            sudo -u "$SUDO_USER" bash -c "
-                source ~/.bashrc 2>/dev/null || true
-                source ~/.zshrc 2>/dev/null || true
-                '$PIP_CMD' install -r '$SCRIPT_DIR/requirements.txt'
-            "
-        elif [[ -f "$INSTALL_DIR/requirements.txt" ]]; then
-            # 备选方案：临时调整已复制文件的权限
-            log_info "临时调整requirements.txt权限以便原用户读取"
-            sudo chmod +r "$INSTALL_DIR/requirements.txt"
+        if [[ -f "$INSTALL_DIR/requirements.txt" ]]; then
+            # 直接从项目目录读取requirements.txt
+            log_info "从项目目录读取requirements.txt: $INSTALL_DIR/requirements.txt"
             
             sudo -u "$SUDO_USER" bash -c "
                 source ~/.bashrc 2>/dev/null || true
                 source ~/.zshrc 2>/dev/null || true
                 '$PIP_CMD' install -r '$INSTALL_DIR/requirements.txt'
             "
-            
-            # 恢复文件权限
-            sudo chown "$SERVICE_USER:$SERVICE_GROUP" "$INSTALL_DIR/requirements.txt"
         else
             log_warning "未找到requirements.txt，手动安装核心依赖"
             sudo -u "$SUDO_USER" bash -c "
@@ -563,13 +548,12 @@ configure_service() {
     # 替换服务文件中的路径和配置
     sed \
         -e "s|/opt/ai-dialogue-backend/venv/bin/python|$PYTHON_CMD|g" \
-        -e "s|WorkingDirectory=/opt/ai-dialogue-backend|WorkingDirectory=$INSTALL_DIR|g" \
-        -e "s|Environment=PATH=/opt/ai-dialogue-backend/venv/bin.*|Environment=PYTHONPATH=$INSTALL_DIR|g" \
-        -e "s|Environment=PYTHONPATH=/opt/ai-dialogue-backend|Environment=PYTHONPATH=$INSTALL_DIR|g" \
-        -e "s|VOSK_MODEL_PATH=/opt/ai-dialogue-backend/model|VOSK_MODEL_PATH=$INSTALL_DIR/model|g" \
-        -e "s|LOG_FILE=/var/log/ai-dialogue-backend|LOG_FILE=$LOG_DIR|g" \
-        -e "s|ReadWritePaths=/var/log/ai-dialogue-backend /opt/ai-dialogue-backend/logs|ReadWritePaths=$LOG_DIR $INSTALL_DIR/logs|g" \
-        "$SCRIPT_DIR/$SERVICE_FILE" > "$TEMP_SERVICE_FILE"
+        -e "s|WorkingDirectory=/home/HwHiAiUser/rongchangbei/backend|WorkingDirectory=$INSTALL_DIR|g" \
+        -e "s|Environment=PYTHONPATH=/home/HwHiAiUser/rongchangbei/backend|Environment=PYTHONPATH=$INSTALL_DIR|g" \
+        -e "s|VOSK_MODEL_PATH=/home/HwHiAiUser/rongchangbei/backend/model|VOSK_MODEL_PATH=$INSTALL_DIR/model|g" \
+        -e "s|LOG_FILE=/home/HwHiAiUser/rongchangbei/backend/logs|LOG_FILE=$LOG_DIR|g" \
+        -e "s|ReadWritePaths=/home/HwHiAiUser/rongchangbei/backend/logs|ReadWritePaths=$LOG_DIR|g" \
+        "$INSTALL_DIR/$SERVICE_FILE" > "$TEMP_SERVICE_FILE"
     
     # 更新原始服务文件
     cp "$TEMP_SERVICE_FILE" "$SCRIPT_DIR/$SERVICE_FILE"
@@ -936,7 +920,7 @@ main() {
         check_requirements
         create_user
         create_directories
-        copy_project_files
+        verify_project_files
         install_python_deps
         configure_service
         start_service
