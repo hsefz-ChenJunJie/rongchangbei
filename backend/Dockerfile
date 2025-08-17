@@ -64,6 +64,11 @@ RUN useradd --create-home --shell /bin/bash --uid 1000 app && \
 COPY --chown=app:app app/ ./app/
 COPY --chown=app:app config/ ./config/
 
+# 可选：复制.env文件（如果存在）
+# 创建空的.env文件作为占位符，然后尝试复制真实的.env文件
+RUN touch .env
+COPY --chown=app:app .env* ./
+
 # 切换到非root用户
 USER app
 

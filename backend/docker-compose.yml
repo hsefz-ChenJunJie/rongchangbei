@@ -12,38 +12,57 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
+    # 配置优先级：
+    # 1. .env 文件（如果存在） - 由Docker Compose自动读取
+    # 2. 下面的environment默认值（作为后备配置）
     environment:
-      # 基础配置
-      - HOST=0.0.0.0
-      - PORT=8000
-      - DEBUG=false
-      - LOG_LEVEL=INFO
-      - TZ=Asia/Shanghai
+      # 基础配置（.env文件优先，否则使用默认值）
+      - HOST=${HOST:-0.0.0.0}
+      - PORT=${PORT:-8000}
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - TZ=${TZ:-Asia/Shanghai}
       
       # LLM服务配置
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-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}
       - OPENROUTER_BASE_URL=${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
       - OPENROUTER_MODEL=${OPENROUTER_MODEL:-qwen/qwen3-235b-a22b:free}
+      - OPENROUTER_TEMPERATURE=${OPENROUTER_TEMPERATURE:-0.7}
+      - OPENROUTER_MAX_TOKENS=${OPENROUTER_MAX_TOKENS:-800}
       
       # STT服务配置
-      - USE_REAL_VOSK=false
+      - USE_REAL_VOSK=${USE_REAL_VOSK:-false}
       - VOSK_MODEL_PATH=${VOSK_MODEL_PATH:-/app/model/vosk-model}
       - VOSK_SAMPLE_RATE=${VOSK_SAMPLE_RATE:-16000}
       
       # 安全配置
-      - ALLOWED_ORIGINS=["*"]
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-["*"]}
       
-      # 性能配置
+      # 超时配置
       - STT_TIMEOUT=${STT_TIMEOUT:-20}
       - LLM_TIMEOUT=${LLM_TIMEOUT:-45}
       - WEBSOCKET_TIMEOUT=${WEBSOCKET_TIMEOUT:-600}
+      - WEBSOCKET_PING_INTERVAL=${WEBSOCKET_PING_INTERVAL:-30}
+      - WEBSOCKET_PING_TIMEOUT=${WEBSOCKET_PING_TIMEOUT:-10}
+      - WEBSOCKET_MAX_MESSAGE_SIZE=${WEBSOCKET_MAX_MESSAGE_SIZE:-16777216}
+      - TIMEOUT=${TIMEOUT:-60}
+      
+      # 性能配置
       - MAX_WORKERS=${MAX_WORKERS:-8}
       
       # 日志配置
-      - LOG_FILE=/app/logs/app.log
+      - LOG_FILE=${LOG_FILE:-/app/logs/app.log}
       - LOG_MAX_SIZE=${LOG_MAX_SIZE:-100MB}
       - LOG_BACKUP_COUNT=${LOG_BACKUP_COUNT:-10}
       - LOG_FORMAT=${LOG_FORMAT:-json}
+      
+      # 音频处理配置
+      - AUDIO_CHUNK_SIZE=${AUDIO_CHUNK_SIZE:-4096}
+      - AUDIO_SAMPLE_RATE=${AUDIO_SAMPLE_RATE:-16000}
+      - AUDIO_CHANNELS=${AUDIO_CHANNELS:-1}
+      - AUDIO_BUFFER_MAX_SIZE=${AUDIO_BUFFER_MAX_SIZE:-52428800}
+      - AUDIO_BUFFER_CLEANUP_INTERVAL=${AUDIO_BUFFER_CLEANUP_INTERVAL:-10}
+      - AUDIO_MAX_CHUNKS_PER_SECOND=${AUDIO_MAX_CHUNKS_PER_SECOND:-100}
     
     volumes:
       # 挂载日志目录

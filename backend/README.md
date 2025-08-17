@@ -246,16 +246,30 @@ docker compose up -d --build
 
 ### 2. 环境配置
 
-#### 2.1 环境变量设置
+#### 2.1 配置优先级说明
+
+🎯 **重要特性：支持灵活的环境配置方式**
+
+**配置优先级（从高到低）：**
+1. **`.env` 文件**：如果backend目录下存在.env文件，优先使用其中的配置
+2. **docker-compose.yml默认值**：作为后备配置，确保服务正常启动
+
+**使用场景：**
+- **开发环境**：无.env文件，使用docker-compose.yml中的默认值
+- **生产环境**：创建.env文件，覆盖需要自定义的配置项
+
+#### 2.2 环境变量设置
+
+**生产环境配置（推荐）：**
 ```bash
-# 复制环境变量示例文件
-cp .env.example .env
+# 复制Docker环境变量示例文件
+cp .env.docker.example .env
 
 # 编辑环境变量配置
 nano .env
 ```
 
-配置示例：
+**.env文件配置示例：**
 ```bash
 # LLM服务配置
 OPENROUTER_API_KEY=sk-or-v1-your-actual-api-key-here
@@ -263,15 +277,21 @@ OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_MODEL=qwen/qwen3-235b-a22b:free
 
 # STT服务配置
-USE_REAL_VOSK=false
+USE_REAL_VOSK=true
 VOSK_MODEL_PATH=/app/model/vosk-model
+
+# 安全配置
+ALLOWED_ORIGINS=["https://yourdomain.com"]
 
 # 基础配置
 DEBUG=false
 LOG_LEVEL=INFO
 ```
 
-#### 2.2 模型文件配置（可选）
+**开发环境（无需创建.env文件）：**
+如果不创建.env文件，系统会自动使用docker-compose.yml中的默认配置，适合开发和测试环境。
+
+#### 2.3 模型文件配置（可选）
 如果使用Vosk语音识别：
 ```bash
 # 创建模型目录
