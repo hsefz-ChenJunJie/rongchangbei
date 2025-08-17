@@ -473,12 +473,31 @@ install_python_deps() {
         "
         
         # 安装依赖
-        if [[ -f "$INSTALL_DIR/requirements.txt" ]]; then
+        # 获取当前脚本所在目录（源目录）
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+        
+        if [[ -f "$SCRIPT_DIR/requirements.txt" ]]; then
+            # 直接从源目录读取requirements.txt，避免权限问题
+            log_info "从源目录读取requirements.txt: $SCRIPT_DIR/requirements.txt"
+            
+            sudo -u "$SUDO_USER" bash -c "
+                source ~/.bashrc 2>/dev/null || true
+                source ~/.zshrc 2>/dev/null || true
+                '$PIP_CMD' install -r '$SCRIPT_DIR/requirements.txt'
+            "
+        elif [[ -f "$INSTALL_DIR/requirements.txt" ]]; then
+            # 备选方案：临时调整已复制文件的权限
+            log_info "临时调整requirements.txt权限以便原用户读取"
+            sudo chmod +r "$INSTALL_DIR/requirements.txt"
+            
             sudo -u "$SUDO_USER" bash -c "
                 source ~/.bashrc 2>/dev/null || true
                 source ~/.zshrc 2>/dev/null || true
                 '$PIP_CMD' install -r '$INSTALL_DIR/requirements.txt'
             "
+            
+            # 恢复文件权限
+            sudo chown "$SERVICE_USER:$SERVICE_GROUP" "$INSTALL_DIR/requirements.txt"
         else
             log_warning "未找到requirements.txt，手动安装核心依赖"
             sudo -u "$SUDO_USER" bash -c "
