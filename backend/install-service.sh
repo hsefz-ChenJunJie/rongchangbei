@@ -97,55 +97,61 @@ check_requirements() {
     # 检查conda - 考虑sudo环境
     CONDA_COMMAND=""
     
-    # 方法1：直接检查conda命令
-    if command -v conda &> /dev/null; then
+    # 构建所有可能的conda路径（优先级排序）
+    POSSIBLE_CONDA_PATHS=(
+        # 用户HOME目录下的conda安装
+        "/home/$SUDO_USER/miniconda3/bin/conda"
+        "/home/$SUDO_USER/anaconda3/bin/conda"
+        "/home/$SUDO_USER/.conda/bin/conda"
+        "/home/$SUDO_USER/.local/bin/conda"
+        # 系统级安装路径
+        "/usr/local/miniconda3/bin/conda"  # 添加这个关键路径
+        "/usr/local/anaconda3/bin/conda"
+        "/usr/local/conda/bin/conda"
+        "/opt/miniconda3/bin/conda"
+        "/opt/anaconda3/bin/conda"
+        "/opt/conda/bin/conda"
+        # 其他可能的路径
+        "/usr/bin/conda"
+        "/usr/local/bin/conda"
+    )
+    
+    # 方法1：优先在常见路径中查找conda（sudo环境下PATH不可靠）
+    for conda_path in "${POSSIBLE_CONDA_PATHS[@]}"; do
+        if [[ -f "$conda_path" && -x "$conda_path" ]]; then
+            CONDA_COMMAND="$conda_path"
+            log_info "在路径找到conda: $conda_path"
+            break
+        fi
+    done
+    
+    # 方法2：如果路径查找失败，再尝试PATH中的conda命令
+    if [[ -z "$CONDA_COMMAND" ]] && command -v conda &> /dev/null; then
         CONDA_COMMAND="conda"
-        log_info "找到conda命令: $(which conda)"
-    else
-        # 方法2：在常见路径中查找conda
-        POSSIBLE_CONDA_PATHS=(
-            "/home/$SUDO_USER/miniconda3/bin/conda"
-            "/home/$SUDO_USER/anaconda3/bin/conda"
-            "/home/$SUDO_USER/.conda/bin/conda"
-            "/opt/conda/bin/conda"
-            "/usr/local/conda/bin/conda"
-            "/opt/miniconda3/bin/conda"
-            "/opt/anaconda3/bin/conda"
-        )
+        log_info "在PATH中找到conda命令: $(which conda)"
+    fi
+    
+    # 方法3：对于sudo环境，额外处理
+    if [[ -z "$CONDA_COMMAND" ]]; then
         
-        # 如果是root用户，尝试获取原用户
-        if [[ -z "$SUDO_USER" ]] && [[ "$EUID" -eq 0 ]]; then
-            log_warning "以root用户运行，尝试检测原用户..."
-            # 从环境或进程中猜测原用户
-            ORIGINAL_USER=$(ps aux | grep -v root | head -n1 | awk '{print $1}' 2>/dev/null || echo "")
-            if [[ -n "$ORIGINAL_USER" && "$ORIGINAL_USER" != "USER" ]]; then
-                SUDO_USER="$ORIGINAL_USER"
-                log_info "检测到可能的原用户: $SUDO_USER"
-            fi
-        fi
-        
-        # 添加动态用户路径
+        # 使用sudo -u 原用户查找conda
         if [[ -n "$SUDO_USER" ]]; then
-            POSSIBLE_CONDA_PATHS+=(
-                "/home/$SUDO_USER/miniconda3/bin/conda"
-                "/home/$SUDO_USER/anaconda3/bin/conda"
-                "/home/$SUDO_USER/.local/bin/conda"
-            )
-        fi
-        
-        for conda_path in "${POSSIBLE_CONDA_PATHS[@]}"; do
-            if [[ -f "$conda_path" && -x "$conda_path" ]]; then
-                CONDA_COMMAND="$conda_path"
-                log_info "在常见路径找到conda: $conda_path"
-                break
-            fi
-        done
-        
-        # 方法3：使用sudo -u 原用户执行conda
-        if [[ -z "$CONDA_COMMAND" && -n "$SUDO_USER" ]]; then
-            if sudo -u "$SUDO_USER" bash -c "command -v conda" &> /dev/null; then
-                CONDA_COMMAND="sudo -u $SUDO_USER bash -c"
-                log_info "通过sudo -u $SUDO_USER 找到conda"
+            # 尝试以原用户身份查找conda
+            ORIGINAL_CONDA_PATH=$(sudo -u "$SUDO_USER" bash -c "command -v conda 2>/dev/null || echo ''")
+            if [[ -n "$ORIGINAL_CONDA_PATH" && -f "$ORIGINAL_CONDA_PATH" && -x "$ORIGINAL_CONDA_PATH" ]]; then
+                CONDA_COMMAND="$ORIGINAL_CONDA_PATH"
+                log_info "通过sudo -u $SUDO_USER 找到conda: $ORIGINAL_CONDA_PATH"
+            else
+                # 尝试以原用户身份source环境后查找conda
+                ORIGINAL_CONDA_PATH=$(sudo -u "$SUDO_USER" bash -c "
+                    source ~/.bashrc 2>/dev/null || true
+                    source ~/.zshrc 2>/dev/null || true
+                    command -v conda 2>/dev/null || echo ''
+                ")
+                if [[ -n "$ORIGINAL_CONDA_PATH" && -f "$ORIGINAL_CONDA_PATH" && -x "$ORIGINAL_CONDA_PATH" ]]; then
+                    CONDA_COMMAND="$ORIGINAL_CONDA_PATH"
+                    log_info "通过sudo -u $SUDO_USER 环境source找到conda: $ORIGINAL_CONDA_PATH"
+                fi
             fi
         fi
     fi
@@ -153,19 +159,29 @@ check_requirements() {
     if [[ -z "$CONDA_COMMAND" ]]; then
         log_error "未找到conda，请先安装miniconda/anaconda"
         log_info "如果conda已安装但未找到，请尝试："
-        log_info "1. 检查conda是否在PATH中"
-        log_info "2. 或者提供conda的完整路径"
-        log_info "3. 确保当前用户有权限访问conda"
+        log_info "1. 检查conda是否在PATH中: which conda"
+        log_info "2. 如果是sudo环境，请确保原用户能访问conda"
+        log_info "3. 检查常见安装位置："
+        log_info "   - /usr/local/miniconda3/bin/conda"
+        log_info "   - /opt/miniconda3/bin/conda"
+        log_info "   - /home/\$USER/miniconda3/bin/conda"
+        log_info "4. 使用--debug参数查看详细诊断信息"
         exit 1
     fi
     
+    log_info "使用conda命令: $CONDA_COMMAND"
+    
     # 检查指定的conda环境是否存在
-    # 使用找到的conda命令检查环境
     ENV_CHECK_RESULT=""
-    if [[ "$CONDA_COMMAND" == "sudo -u $SUDO_USER bash -c" ]]; then
-        ENV_CHECK_RESULT=$(sudo -u "$SUDO_USER" bash -c "conda env list | grep '^${CONDA_ENV} '" 2>/dev/null || echo "")
+    if [[ -n "$SUDO_USER" ]]; then
+        # 在sudo环境下以原用户身份检查
+        ENV_CHECK_RESULT=$(sudo -u "$SUDO_USER" bash -c "
+            source ~/.bashrc 2>/dev/null || true
+            source ~/.zshrc 2>/dev/null || true
+            '$CONDA_COMMAND' env list 2>/dev/null | grep '^${CONDA_ENV} ' || echo ''
+        ")
     else
-        ENV_CHECK_RESULT=$($CONDA_COMMAND env list | grep "^${CONDA_ENV} " 2>/dev/null || echo "")
+        ENV_CHECK_RESULT=$($CONDA_COMMAND env list 2>/dev/null | grep "^${CONDA_ENV} " || echo "")
     fi
     
     if [[ -z "$ENV_CHECK_RESULT" ]]; then
@@ -180,8 +196,12 @@ check_requirements() {
     # 定义执行conda命令的函数
     run_conda_cmd() {
         local cmd="$1"
-        if [[ "$CONDA_COMMAND" == "sudo -u $SUDO_USER bash -c" ]]; then
-            sudo -u "$SUDO_USER" bash -c "$cmd" 2>/dev/null || echo ""
+        if [[ -n "$SUDO_USER" ]]; then
+            sudo -u "$SUDO_USER" bash -c "
+                source ~/.bashrc 2>/dev/null || true
+                source ~/.zshrc 2>/dev/null || true
+                '$CONDA_COMMAND' $cmd 2>/dev/null || echo ''
+            "
         else
             $CONDA_COMMAND $cmd 2>/dev/null || echo ""
         fi
@@ -189,7 +209,7 @@ check_requirements() {
     
     # 方法1：使用conda info --envs（最常用方法）
     if [[ -z "$CONDA_PREFIX" ]]; then
-        CONDA_PREFIX=$(run_conda_cmd "conda info --envs" | grep "^${CONDA_ENV} " | awk '{print $2}')
+        CONDA_PREFIX=$(run_conda_cmd "info --envs" | grep "^${CONDA_ENV} " | awk '{print $2}')
         if [[ -n "$CONDA_PREFIX" ]]; then
             log_info "方法1成功：conda info --envs 获取路径 $CONDA_PREFIX"
         fi
@@ -197,7 +217,7 @@ check_requirements() {
     
     # 方法2：尝试不同的awk字段
     if [[ -z "$CONDA_PREFIX" ]]; then
-        CONDA_PREFIX=$(run_conda_cmd "conda info --envs" | grep " ${CONDA_ENV} " | awk '{print $3}')
+        CONDA_PREFIX=$(run_conda_cmd "info --envs" | grep " ${CONDA_ENV} " | awk '{print $3}')
         if [[ -n "$CONDA_PREFIX" ]]; then
             log_info "方法2成功：conda info --envs (字段3) 获取路径 $CONDA_PREFIX"
         fi
@@ -205,7 +225,7 @@ check_requirements() {
     
     # 方法3：使用conda env list
     if [[ -z "$CONDA_PREFIX" ]]; then
-        CONDA_PREFIX=$(run_conda_cmd "conda env list" | grep "^${CONDA_ENV} " | awk '{print $2}')
+        CONDA_PREFIX=$(run_conda_cmd "env list" | grep "^${CONDA_ENV} " | awk '{print $2}')
         if [[ -n "$CONDA_PREFIX" ]]; then
             log_info "方法3成功：conda env list 获取路径 $CONDA_PREFIX"
         fi
@@ -221,8 +241,8 @@ check_requirements() {
 #!/bin/bash
 source ~/.bashrc 2>/dev/null || true
 source ~/.zshrc 2>/dev/null || true
-eval "\$(conda shell.bash hook)" 2>/dev/null || true
-conda activate ${CONDA_ENV} 2>/dev/null && echo "\$CONDA_PREFIX"
+eval "\$('$CONDA_COMMAND' shell.bash hook)" 2>/dev/null || true
+'$CONDA_COMMAND' activate ${CONDA_ENV} 2>/dev/null && echo "\$CONDA_PREFIX"
 EOF
             CONDA_PREFIX=$(sudo -u "$SUDO_USER" bash "$TEMP_SCRIPT")
         else
@@ -230,8 +250,8 @@ EOF
 #!/bin/bash
 source ~/.bashrc 2>/dev/null || true
 source ~/.zshrc 2>/dev/null || true
-eval "\$(conda shell.bash hook)" 2>/dev/null || true
-conda activate ${CONDA_ENV} 2>/dev/null && echo "\$CONDA_PREFIX"
+eval "\$('$CONDA_COMMAND' shell.bash hook)" 2>/dev/null || true
+'$CONDA_COMMAND' activate ${CONDA_ENV} 2>/dev/null && echo "\$CONDA_PREFIX"
 EOF
             CONDA_PREFIX=$(bash "$TEMP_SCRIPT")
         fi
