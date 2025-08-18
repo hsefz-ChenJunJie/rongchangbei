@@ -1,0 +1,41 @@
+{
+  "test_config": {
+    "server_url": "http://xg.3.frp.one:40271",
+    "websocket_url": "ws://xg.3.frp.one:40271/conversation",
+    "test_settings": {
+      "connection_timeout": 10,
+      "response_timeout": 30,
+      "max_retries": 3,
+      "enable_detailed_logging": true,
+      "enable_file_logging": true,
+      "log_level": "DEBUG",
+      "show_list_items": true,
+      "test_audio_chunks": 5,
+      "mock_audio_duration": 2.0,
+      "websocket_timeout": 90
+    }
+  },
+  "test_summary": {
+    "total_tests": 2,
+    "passed_tests": 2,
+    "failed_tests": 0,
+    "success_rate": 100.0,
+    "results": [
+      {
+        "test_name": "长时间录音测试",
+        "success": true,
+        "timestamp": "2025-08-18T19:23:59.889633",
+        "details": "90秒录音成功，发送 90 个音频块，连接稳定",
+        "data": null
+      },
+      {
+        "test_name": "多轮长时间录音测试",
+        "success": true,
+        "timestamp": "2025-08-18T19:24:01.835308",
+        "details": "0/0 轮成功",
+        "data": null
+      }
+    ]
+  },
+  "generated_at": "2025-08-18T19:24:01.835577"
+}

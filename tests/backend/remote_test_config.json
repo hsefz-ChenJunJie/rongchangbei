@@ -1,7 +1,7 @@
 {
   "backend_server": {
-    "base_url": "http://192.168.1.23",
-    "port": 8000,
+    "base_url": "http://xg.3.frp.one",
+    "port": 40271,
     "health_endpoint": "/",
     "conversation_health_endpoint": "/conversation/health",
     "websocket_endpoint": "/conversation"
@@ -32,5 +32,39 @@
     "enable_session_recovery_test": true,
     "disconnect_duration": 5,
     "max_persistence_test_hours": 1
+  },
+  "disconnect_test": {
+    "enable_disconnect_test": true,
+    "disconnect_scenarios": [
+      {
+        "name": "短暂断连",
+        "disconnect_duration": 3,
+        "expected_result": "session_restored"
+      },
+      {
+        "name": "中等断连", 
+        "disconnect_duration": 10,
+        "expected_result": "session_restored"
+      },
+      {
+        "name": "长时间断连",
+        "disconnect_duration": 30,
+        "expected_result": "session_not_found"
+      }
+    ],
+    "test_rounds": 2,
+    "round_interval": 3,
+    "reconnection_timeout": 15,
+    "recovery_timeout": 10
+  },
+  "long_recording_test": {
+    "recording_duration": 90,
+    "chunk_interval": 1,
+    "chunk_size": 17920,
+    "quiet_mode": true,
+    "progress_interval_quiet": 20,
+    "progress_interval_verbose": 10,
+    "test_rounds": 0,
+    "round_interval": 5
   }
 }

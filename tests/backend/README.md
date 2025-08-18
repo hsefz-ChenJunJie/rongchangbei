@@ -44,8 +44,10 @@ python run_remote_tests.py
 python run_remote_tests.py my_config.json
 
 # 单独运行特定测试
-python test_websocket_features.py
-python test_conversation_features.py
+python test_websocket_features.py         # WebSocket基础功能测试
+python test_conversation_features.py      # 完整对话功能测试
+python test_disconnect_recovery.py        # 断连恢复专项测试
+python test_long_recording.py             # 长时间录音稳定性测试
 ```
 
 ## 📁 文件结构

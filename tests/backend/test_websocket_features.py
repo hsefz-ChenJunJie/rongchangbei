@@ -107,85 +107,7 @@ class WebSocketFeatureTester(RemoteTestBase):
             self.log_test_result("对话流程测试", False, f"流程异常: {str(e)}")
             return False
     
-    async def test_session_recovery(self) -> bool:
-        """测试会话恢复功能"""
-        print("\n🧪 测试会话恢复功能...")
-        
-        if not self.config.get("session_recovery_test", {}).get("enable_session_recovery_test", False):
-            print("⏭️ 会话恢复测试已禁用，跳过")
-            return True
-        
-        # 为此测试创建新的WebSocket连接
-        test_websocket = await self.connect_websocket()
-        if not test_websocket:
-            self.log_test_result("会话恢复测试", False, "无法建立WebSocket连接")
-            return False
-        
-        try:
-            # 1. 创建会话
-            session_id = await self.start_conversation(test_websocket)
-            if not session_id:
-                self.log_test_result("会话恢复测试", False, "无法创建会话")
-                return False
-            
-            # 2. 发送一条消息
-            await self.send_audio_message(test_websocket, session_id, "测试用户")
-            
-            # 3. 模拟异常断开
-            print("🔌 模拟连接断开...")
-            await test_websocket.close()
-            
-            # 4. 等待一段时间
-            disconnect_duration = self.config.get("session_recovery_test", {}).get("disconnect_duration", 5)
-            print(f"⏳ 等待 {disconnect_duration} 秒...")
-            await asyncio.sleep(disconnect_duration)
-            
-            # 5. 重新连接
-            print("🔌 重新连接...")
-            test_websocket = await self.connect_websocket()
-            if not test_websocket:
-                self.log_test_result("会话恢复测试", False, "重连失败")
-                return False
-            
-            # 6. 尝试恢复会话
-            success = await self.send_websocket_event(test_websocket, "session_resume", {
-                "session_id": session_id
-            })
-            if not success:
-                self.log_test_result("会话恢复测试", False, "恢复请求发送失败")
-                return False
-            
-            # 7. 等待恢复确认，可能伴随状态更新
-            restore_event = await self.receive_any_websocket_event(test_websocket, ["session_restored"], 10)
-            if restore_event:
-                restored_data = restore_event["data"]
-                print(f"✅ 会话恢复成功: {restored_data}")
-                self.log_test_result("会话恢复测试", True, f"会话恢复成功，消息数: {restored_data.get('message_count', 0)}")
-                return True
-            else:
-                # 可能会话已过期或系统不支持恢复
-                error_event = await self.receive_any_websocket_event(test_websocket, ["error"], 5)
-                if error_event:
-                    error_code = error_event["data"].get("error_code")
-                    if error_code == "SESSION_NOT_FOUND":
-                        print("ℹ️ 会话已过期或不支持恢复")
-                        self.log_test_result("会话恢复测试", True, "会话恢复功能正常（会话已过期）")
-                        return True
-                
-                self.log_test_result("会话恢复测试", False, "未收到恢复确认")
-                return False
-                
-        except Exception as e:
-            self.log_test_result("会话恢复测试", False, f"恢复测试异常: {str(e)}")
-            return False
-        finally:
-            # 确保关闭所有测试连接
-            try:
-                if 'test_websocket' in locals() and test_websocket:
-                    await test_websocket.close()
-                    print("🔌 会话恢复测试连接已关闭")
-            except Exception:
-                pass  # 连接可能已关闭
+    # 注意: 会话恢复/断连测试已移动到独立的 test_disconnect_recovery.py 文件中
     
     async def test_response_count_update(self) -> bool:
         """测试回答数量动态调整"""
@@ -262,12 +184,11 @@ class WebSocketFeatureTester(RemoteTestBase):
         print("=" * 60)
         
         try:
-            # 定义测试序列
+            # 定义测试序列（移除断连测试，已独立为test_disconnect_recovery.py）
             tests = [
                 self.test_websocket_connection(),
                 self.test_conversation_flow(),
                 self.test_response_count_update(),
-                self.test_session_recovery(),
             ]
             
             # 逐个执行测试
