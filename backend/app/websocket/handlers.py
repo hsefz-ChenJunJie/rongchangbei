@@ -105,12 +105,7 @@ class WebSocketHandler:
         if client_id in self.active_connections:
             websocket = self.active_connections[client_id]
             try:
-                # 检查WebSocket连接状态
-                if websocket.client_state.DISCONNECTED:
-                    logger.debug(f"连接已断开，跳过发送事件到 {client_id}: {event.type}")
-                    await self.disconnect(client_id)
-                    return
-                
+                # 直接尝试发送事件，让WebSocket自然抛出异常来处理断开的连接
                 event_dict = event.dict()
                 await websocket.send_text(json.dumps(event_dict, ensure_ascii=False))
                 logger.debug(f"发送事件到 {client_id}: {event.type}")
