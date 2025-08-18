@@ -1,0 +1,36 @@
+{
+  "backend_server": {
+    "base_url": "http://192.168.1.23",
+    "port": 8000,
+    "health_endpoint": "/",
+    "conversation_health_endpoint": "/conversation/health",
+    "websocket_endpoint": "/conversation"
+  },
+  "test_settings": {
+    "connection_timeout": 10,
+    "response_timeout": 30,
+    "max_retries": 3,
+    "enable_detailed_logging": true,
+    "enable_file_logging": true,
+    "log_level": "DEBUG",
+    "show_list_items": true,
+    "test_audio_chunks": 5,
+    "mock_audio_duration": 2.0,
+    "websocket_timeout": 90
+  },
+  "test_scenarios": {
+    "scenario_description": "项目管理讨论会议",
+    "response_count": 3,
+    "test_users": ["张三", "李四", "王五"],
+    "test_messages": [
+      "大家好，我想讨论一下项目管理的最佳实践",
+      "我觉得敏捷开发方法比较适合我们的团队",
+      "但是我们需要考虑客户的具体需求和时间限制"
+    ]
+  },
+  "session_recovery_test": {
+    "enable_session_recovery_test": true,
+    "disconnect_duration": 5,
+    "max_persistence_test_hours": 1
+  }
+}
