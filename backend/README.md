@@ -4,6 +4,8 @@
 
 本文档提供AI对话应用后端的完整部署指南，包括开发环境部署和生产环境Docker部署两种方式。
 
+**🎙️ 最新特性：** 项目现已集成Whisper高精度语音识别服务，支持GPU/CPU推理，提供比Vosk更好的识别准确率和多语言支持。推荐使用Whisper作为主要STT服务。
+
 ## 快速导航
 
 - 📋 **[详细配置说明](CONFIGURATION.md)** - 所有配置项的完整说明
@@ -21,8 +23,10 @@
 - 网络连接（用于下载依赖和模型）
 
 ### 可选组件
-- Vosk语音识别模型（真实STT服务）
+- Whisper语音识别模型（推荐的STT服务）
+- Vosk语音识别模型（备用STT服务）
 - OpenRouter API密钥（真实LLM服务）
+- CUDA支持（Whisper GPU推理，可选）
 - Nginx（反向代理，生产环境推荐）
 
 ### 📋 重要配置说明
@@ -31,7 +35,9 @@
 
 **快速配置要点：**
 - 🔑 **OpenRouter API**: 配置 `OPENROUTER_API_KEY` 启用真实LLM服务
-- 🎙️ **语音识别**: 下载Vosk模型启用真实STT服务  
+- 🎙️ **语音识别**: 下载Whisper模型启用高质量STT服务（推荐）
+- 🎯 **STT引擎选择**: 通过 `STT_ENGINE` 选择whisper/vosk/mock
+- 🚀 **GPU加速**: 配置 `WHISPER_DEVICE=cuda` 启用GPU推理（可选）
 - 🌐 **网络设置**: 生产环境需设置 `HOST=0.0.0.0`
 - 📝 **日志配置**: 可调整 `LOG_LEVEL` 和 `LOG_FORMAT`
 
@@ -47,6 +53,8 @@ backend/
 │   └── main.py           # 应用入口
 ├── config/                # 配置管理
 ├── model/                 # AI模型存储
+│   ├── whisper-models/    # Whisper语音识别模型
+│   └── vosk-model/        # Vosk语音识别模型（备用）
 ├── requirements.txt       # Python依赖
 ├── Dockerfile            # Docker镜像构建配置
 ├── docker-compose.yml    # Docker Compose服务编排
@@ -101,7 +109,18 @@ OPENROUTER_API_KEY=your_api_key_here
 OPENROUTER_MODEL=anthropic/claude-3-haiku
 OPENROUTER_TEMPERATURE=0.7
 
-# Vosk STT配置（可选）
+# STT语音识别配置
+STT_ENGINE=whisper    # 选择引擎: whisper（推荐）/vosk/mock
+
+# Whisper STT配置（推荐）
+USE_WHISPER=true
+WHISPER_MODEL_NAME=base
+WHISPER_MODEL_PATH=model/whisper-models
+WHISPER_DEVICE=auto
+WHISPER_COMPUTE_TYPE=int8
+
+# Vosk STT配置（备用）
+USE_REAL_VOSK=false
 VOSK_MODEL_PATH=model/vosk-model
 VOSK_SAMPLE_RATE=16000
 
@@ -114,32 +133,84 @@ LOG_LEVEL=INFO
 
 > 💡 **完整配置说明**: 查看 [CONFIGURATION.md](CONFIGURATION.md) 了解所有配置项的详细说明、默认值和最佳实践。
 
-#### 2.2 下载Vosk模型（推荐）
-如果要使用真实的语音识别服务（推荐测试环境使用）：
+#### 2.2 下载Whisper模型（推荐）
 
-> 💡 **提示**：模型目录结构已预创建，详细说明请查看 `backend/model/vosk-model/README.md`
+**方式一：使用自动化脚本（推荐）**
+
+项目提供了自动下载和转换脚本，可以轻松获取Whisper模型：
 
 ```bash
-# 进入模型目录
+# 下载推荐的base模型（约74MB，性能和准确率平衡）
+python scripts/download_whisper_models.py --model base --verify
+
+# 下载所有推荐模型（base、small、medium）
+python scripts/download_whisper_models.py --all --verify
+
+# 下载特定模型并指定量化类型
+python scripts/download_whisper_models.py --model small --quantization int8 --verify
+```
+
+**方式二：手动下载和转换**
+
+如果需要手动操作或定制化安装：
+
+```bash
+# 安装转换工具
+pip install ctranslate2 transformers[torch]
+
+# 创建模型目录
+mkdir -p model/whisper-models
+
+# 转换base模型（推荐）
+ct2-transformers-converter \
+    --model openai/whisper-base \
+    --output_dir model/whisper-models/base-ct2 \
+    --copy_files tokenizer.json preprocessor_config.json \
+    --quantization int8
+
+# 验证模型安装
+python -c "
+from faster_whisper import WhisperModel
+model = WhisperModel('model/whisper-models/base-ct2', device='cpu')
+print('✅ Whisper模型加载成功!')
+"
+```
+
+**模型选择建议：**
+
+| 模型名称 | 大小 | 内存需求 | 准确性 | 推荐用途 |
+|----------|------|----------|--------|----------|
+| `base` | ~74MB | ~1GB | 良好 | **通用推荐** |
+| `small` | ~244MB | ~2GB | 很好 | 高质量需求 |
+| `medium` | ~769MB | ~5GB | 优秀 | 专业应用 |
+| `large-v3` | ~1550MB | ~10GB | 极佳 | 最高精度 |
+
+> 💡 **提示**：
+> - 首次使用建议选择 `base` 模型，平衡了性能和准确率
+> - 如有GPU支持，可设置 `WHISPER_DEVICE=cuda` 提升推理速度
+> - 详细的模型管理指南请查看 `backend/model/WHISPER_MODELS.md`
+
+#### 2.3 下载Vosk模型（可选备用）
+
+如果需要Vosk作为备用STT服务：
+
+```bash
+# 进入Vosk模型目录
 cd backend/model/vosk-model
 
-# 下载中文模型（约500MB，推荐）
+# 下载中文模型（约500MB）
 wget https://alphacephei.com/vosk/models/vosk-model-cn-0.22.zip
 unzip vosk-model-cn-0.22.zip
 mv vosk-model-cn-0.22/* .
 rm -rf vosk-model-cn-0.22 vosk-model-cn-0.22.zip
 
-# 或下载小型英文模型（约50MB，快速测试）
-wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
-unzip vosk-model-small-en-us-0.15.zip
-mv vosk-model-small-en-us-0.15/* .
-rm -rf vosk-model-small-en-us-0.15 vosk-model-small-en-us-0.15.zip
-
 # 验证模型文件
 ls -la  # 应该看到 am/, conf/, graph/, ivector/ 目录
 ```
 
-> ⚠️ **重要**：如果不下载模型，应用将使用Mock STT服务（用于开发测试）
+> ⚠️ **重要**：
+> - 如果不下载任何模型，应用将使用Mock STT服务（适合开发测试）
+> - 推荐使用Whisper而非Vosk，Whisper具有更高的识别准确率和更好的多语言支持
 
 ### 3. 启动服务
 
@@ -277,8 +348,12 @@ OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_MODEL=qwen/qwen3-235b-a22b:free
 
 # STT服务配置
-USE_REAL_VOSK=true
-VOSK_MODEL_PATH=/app/model/vosk-model
+STT_ENGINE=whisper
+USE_WHISPER=true
+WHISPER_MODEL_NAME=base
+WHISPER_MODEL_PATH=/app/model/whisper-models
+WHISPER_DEVICE=auto
+WHISPER_COMPUTE_TYPE=int8
 
 # 安全配置
 ALLOWED_ORIGINS=["https://yourdomain.com"]
@@ -291,10 +366,23 @@ LOG_LEVEL=INFO
 **开发环境（无需创建.env文件）：**
 如果不创建.env文件，系统会自动使用docker-compose.yml中的默认配置，适合开发和测试环境。
 
-#### 2.3 模型文件配置（可选）
-如果使用Vosk语音识别：
+#### 2.3 模型文件配置
+
+**Whisper模型配置（推荐）：**
 ```bash
-# 创建模型目录
+# 使用项目脚本自动下载和转换Whisper模型
+python scripts/download_whisper_models.py --model base --verify
+
+# 或下载多个推荐模型
+python scripts/download_whisper_models.py --all --verify
+
+# 验证Whisper模型
+ls -la model/whisper-models/  # 应该看到 base-ct2/ 等目录
+```
+
+**Vosk模型配置（可选备用）：**
+```bash
+# 创建Vosk模型目录
 mkdir -p model/vosk-model
 
 # 下载中文模型
@@ -306,6 +394,24 @@ rm -rf vosk-model-cn-0.22*
 
 # 验证模型结构
 ls -la  # 应该看到 am/, conf/, graph/, ivector/ 目录
+```
+
+**GPU支持配置（可选）：**
+```bash
+# 如果有NVIDIA GPU且希望使用GPU加速Whisper推理
+# 确保已安装CUDA和相应的PyTorch版本
+# 在.env文件中配置：
+WHISPER_DEVICE=cuda
+WHISPER_COMPUTE_TYPE=float16
+
+# 验证GPU可用性
+docker compose exec ai-dialogue-backend python -c "
+import torch
+print(f'CUDA available: {torch.cuda.is_available()}')
+if torch.cuda.is_available():
+    print(f'GPU devices: {torch.cuda.device_count()}')
+    print(f'Current device: {torch.cuda.get_device_name(0)}')
+"
 ```
 
 ### 3. 容器管理
@@ -559,9 +665,67 @@ pip install --upgrade pip
 pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple/
 ```
 
-#### 4. Vosk模型加载失败
+#### 4. STT服务问题
+
+**Whisper模型加载失败：**
 ```bash
-# 检查模型文件
+# 检查Whisper模型文件
+ls -la model/whisper-models/
+
+# 确保模型目录结构正确
+model/whisper-models/
+├── base-ct2/
+│   ├── config.json
+│   ├── model.bin
+│   └── tokenizer.json
+└── small-ct2/  # 如果下载了其他模型
+
+# 如果模型不存在，重新下载
+python scripts/download_whisper_models.py --model base --verify
+
+# 权限问题
+chmod -R 755 model/
+
+# 测试模型加载
+python -c "
+from faster_whisper import WhisperModel
+try:
+    model = WhisperModel('model/whisper-models/base-ct2', device='cpu')
+    print('✅ Whisper模型加载成功')
+except Exception as e:
+    print(f'❌ Whisper模型加载失败: {e}')
+"
+```
+
+**GPU推理问题：**
+```bash
+# 检查CUDA可用性
+python -c "
+import torch
+print(f'CUDA available: {torch.cuda.is_available()}')
+print(f'PyTorch version: {torch.__version__}')
+"
+
+# 如果CUDA不可用，切换到CPU推理
+export WHISPER_DEVICE=cpu
+export WHISPER_COMPUTE_TYPE=int8
+```
+
+**STT引擎选择问题：**
+```bash
+# 检查当前STT引擎配置
+echo "Current STT_ENGINE: $STT_ENGINE"
+
+# 切换到Mock模式进行测试
+export STT_ENGINE=mock
+
+# 检查环境变量
+env | grep -E "(STT_|WHISPER_|VOSK_)"
+```
+
+**Vosk模型加载失败（备用选项）：**
+```bash
+# 检查Vosk模型文件
 ls -la model/vosk-model/
 
 # 确保模型目录结构正确
@@ -628,7 +792,7 @@ chmod -R 755 model/
 cat .env
 
 # 查看容器中的环境变量
-docker compose exec ai-dialogue-backend env | grep -E "(OPENROUTER|VOSK|LOG)"
+docker compose exec ai-dialogue-backend env | grep -E "(OPENROUTER|STT_|WHISPER_|VOSK_|LOG)"
 
 # 测试手动启动
 docker compose exec ai-dialogue-backend python -m uvicorn app.main:app --host 0.0.0.0 --port 8000

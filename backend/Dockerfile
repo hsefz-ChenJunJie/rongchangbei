@@ -21,6 +21,7 @@ RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debia
 # 安装系统依赖
 RUN apt-get update && apt-get install -y \
     curl \
+    wget \
     gcc \
     g++ \
     ca-certificates \
@@ -29,16 +30,19 @@ RUN apt-get update && apt-get install -y \
     # PortAudio依赖（pyaudio需要）
     portaudio19-dev \
     libasound2-dev \
-    # 其他音频相关依赖
+    # 音频处理依赖
     libsndfile1-dev \
+    ffmpeg \
+    # Whisper模型转换和推理依赖
+    git \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # 设置工作目录
 WORKDIR /app
 
-# 创建uv缓存目录和应用目录
-RUN mkdir -p /tmp/uv-cache /app/logs
+# 创建必要目录
+RUN mkdir -p /tmp/uv-cache /app/logs /app/model/whisper-models /app/model/vosk-model
 
 # 配置pip镜像源并安装uv
 RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/ && \
@@ -63,6 +67,7 @@ RUN useradd --create-home --shell /bin/bash --uid 1000 app && \
 # 复制应用代码（放在最后以利用缓存）
 COPY --chown=app:app app/ ./app/
 COPY --chown=app:app config/ ./config/
+COPY --chown=app:app scripts/ ./scripts/
 
 # 可选：复制.env文件（如果存在）
 # 创建空的.env文件作为占位符，然后尝试复制真实的.env文件

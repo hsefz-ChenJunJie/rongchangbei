@@ -22,8 +22,11 @@ RUN apt-get update && apt-get install -y \
     # PortAudio依赖（pyaudio需要）
     portaudio19-dev \
     libasound2-dev \
-    # 其他音频相关依赖
+    # 音频处理依赖
     libsndfile1-dev \
+    ffmpeg \
+    # Whisper模型转换和推理依赖
+    git \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -64,10 +67,14 @@ RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debia
 RUN apt-get update && apt-get install -y \
     curl \
     ca-certificates \
+    # 时区数据包
+    tzdata \
     # PortAudio运行时库
     libportaudio2 \
     libasound2 \
+    # 音频处理依赖
     libsndfile1 \
+    ffmpeg \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
@@ -83,9 +90,11 @@ COPY --from=builder /app/venv /app/venv
 # 复制应用代码
 COPY --chown=app:app app/ ./app/
 COPY --chown=app:app config/ ./config/
+COPY --chown=app:app scripts/ ./scripts/
 
-# 创建日志目录
-RUN mkdir -p /app/logs && chown app:app /app/logs
+# 创建必要目录
+RUN mkdir -p /app/logs /app/model/whisper-models /app/model/vosk-model && \
+    chown -R app:app /app/logs /app/model
 
 # 切换到非root用户
 USER app

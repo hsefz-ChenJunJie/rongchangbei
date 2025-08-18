@@ -28,7 +28,63 @@ class Settings(BaseSettings):
         description="OpenRouter最大token数"
     )
     
-    # Vosk STT Configuration
+    # STT Service Configuration
+    stt_engine: str = Field(
+        default="mock",
+        description="STT引擎选择: 'mock', 'whisper', 'vosk'"
+    )
+    
+    # Whisper STT Configuration
+    use_whisper: bool = Field(
+        default=False,
+        description="是否使用Whisper STT服务"
+    )
+    whisper_model_name: str = Field(
+        default="base",
+        description="Whisper模型名称: tiny, base, small, medium, large, large-v2, large-v3, distil-large-v3"
+    )
+    whisper_model_path: str = Field(
+        default="model/whisper-models",
+        description="Whisper模型存储目录路径"
+    )
+    whisper_device: str = Field(
+        default="cpu",
+        description="Whisper推理设备: 'cpu', 'cuda', 'auto'"
+    )
+    whisper_compute_type: str = Field(
+        default="int8",
+        description="Whisper计算类型: 'float16', 'int8_float16', 'int8', 'float32'"
+    )
+    whisper_batch_size: int = Field(
+        default=16,
+        description="Whisper批处理大小"
+    )
+    whisper_beam_size: int = Field(
+        default=5,
+        description="Whisper束搜索大小"
+    )
+    whisper_language: Optional[str] = Field(
+        default=None,
+        description="强制指定语言（如'zh', 'en'），None为自动检测"
+    )
+    whisper_vad_filter: bool = Field(
+        default=True,
+        description="是否启用语音活动检测(VAD)过滤静音"
+    )
+    whisper_word_timestamps: bool = Field(
+        default=False,
+        description="是否启用词级时间戳"
+    )
+    whisper_temperature: float = Field(
+        default=0.0,
+        description="Whisper温度参数，0为确定性输出"
+    )
+    whisper_condition_on_previous_text: bool = Field(
+        default=True,
+        description="是否基于前一段文本进行条件化"
+    )
+    
+    # Vosk STT Configuration (保留作为备用)
     use_real_vosk: bool = Field(
         default=False,
         description="是否使用真实的Vosk STT服务"

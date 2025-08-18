@@ -2,7 +2,7 @@
 
 ## 配置概述
 
-本文档详细说明了AI对话应用后端的所有35个可配置项，包括环境变量、配置文件选项、默认值和最佳实践建议。
+本文档详细说明了AI对话应用后端的所有48个可配置项，包括环境变量、配置文件选项、默认值和最佳实践建议。
 
 ## 配置方式
 
@@ -16,7 +16,7 @@
 
 ## 完整配置清单
 
-后端系统共包含 **35个配置项**，分为以下8个功能分类：
+后端系统共包含 **48个配置项**，分为以下8个功能分类：
 
 ### 🔗 OpenRouter LLM API 配置（5项）
 
@@ -48,17 +48,84 @@ OPENROUTER_MAX_TOKENS=1000
 - `openai/gpt-4o-mini` - OpenAI经济型模型
 - `openai/gpt-4o` - OpenAI高性能模型
 
-### 🎙️ Vosk STT 语音识别配置（3项）
+### 🎙️ STT 语音识别服务配置（16项）
 
-用于集成 Vosk 本地语音转文字服务。
+支持多种语音转文字服务，包括Whisper和Vosk，可通过配置动态选择。
+
+#### STT服务选择配置（1项）
 
 | 配置项 | 环境变量 | 类型 | 默认值 | 必需 | 说明 |
 |--------|----------|------|--------|------|------|
-| `use_real_vosk` | `USE_REAL_VOSK` | bool | `False` | 否 | 是否使用真实的Vosk STT服务 |
+| `stt_engine` | `STT_ENGINE` | str | `whisper` | 否 | STT引擎选择（mock/whisper/vosk） |
+
+#### Whisper STT 配置（12项）
+
+用于集成 Whisper 本地语音转文字服务，支持GPU/CPU推理和多种优化选项。
+
+| 配置项 | 环境变量 | 类型 | 默认值 | 必需 | 说明 |
+|--------|----------|------|--------|------|------|
+| `use_whisper` | `USE_WHISPER` | bool | `True` | 否 | 是否启用Whisper服务（兼容性） |
+| `whisper_model_name` | `WHISPER_MODEL_NAME` | str | `base` | 否 | Whisper模型名称 |
+| `whisper_model_path` | `WHISPER_MODEL_PATH` | str | `model/whisper-models` | 否 | Whisper模型存储目录 |
+| `whisper_device` | `WHISPER_DEVICE` | str | `auto` | 否 | 推理设备（auto/cpu/cuda） |
+| `whisper_compute_type` | `WHISPER_COMPUTE_TYPE` | str | `int8` | 否 | 计算精度类型 |
+| `whisper_batch_size` | `WHISPER_BATCH_SIZE` | int | `16` | 否 | 批处理大小 |
+| `whisper_beam_size` | `WHISPER_BEAM_SIZE` | int | `5` | 否 | 束搜索大小 |
+| `whisper_language` | `WHISPER_LANGUAGE` | str | `null` | 否 | 强制语言识别（null为自动） |
+| `whisper_vad_filter` | `WHISPER_VAD_FILTER` | bool | `True` | 否 | 启用语音活动检测 |
+| `whisper_word_timestamps` | `WHISPER_WORD_TIMESTAMPS` | bool | `False` | 否 | 生成词级时间戳 |
+| `whisper_temperature` | `WHISPER_TEMPERATURE` | float | `0.0` | 否 | 采样温度（0为贪婪解码） |
+| `whisper_condition_on_previous_text` | `WHISPER_CONDITION_ON_PREVIOUS_TEXT` | bool | `True` | 否 | 基于前文条件推理 |
+
+#### Vosk STT 配置（3项）
+
+用于集成 Vosk 本地语音转文字服务作为备用选项。
+
+| 配置项 | 环境变量 | 类型 | 默认值 | 必需 | 说明 |
+|--------|----------|------|--------|------|------|
+| `use_real_vosk` | `USE_REAL_VOSK` | bool | `False` | 否 | 是否启用Vosk STT服务（兼容性） |
 | `vosk_model_path` | `VOSK_MODEL_PATH` | str | `model/vosk-model` | 否 | Vosk模型文件路径 |
 | `vosk_sample_rate` | `VOSK_SAMPLE_RATE` | int | `16000` | 否 | 音频采样率（Hz） |
 
-**配置示例：**
+**STT引擎选择示例：**
+```bash
+# 使用Whisper（推荐）
+STT_ENGINE=whisper
+USE_WHISPER=true
+
+# 使用Vosk作为备用
+STT_ENGINE=vosk
+USE_REAL_VOSK=true
+
+# 开发测试使用Mock
+STT_ENGINE=mock
+```
+
+**Whisper配置示例：**
+```bash
+# 基础配置（推荐）
+WHISPER_MODEL_NAME=base
+WHISPER_DEVICE=auto
+WHISPER_COMPUTE_TYPE=int8
+
+# CPU优化配置
+WHISPER_DEVICE=cpu
+WHISPER_COMPUTE_TYPE=int8
+WHISPER_BATCH_SIZE=8
+
+# GPU高性能配置
+WHISPER_DEVICE=cuda
+WHISPER_COMPUTE_TYPE=float16
+WHISPER_BATCH_SIZE=32
+
+# 高精度配置
+WHISPER_MODEL_NAME=medium
+WHISPER_COMPUTE_TYPE=float32
+WHISPER_BEAM_SIZE=10
+WHISPER_WORD_TIMESTAMPS=true
+```
+
+**Vosk配置示例：**
 ```bash
 # 使用中文模型
 VOSK_MODEL_PATH=model/vosk-model-cn-0.22
@@ -70,7 +137,19 @@ VOSK_MODEL_PATH=model/vosk-model-small-en-us-0.15
 VOSK_SAMPLE_RATE=44100
 ```
 
-**模型下载建议：**
+**Whisper模型选择建议：**
+- `tiny` (~39MB) - 快速测试，准确率较低
+- `base` (~74MB) - **通用推荐**，平衡性能和准确率
+- `small` (~244MB) - 高质量需求
+- `medium` (~769MB) - 专业应用
+- `large-v3` (~1550MB) - 最高精度
+
+**Whisper设备选择建议：**
+- `auto` - 自动检测最佳设备（推荐）
+- `cpu` - CPU推理，内存需求1-10GB
+- `cuda` - GPU推理，需要CUDA支持
+
+**Vosk模型下载建议：**
 - 中文识别：`vosk-model-cn-0.22` (~500MB)
 - 英文识别：`vosk-model-en-us-0.22` (~1.8GB)
 - 小型英文：`vosk-model-small-en-us-0.15` (~40MB)
@@ -288,7 +367,25 @@ OPENROUTER_MODEL=anthropic/claude-3-haiku
 OPENROUTER_TEMPERATURE=0.7
 OPENROUTER_MAX_TOKENS=800
 
-# Vosk STT 语音识别配置
+# STT 语音识别配置
+# 引擎选择: mock, whisper, vosk
+STT_ENGINE=whisper
+
+# Whisper STT 配置
+USE_WHISPER=true
+WHISPER_MODEL_NAME=base
+WHISPER_MODEL_PATH=model/whisper-models
+WHISPER_DEVICE=auto
+WHISPER_COMPUTE_TYPE=int8
+WHISPER_BATCH_SIZE=16
+WHISPER_BEAM_SIZE=5
+WHISPER_LANGUAGE=null
+WHISPER_VAD_FILTER=true
+WHISPER_WORD_TIMESTAMPS=false
+WHISPER_TEMPERATURE=0.0
+WHISPER_CONDITION_ON_PREVIOUS_TEXT=true
+
+# Vosk STT 配置（备用）
 # 模型下载：https://alphacephei.com/vosk/models
 USE_REAL_VOSK=false
 VOSK_MODEL_PATH=model/vosk-model
@@ -354,7 +451,11 @@ PORT=8000
 ALLOWED_ORIGINS=["https://yourdomain.com"]
 
 # API服务配置
-USE_REAL_VOSK=true
+STT_ENGINE=whisper
+USE_WHISPER=true
+WHISPER_MODEL_NAME=base
+WHISPER_DEVICE=auto
+WHISPER_COMPUTE_TYPE=int8
 OPENROUTER_API_KEY=sk-or-v1-production-api-key
 OPENROUTER_MODEL=anthropic/claude-3-sonnet
 OPENROUTER_TEMPERATURE=0.5
@@ -406,7 +507,10 @@ curl http://localhost:8000/conversation/health
   "services": {
     "stt": {
       "status": "healthy", 
-      "mode": "vosk|mock",
+      "mode": "whisper|vosk|mock",
+      "engine": "whisper",
+      "model_name": "base",
+      "device": "cpu",
       "model_loaded": true
     },
     "llm": {
@@ -453,11 +557,23 @@ def check_config():
     else:
         print("⚠️  OpenRouter: Mock模式")
     
-    # Vosk配置  
-    if os.path.exists(settings.vosk_model_path):
-        print("✅ Vosk: 真实模式")
+    # STT配置
+    print(f"🎙️  STT引擎: {settings.stt_engine}")
+    if settings.stt_engine == "whisper":
+        whisper_model_path = os.path.join(settings.whisper_model_path, f"{settings.whisper_model_name}-ct2")
+        if os.path.exists(whisper_model_path):
+            print("✅ Whisper: 真实模式")
+            print(f"   模型: {settings.whisper_model_name}")
+            print(f"   设备: {settings.whisper_device}")
+        else:
+            print("⚠️  Whisper: 模型文件不存在")
+    elif settings.stt_engine == "vosk":
+        if os.path.exists(settings.vosk_model_path):
+            print("✅ Vosk: 真实模式")
+        else:
+            print("⚠️  Vosk: Mock模式（模型文件不存在）")
     else:
-        print("⚠️  Vosk: Mock模式（模型文件不存在）")
+        print("⚠️  STT: Mock模式")
     
     # 网络配置
     print(f"🌐 服务地址: {settings.host}:{settings.port}")
@@ -494,7 +610,8 @@ LOG_LEVEL=DEBUG
 ```bash
 # 完整本地测试配置
 OPENROUTER_API_KEY=sk-or-v1-your-test-key
-VOSK_MODEL_PATH=model/vosk-model-small-en-us-0.15
+STT_ENGINE=whisper
+WHISPER_MODEL_NAME=base
 DEBUG=true
 LOG_LEVEL=DEBUG
 ```
@@ -523,7 +640,8 @@ LLM_TIMEOUT=45
 # Docker专用配置
 HOST=0.0.0.0
 PORT=8000
-VOSK_MODEL_PATH=/app/model/vosk-model
+STT_ENGINE=whisper
+WHISPER_MODEL_PATH=/app/model/whisper-models
 LOG_FORMAT=json
 DEBUG=false
 ```
@@ -617,7 +735,17 @@ DEBUG=false
    # 查看支持的模型列表
    ```
 
-2. **Vosk模型加载失败：**
+2. **Whisper模型加载失败：**
+   ```bash
+   # 检查模型路径
+   ls -la $WHISPER_MODEL_PATH/$WHISPER_MODEL_NAME-ct2/
+   
+   # 确保包含必要文件：config.json, model.bin等
+   # 如果模型不存在，运行下载脚本
+   python scripts/download_whisper_models.py --model base --verify
+   ```
+
+3. **Vosk模型加载失败：**
    ```bash
    # 检查模型路径
    ls -la $VOSK_MODEL_PATH/
@@ -626,7 +754,7 @@ DEBUG=false
    # am/ graph/ ivector/ conf/
    ```
 
-3. **端口绑定失败：**
+4. **端口绑定失败：**
    ```bash
    # 检查端口占用
    lsof -i :$PORT
@@ -635,7 +763,7 @@ DEBUG=false
    export PORT=8001
    ```
 
-4. **WebSocket连接问题：**
+5. **WebSocket连接问题：**
    ```bash
    # 检查防火墙设置
    # 确保HOST设置正确（容器中使用0.0.0.0）
@@ -646,7 +774,9 @@ DEBUG=false
 部署前检查清单：
 
 - [ ] API密钥配置正确
-- [ ] 模型文件存在且可访问  
+- [ ] STT引擎正确选择（whisper/vosk/mock）
+- [ ] Whisper模型文件已下载并转换
+- [ ] Vosk模型文件存在且可访问（如使用）
 - [ ] 端口未被占用
 - [ ] 防火墙规则允许访问
 - [ ] 日志级别适合环境

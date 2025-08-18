@@ -10,6 +10,10 @@ pydantic==2.5.0
 pydantic-settings==2.1.0
 
 # Speech-to-Text
+# Whisper STT (primary)
+faster-whisper>=0.10.0
+torch>=2.0.0  # Required for device detection
+# Vosk STT (backup)
 vosk==0.3.45
 
 # LLM Service

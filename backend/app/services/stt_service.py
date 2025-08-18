@@ -421,7 +421,331 @@ class STTService:
 
 
 # ===============================
-# 真实的Vosk集成代码（待启用）
+# Whisper STT服务实现
+# ===============================
+
+class WhisperSTTService(STTService):
+    """
+    基于faster-whisper的STT服务实现
+    
+    注意：需要安装faster-whisper库
+    pip install faster-whisper
+    """
+    
+    def __init__(self):
+        super().__init__()
+        self.model = None
+        self.model_info = {}
+        
+    async def initialize(self) -> bool:
+        """
+        初始化Whisper服务
+        """
+        try:
+            from faster_whisper import WhisperModel
+            import os
+            import torch
+            
+            # 自动检测设备
+            device = self._detect_device() if settings.whisper_device == "auto" else settings.whisper_device
+            
+            # 确定计算类型
+            compute_type = self._get_compute_type(device)
+            
+            # 构建模型路径
+            model_path = self._get_model_path()
+            
+            logger.info(f"初始化Whisper服务: 模型={settings.whisper_model_name}, 设备={device}, 计算类型={compute_type}")
+            logger.info(f"模型路径: {model_path}")
+            
+            # 检查本地模型文件
+            if os.path.exists(model_path):
+                logger.info(f"从本地加载Whisper模型: {model_path}")
+                self.model = WhisperModel(
+                    model_path,
+                    device=device,
+                    compute_type=compute_type,
+                    cpu_threads=settings.max_workers
+                )
+            else:
+                logger.error(f"Whisper模型文件不存在: {model_path}")
+                logger.info("请确保已将模型文件下载到指定目录，或使用模型转换工具")
+                return False
+            
+            # 存储模型信息
+            self.model_info = {
+                "model_name": settings.whisper_model_name,
+                "model_path": model_path,
+                "device": device,
+                "compute_type": compute_type,
+                "batch_size": settings.whisper_batch_size,
+                "beam_size": settings.whisper_beam_size,
+                "language": settings.whisper_language,
+                "vad_filter": settings.whisper_vad_filter
+            }
+            
+            self.is_initialized = True
+            
+            # 启动缓冲区清理任务
+            self.cleanup_task = asyncio.create_task(self._cleanup_buffer_loop())
+            
+            logger.info("Whisper STT服务初始化完成")
+            return True
+            
+        except ImportError:
+            logger.error("faster-whisper库未安装，请运行: pip install faster-whisper")
+            return False
+        except Exception as e:
+            logger.error(f"Whisper STT服务初始化失败: {e}")
+            return False
+    
+    def _detect_device(self) -> str:
+        """
+        自动检测最佳推理设备
+        """
+        try:
+            import torch
+            if torch.cuda.is_available():
+                logger.info("检测到CUDA支持，使用GPU推理")
+                return "cuda"
+            else:
+                logger.info("未检测到CUDA支持，使用CPU推理")
+                return "cpu"
+        except ImportError:
+            logger.info("PyTorch未安装，使用CPU推理")
+            return "cpu"
+    
+    def _get_compute_type(self, device: str) -> str:
+        """
+        根据设备选择合适的计算类型
+        """
+        if device == "cuda":
+            # GPU推理：优先使用int8_float16以节省显存
+            if settings.whisper_compute_type in ["float16", "int8_float16"]:
+                return settings.whisper_compute_type
+            else:
+                logger.warning(f"GPU设备不支持计算类型 {settings.whisper_compute_type}，使用 int8_float16")
+                return "int8_float16"
+        else:
+            # CPU推理：使用int8或float32
+            if settings.whisper_compute_type in ["int8", "float32"]:
+                return settings.whisper_compute_type
+            else:
+                logger.warning(f"CPU设备不支持计算类型 {settings.whisper_compute_type}，使用 int8")
+                return "int8"
+    
+    def _get_model_path(self) -> str:
+        """
+        构建模型文件路径
+        """
+        import os
+        
+        # 检查是否是预转换的CT2模型目录
+        ct2_model_path = os.path.join(settings.whisper_model_path, f"{settings.whisper_model_name}-ct2")
+        if os.path.exists(ct2_model_path):
+            return ct2_model_path
+        
+        # 检查标准模型文件
+        standard_model_path = os.path.join(settings.whisper_model_path, settings.whisper_model_name)
+        if os.path.exists(standard_model_path):
+            return standard_model_path
+        
+        # 如果都不存在，返回CT2路径（用于错误提示）
+        return ct2_model_path
+    
+    async def start_stream_processing(self, session_id: str) -> bool:
+        """
+        开始Whisper音频流处理
+        """
+        if not self.is_initialized:
+            logger.error("Whisper服务未初始化")
+            return False
+        
+        # 调用父类方法初始化流状态
+        success = await super().start_stream_processing(session_id)
+        if success:
+            logger.info(f"开始Whisper音频流处理: {session_id}")
+        
+        return success
+    
+    async def process_audio_chunk(self, session_id: str, audio_chunk_base64: str) -> Optional[Dict[str, Any]]:
+        """
+        处理音频数据块（Whisper实时处理）
+        
+        注意：Whisper不像Vosk那样支持实时流式处理，
+        这里我们收集音频块，在消息结束时进行完整转录
+        """
+        if not self.is_initialized:
+            logger.error("Whisper服务未初始化")
+            return None
+        
+        if session_id not in self.active_streams:
+            logger.error(f"会话 {session_id} 的音频流未开始")
+            return None
+        
+        try:
+            # 解码音频数据
+            audio_data = base64.b64decode(audio_chunk_base64)
+            
+            # 获取流状态
+            stream_info = self.active_streams[session_id]
+            current_time = time.time()
+            
+            # 背压控制检查（复用父类逻辑）
+            now = datetime.utcnow()
+            chunk_timestamps = stream_info["chunk_timestamps"]
+            
+            # 清理1秒前的时间戳
+            cutoff_time = now - timedelta(seconds=1)
+            chunk_timestamps[:] = [ts for ts in chunk_timestamps if ts > cutoff_time]
+            
+            # 检查是否超过每秒最大chunk数量
+            if len(chunk_timestamps) >= self.max_chunks_per_second:
+                stream_info["rejected_chunks"] += 1
+                logger.warning(f"Whisper音频流背压控制触发 {session_id}: 当前每秒chunk数量 {len(chunk_timestamps)}")
+                return {
+                    "backpressure": True,
+                    "message": f"超过每秒最大chunk数量限制 ({self.max_chunks_per_second})",
+                    "rejected_count": stream_info["rejected_chunks"]
+                }
+            
+            # 缓冲区大小检查
+            new_total_bytes = stream_info["total_bytes"] + len(audio_data)
+            if new_total_bytes > self.max_buffer_size:
+                # 强制清理旧的audio_chunks
+                self._cleanup_old_chunks(stream_info)
+                new_total_bytes = stream_info["total_bytes"] + len(audio_data)
+                
+                if new_total_bytes > self.max_buffer_size:
+                    stream_info["rejected_chunks"] += 1
+                    logger.warning(f"Whisper音频缓冲区已满 {session_id}: 当前 {stream_info['total_bytes']} 字节")
+                    return {
+                        "buffer_full": True,
+                        "message": f"音频缓冲区已满",
+                        "rejected_count": stream_info["rejected_chunks"]
+                    }
+            
+            # 更新流状态
+            stream_info["audio_chunks"].append(audio_data)
+            stream_info["total_bytes"] += len(audio_data)
+            stream_info["chunk_timestamps"].append(now)
+            stream_info["last_chunk_time"] = current_time
+            
+            # Whisper收集模式：不返回中间结果
+            # 在get_final_transcription时进行完整转录
+            logger.debug(f"Whisper音频块收集 {session_id}: 数据长度 {len(audio_data)}, 总块数 {len(stream_info['audio_chunks'])}")
+            
+            # 每收集10个音频块返回一次进度提示
+            chunk_count = len(stream_info["audio_chunks"])
+            if chunk_count % 10 == 0:
+                return {
+                    "partial": True,
+                    "text": f"正在收集音频数据... ({chunk_count} 块)",
+                    "confidence": 0.9,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "whisper_collecting": True
+                }
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Whisper处理音频块失败 {session_id}: {e}")
+            return None
+    
+    async def get_final_transcription(self, session_id: str) -> Optional[str]:
+        """
+        获取Whisper最终转录结果
+        """
+        if session_id not in self.active_streams:
+            logger.error(f"会话 {session_id} 的音频流不存在")
+            return None
+        
+        try:
+            stream_info = self.active_streams[session_id]
+            
+            # 合并所有音频块
+            if not stream_info["audio_chunks"]:
+                logger.warning(f"会话 {session_id} 没有音频数据")
+                return "未检测到音频内容"
+            
+            # 将音频块合并为单个音频流
+            combined_audio = b''.join(stream_info["audio_chunks"])
+            
+            logger.info(f"开始Whisper转录 {session_id}: {len(combined_audio)} 字节音频数据")
+            
+            # 创建临时音频文件
+            import tempfile
+            import wave
+            
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_audio:
+                # 写入WAV格式音频文件
+                with wave.open(temp_audio.name, 'wb') as wav_file:
+                    wav_file.setnchannels(settings.audio_channels)
+                    wav_file.setsampwidth(2)  # 16位采样
+                    wav_file.setframerate(settings.audio_sample_rate)
+                    wav_file.writeframes(combined_audio)
+                
+                # 使用Whisper进行转录
+                segments, info = await self._transcribe_audio(temp_audio.name)
+                
+                # 组合转录结果
+                final_text = "".join([segment.text.strip() for segment in segments])
+                
+                # 清理临时文件
+                import os
+                os.unlink(temp_audio.name)
+            
+            # 清理流状态
+            del self.active_streams[session_id]
+            
+            logger.info(f"Whisper转录完成 {session_id}: 检测语言={info.language} (置信度={info.language_probability:.2f})")
+            logger.info(f"转录结果: {final_text[:100]}{'...' if len(final_text) > 100 else ''}")
+            
+            return final_text if final_text.strip() else "未识别到语音内容"
+            
+        except Exception as e:
+            logger.error(f"Whisper获取最终转录失败 {session_id}: {e}")
+            # 清理流状态
+            if session_id in self.active_streams:
+                del self.active_streams[session_id]
+            return None
+    
+    async def _transcribe_audio(self, audio_file_path: str):
+        """
+        执行Whisper音频转录
+        """
+        import asyncio
+        
+        def _sync_transcribe():
+            return self.model.transcribe(
+                audio_file_path,
+                beam_size=settings.whisper_beam_size,
+                language=settings.whisper_language,
+                temperature=settings.whisper_temperature,
+                condition_on_previous_text=settings.whisper_condition_on_previous_text,
+                vad_filter=settings.whisper_vad_filter,
+                word_timestamps=settings.whisper_word_timestamps
+            )
+        
+        # 在线程池中执行同步转录
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, _sync_transcribe)
+    
+    async def health_check(self) -> Dict[str, Any]:
+        """
+        Whisper健康检查
+        """
+        base_status = await super().health_check()
+        base_status.update({
+            "mode": "whisper",
+            "model_info": self.model_info,
+            "model_loaded": self.model is not None
+        })
+        return base_status
+
+
+# ===============================
+# Vosk集成代码（保留作为备用）
 # ===============================
 
 class VoskSTTService(STTService):
@@ -575,13 +899,23 @@ def create_stt_service() -> STTService:
     Returns:
         STTService: STT服务实例
     """
-    # 从配置文件读取使用真实Vosk的设置
-    use_real_vosk = settings.use_real_vosk
+    # 优先使用stt_engine配置
+    engine = settings.stt_engine.lower()
     
-    logger.info(f"STT服务配置: use_real_vosk={use_real_vosk}")
+    # 向后兼容：检查旧配置
+    if engine == "mock":
+        if settings.use_whisper:
+            engine = "whisper"
+        elif settings.use_real_vosk:
+            engine = "vosk"
     
-    if use_real_vosk:
-        logger.info("使用真实Vosk STT服务")
+    logger.info(f"STT服务配置: engine={engine}")
+    
+    if engine == "whisper":
+        logger.info("使用Whisper STT服务")
+        return WhisperSTTService()
+    elif engine == "vosk":
+        logger.info("使用Vosk STT服务")
         return VoskSTTService()
     else:
         logger.info("使用Mock STT服务")
