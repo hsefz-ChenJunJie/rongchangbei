@@ -105,6 +105,12 @@ class WebSocketHandler:
         if client_id in self.active_connections:
             websocket = self.active_connections[client_id]
             try:
+                # 检查WebSocket连接状态
+                if websocket.client_state.DISCONNECTED:
+                    logger.debug(f"连接已断开，跳过发送事件到 {client_id}: {event.type}")
+                    await self.disconnect(client_id)
+                    return
+                
                 event_dict = event.dict()
                 await websocket.send_text(json.dumps(event_dict, ensure_ascii=False))
                 logger.debug(f"发送事件到 {client_id}: {event.type}")
@@ -121,7 +127,7 @@ class WebSocketHandler:
                     self.connection_info[client_id]["error_count"] += 1
                     self.connection_info[client_id]["is_healthy"] = False
                 
-                self.disconnect(client_id)
+                await self.disconnect(client_id)
         else:
             logger.warning(f"尝试向不存在的连接发送事件: {client_id}")
     
@@ -181,7 +187,7 @@ class WebSocketHandler:
         except Exception as e:
             logger.error(f"WebSocket连接错误 {client_id}: {e}")
         finally:
-            self.disconnect(client_id)
+            await self.disconnect(client_id)
     
     async def handle_event(self, client_id: str, message: Dict[str, Any]):
         """处理接收到的事件"""
@@ -378,6 +384,15 @@ class WebSocketHandler:
         
         # 发送消息记录确认
         await self.send_message_recorded(session_id, message_id)
+        
+        # 主动保存会话（有新消息时）
+        if self.persistence_manager:
+            try:
+                success = await self.persistence_manager.save_session(session)
+                if success:
+                    logger.debug(f"消息记录后会话已保存: {session_id}")
+            except Exception as e:
+                logger.error(f"保存会话失败 {session_id}: {e}")
         
         # 自动触发意见生成
         await self.send_status_update(session_id, "generating_opinions", "生成意见建议")
@@ -611,18 +626,21 @@ class WebSocketHandler:
     async def _save_session_on_disconnect(self, session_id: str):
         """在连接断开时保存会话"""
         if not self.persistence_manager or not self.session_manager:
+            logger.debug(f"持久化管理器或会话管理器不可用，跳过保存: {session_id}")
             return
         
         try:
             session = self.session_manager.get_session(session_id)
-            if session:
-                # 只有在非正常结束的情况下才保存
-                # 这里可以根据会话状态判断是否需要保存
+            if session and session.messages:
+                # 积极保存有消息内容的会话，不管是否正常结束
+                logger.info(f"正在保存会话到持久化存储: {session_id}")
                 success = await self.persistence_manager.save_session(session)
                 if success:
-                    logger.info(f"连接断开时会话已保存: {session_id}")
+                    logger.info(f"连接断开时会话已保存: {session_id} (消息数: {len(session.messages)})")
                 else:
                     logger.error(f"连接断开时保存会话失败: {session_id}")
+            else:
+                logger.debug(f"会话为空或无消息，跳过保存: {session_id}")
         except Exception as e:
             logger.error(f"保存会话异常 {session_id}: {e}")
     
@@ -748,14 +766,27 @@ class WebSocketHandler:
                             f"连接 {client_id} 长时间无活动 ({inactive_duration:.1f}秒)，准备清理"
                         )
                     elif inactive_duration > self.heartbeat_interval * 2:
-                        # 发送心跳ping
+                        # 检查连接状态并发送心跳
                         try:
                             websocket = self.active_connections.get(client_id)
-                            if websocket:
-                                await websocket.ping()
-                                logger.debug(f"发送心跳到 {client_id}")
+                            if websocket and not websocket.client_state.DISCONNECTED:
+                                # 使用FastAPI WebSocket的状态检查
+                                try:
+                                    # 发送状态更新作为心跳检测
+                                    test_event = {
+                                        "type": "heartbeat",
+                                        "data": {"timestamp": datetime.utcnow().isoformat()}
+                                    }
+                                    await websocket.send_text(json.dumps(test_event))
+                                    logger.debug(f"发送心跳到 {client_id}")
+                                except Exception as send_error:
+                                    logger.warning(f"心跳发送失败 {client_id}: {send_error}")
+                                    stale_connections.append(client_id)
+                            else:
+                                logger.debug(f"连接已断开，标记为过期: {client_id}")
+                                stale_connections.append(client_id)
                         except Exception as e:
-                            logger.warning(f"心跳发送失败 {client_id}: {e}")
+                            logger.warning(f"心跳检查失败 {client_id}: {e}")
                             stale_connections.append(client_id)
                 
                 # 清理无效连接
@@ -767,7 +798,7 @@ class WebSocketHandler:
                     except Exception as e:
                         logger.debug(f"关闭无效连接时出错 {client_id}: {e}")
                     finally:
-                        self.disconnect(client_id)
+                        await self.disconnect(client_id)
                 
                 if stale_connections:
                     logger.info(f"清理了 {len(stale_connections)} 个无效连接")
@@ -838,6 +869,6 @@ class WebSocketHandler:
             except Exception as e:
                 logger.debug(f"关闭连接时出错 {client_id}: {e}")
             finally:
-                self.disconnect(client_id)
+                await self.disconnect(client_id)
         
         logger.info("WebSocket处理器已关闭")
