@@ -2,7 +2,7 @@
 
 ## 配置概述
 
-本文档详细说明了AI对话应用后端的所有可配置项，包括环境变量、配置文件选项、默认值和最佳实践建议。
+本文档详细说明了AI对话应用后端的所有35个可配置项，包括环境变量、配置文件选项、默认值和最佳实践建议。
 
 ## 配置方式
 
@@ -16,7 +16,9 @@
 
 ## 完整配置清单
 
-### 🔗 OpenRouter LLM API 配置
+后端系统共包含 **35个配置项**，分为以下8个功能分类：
+
+### 🔗 OpenRouter LLM API 配置（5项）
 
 用于集成 OpenRouter 大语言模型服务，支持多种AI模型调用。
 
@@ -46,12 +48,13 @@ OPENROUTER_MAX_TOKENS=1000
 - `openai/gpt-4o-mini` - OpenAI经济型模型
 - `openai/gpt-4o` - OpenAI高性能模型
 
-### 🎙️ Vosk STT 语音识别配置
+### 🎙️ Vosk STT 语音识别配置（3项）
 
 用于集成 Vosk 本地语音转文字服务。
 
 | 配置项 | 环境变量 | 类型 | 默认值 | 必需 | 说明 |
 |--------|----------|------|--------|------|------|
+| `use_real_vosk` | `USE_REAL_VOSK` | bool | `False` | 否 | 是否使用真实的Vosk STT服务 |
 | `vosk_model_path` | `VOSK_MODEL_PATH` | str | `model/vosk-model` | 否 | Vosk模型文件路径 |
 | `vosk_sample_rate` | `VOSK_SAMPLE_RATE` | int | `16000` | 否 | 音频采样率（Hz） |
 
@@ -72,7 +75,7 @@ VOSK_SAMPLE_RATE=44100
 - 英文识别：`vosk-model-en-us-0.22` (~1.8GB)
 - 小型英文：`vosk-model-small-en-us-0.15` (~40MB)
 
-### 🌐 服务器网络配置
+### 🌐 服务器网络配置（4项）
 
 控制 FastAPI 应用的网络监听和访问设置。
 
@@ -81,6 +84,7 @@ VOSK_SAMPLE_RATE=44100
 | `host` | `HOST` | str | `127.0.0.1` | 否 | 服务器监听地址 |
 | `port` | `PORT` | int | `8000` | 否 | 服务器监听端口 |
 | `debug` | `DEBUG` | bool | `True` | 否 | 调试模式开关 |
+| `allowed_origins` | `ALLOWED_ORIGINS` | List[str] | `["*"]` | 否 | CORS允许的域名列表 |
 
 **配置示例：**
 ```bash
@@ -103,7 +107,7 @@ PORT=3000
 - 生产环境：`HOST=0.0.0.0` 允许外部访问
 - 容器环境：必须使用 `HOST=0.0.0.0`
 
-### ⏱️ 超时设置
+### ⏱️ 超时设置（7项）
 
 控制各种服务操作的超时时间，防止长时间阻塞。
 
@@ -111,7 +115,11 @@ PORT=3000
 |--------|----------|------|--------|------|------|
 | `stt_timeout` | `STT_TIMEOUT` | int | `30` | 否 | STT服务超时时间（秒） |
 | `llm_timeout` | `LLM_TIMEOUT` | int | `30` | 否 | LLM服务超时时间（秒） |
-| `websocket_timeout` | `WEBSOCKET_TIMEOUT` | int | `300` | 否 | WebSocket连接超时（秒） |
+| `websocket_timeout` | `WEBSOCKET_TIMEOUT` | int | `600` | 否 | WebSocket连接超时时间（秒） |
+| `websocket_ping_interval` | `WEBSOCKET_PING_INTERVAL` | int | `30` | 否 | WebSocket心跳间隔时间（秒） |
+| `websocket_ping_timeout` | `WEBSOCKET_PING_TIMEOUT` | int | `10` | 否 | WebSocket心跳超时时间（秒） |
+| `websocket_max_message_size` | `WEBSOCKET_MAX_MESSAGE_SIZE` | int | `16777216` | 否 | WebSocket最大消息大小（字节） |
+| `timeout` | `TIMEOUT` | int | `60` | 否 | 通用超时时间（秒） |
 
 **配置示例：**
 ```bash
@@ -131,7 +139,7 @@ WEBSOCKET_TIMEOUT=600
 - LLM超时：根据模型复杂度调整20-60秒
 - WebSocket：建议300-600秒
 
-### 📝 日志记录配置
+### 📝 日志记录配置（5项）
 
 控制应用日志的输出级别和格式。
 
@@ -139,6 +147,9 @@ WEBSOCKET_TIMEOUT=600
 |--------|----------|------|--------|------|------|
 | `log_level` | `LOG_LEVEL` | str | `INFO` | 否 | 日志级别 |
 | `log_format` | `LOG_FORMAT` | str | `json` | 否 | 日志输出格式 |
+| `log_file` | `LOG_FILE` | str | `logs/app.log` | 否 | 日志文件路径 |
+| `log_max_size` | `LOG_MAX_SIZE` | str | `100MB` | 否 | 日志文件最大大小 |
+| `log_backup_count` | `LOG_BACKUP_COUNT` | int | `5` | 否 | 日志备份文件数量 |
 
 **可选值：**
 - **日志级别**: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`
@@ -165,15 +176,18 @@ LOG_LEVEL=DEBUG
 - `ERROR`: 仅错误信息
 - `CRITICAL`: 仅严重错误
 
-### 🎵 音频处理配置
+### 🎵 音频处理配置（6项）
 
-控制音频数据的处理参数。
+控制音频数据的处理参数和背压控制。
 
 | 配置项 | 环境变量 | 类型 | 默认值 | 必需 | 说明 |
 |--------|----------|------|--------|------|------|
 | `audio_chunk_size` | `AUDIO_CHUNK_SIZE` | int | `4096` | 否 | 音频数据块大小（字节） |
 | `audio_sample_rate` | `AUDIO_SAMPLE_RATE` | int | `16000` | 否 | 音频采样率（Hz） |
 | `audio_channels` | `AUDIO_CHANNELS` | int | `1` | 否 | 音频声道数 |
+| `audio_buffer_max_size` | `AUDIO_BUFFER_MAX_SIZE` | int | `52428800` | 否 | 音频缓冲区最大大小（50MB） |
+| `audio_buffer_cleanup_interval` | `AUDIO_BUFFER_CLEANUP_INTERVAL` | int | `10` | 否 | 音频缓冲区清理间隔（秒） |
+| `audio_max_chunks_per_second` | `AUDIO_MAX_CHUNKS_PER_SECOND` | int | `100` | 否 | 每秒最大音频块数量（背压控制） |
 
 **配置示例：**
 ```bash
@@ -197,6 +211,64 @@ AUDIO_SAMPLE_RATE=8000
 - 高质量录音：44.1kHz, 立体声, 8KB块
 - 低带宽：8kHz, 单声道, 2KB块
 
+### ⚡ 性能配置（1项）
+
+控制应用的并发处理能力。
+
+| 配置项 | 环境变量 | 类型 | 默认值 | 必需 | 说明 |
+|--------|----------|------|--------|------|------|
+| `max_workers` | `MAX_WORKERS` | int | `4` | 否 | 最大工作线程数 |
+
+**配置示例：**
+```bash
+# 高并发配置
+MAX_WORKERS=8
+
+# 低资源配置
+MAX_WORKERS=2
+
+# 单核系统
+MAX_WORKERS=1
+```
+
+**性能建议：**
+- CPU密集型：设置为CPU核心数
+- I/O密集型：可设置为CPU核心数的2-4倍
+- 内存受限：适当降低线程数
+
+### 💾 会话持久化配置（4项）
+
+控制对话会话的持久化存储和过期管理。
+
+| 配置项 | 环境变量 | 类型 | 默认值 | 必需 | 说明 |
+|--------|----------|------|--------|------|------|
+| `session_persistence_enabled` | `SESSION_PERSISTENCE_ENABLED` | bool | `True` | 否 | 是否启用会话持久化 |
+| `session_persistence_dir` | `SESSION_PERSISTENCE_DIR` | str | `./sessions` | 否 | 会话持久化存储目录 |
+| `session_max_persistence_hours` | `SESSION_MAX_PERSISTENCE_HOURS` | int | `24` | 否 | 会话最大持久化时间（小时） |
+| `session_cleanup_interval_minutes` | `SESSION_CLEANUP_INTERVAL_MINUTES` | int | `60` | 否 | 会话清理间隔（分钟） |
+
+**配置示例：**
+```bash
+# 长期存储配置
+SESSION_PERSISTENCE_ENABLED=true
+SESSION_PERSISTENCE_DIR=/var/lib/ai-dialogue/sessions
+SESSION_MAX_PERSISTENCE_HOURS=168  # 7天
+SESSION_CLEANUP_INTERVAL_MINUTES=30
+
+# 临时存储配置
+SESSION_MAX_PERSISTENCE_HOURS=2    # 2小时
+SESSION_CLEANUP_INTERVAL_MINUTES=10
+
+# 禁用持久化
+SESSION_PERSISTENCE_ENABLED=false
+```
+
+**持久化策略：**
+- **短期对话（1-6小时）**：适合临时使用场景
+- **日常对话（12-48小时）**：适合常规使用
+- **长期对话（7-30天）**：适合重要项目讨论
+- **永久存储**：需要额外的归档机制
+
 ## 环境配置文件
 
 ### .env 文件模板
@@ -218,6 +290,7 @@ OPENROUTER_MAX_TOKENS=800
 
 # Vosk STT 语音识别配置
 # 模型下载：https://alphacephei.com/vosk/models
+USE_REAL_VOSK=false
 VOSK_MODEL_PATH=model/vosk-model
 VOSK_SAMPLE_RATE=16000
 
@@ -225,20 +298,40 @@ VOSK_SAMPLE_RATE=16000
 HOST=127.0.0.1
 PORT=8000
 DEBUG=true
+ALLOWED_ORIGINS=["*"]
 
 # 超时设置（秒）
 STT_TIMEOUT=30
 LLM_TIMEOUT=30
-WEBSOCKET_TIMEOUT=300
+WEBSOCKET_TIMEOUT=600
+WEBSOCKET_PING_INTERVAL=30
+WEBSOCKET_PING_TIMEOUT=10
+WEBSOCKET_MAX_MESSAGE_SIZE=16777216
+TIMEOUT=60
 
 # 日志记录配置
 LOG_LEVEL=INFO
 LOG_FORMAT=json
+LOG_FILE=logs/app.log
+LOG_MAX_SIZE=100MB
+LOG_BACKUP_COUNT=5
 
 # 音频处理配置
 AUDIO_CHUNK_SIZE=4096
 AUDIO_SAMPLE_RATE=16000
 AUDIO_CHANNELS=1
+AUDIO_BUFFER_MAX_SIZE=52428800
+AUDIO_BUFFER_CLEANUP_INTERVAL=10
+AUDIO_MAX_CHUNKS_PER_SECOND=100
+
+# 性能配置
+MAX_WORKERS=4
+
+# 会话持久化配置
+SESSION_PERSISTENCE_ENABLED=true
+SESSION_PERSISTENCE_DIR=./sessions
+SESSION_MAX_PERSISTENCE_HOURS=24
+SESSION_CLEANUP_INTERVAL_MINUTES=60
 ```
 
 ### 生产环境配置
@@ -258,8 +351,10 @@ LOG_FORMAT=json
 # 网络配置
 HOST=0.0.0.0
 PORT=8000
+ALLOWED_ORIGINS=["https://yourdomain.com"]
 
 # API服务配置
+USE_REAL_VOSK=true
 OPENROUTER_API_KEY=sk-or-v1-production-api-key
 OPENROUTER_MODEL=anthropic/claude-3-sonnet
 OPENROUTER_TEMPERATURE=0.5
@@ -269,10 +364,24 @@ OPENROUTER_MAX_TOKENS=1000
 STT_TIMEOUT=20
 LLM_TIMEOUT=45
 WEBSOCKET_TIMEOUT=600
+WEBSOCKET_PING_INTERVAL=30
+MAX_WORKERS=8
 
 # 音频处理优化
 AUDIO_CHUNK_SIZE=8192
 VOSK_SAMPLE_RATE=16000
+AUDIO_BUFFER_MAX_SIZE=104857600  # 100MB
+
+# 会话管理
+SESSION_MAX_PERSISTENCE_HOURS=72  # 3天
+SESSION_CLEANUP_INTERVAL_MINUTES=30
+
+# 日志配置
+LOG_LEVEL=INFO
+LOG_FORMAT=json
+LOG_FILE=/var/log/ai-dialogue/app.log
+LOG_MAX_SIZE=500MB
+LOG_BACKUP_COUNT=10
 ```
 
 ## 配置验证和测试
