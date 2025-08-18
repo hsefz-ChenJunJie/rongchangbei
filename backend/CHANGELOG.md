@@ -1,5 +1,57 @@
 # 更新日志
 
+## [v1.3.0] - 2025-08-18
+
+### 重大功能更新
+- **新增**: 会话恢复功能 - 支持非正常断连时的会话持久化和恢复
+- **重大变更**: 简化消息确认事件格式 - 移除 `message_recorded` 事件中的 `content` 和 `sender` 字段
+- **新增**: 长时间WebSocket连接持久性测试工具
+
+### 会话恢复功能
+- **会话持久化**: 非正常断连时自动保存会话到本地文件系统
+- **会话恢复**: 前端可通过 `session_resume` 事件恢复中断的会话
+- **自动清理**: 定期清理过期的持久化会话文件
+- **配置选项**: 支持启用/禁用、存储目录、持久化时长等配置
+
+### API 变更
+- **简化事件**: `message_recorded` 事件现仅包含 `session_id` 和 `message_id` 字段
+- **新增事件**: 
+  - `session_resume` (前端→后端): 请求恢复指定会话
+  - `session_restored` (后端→前端): 确认会话恢复成功
+- **配置新增**: 会话持久化相关配置项
+
+### 技术实现
+- 新增 `SessionPersistenceManager` 类：基于JSON文件的会话存储
+- 新增 `PeriodicCleanupTask` 类：定期清理过期会话
+- 扩展 WebSocket 处理器：支持会话保存和恢复逻辑
+- 集成到应用生命周期：启动时初始化，关闭时清理
+
+### 测试支持
+- **新增**: 90秒 WebSocket 持久性测试 `test_websocket_persistence.py`
+- **性能监控**: 内存、CPU使用率跟踪和详细报告生成
+- **异常检测**: 自动检测WebSocket异常断线和重连
+
+### 文档更新
+- 同步更新所有相关API文档
+- 更新事件格式说明
+- 添加会话恢复功能使用指南
+
+### 配置选项
+```bash
+# 新增配置项
+SESSION_PERSISTENCE_ENABLED=true      # 是否启用会话持久化
+SESSION_PERSISTENCE_DIR=./sessions    # 会话存储目录  
+SESSION_MAX_PERSISTENCE_HOURS=24      # 最大持久化时间(小时)
+SESSION_CLEANUP_INTERVAL_MINUTES=60   # 清理间隔(分钟)
+```
+
+### 向后兼容性
+- ✅ 会话恢复功能为可选功能，不影响现有API
+- ⚠️ `message_recorded` 事件格式简化，前端需适配（移除content/sender字段的依赖）
+- ✅ 所有现有配置和功能保持兼容
+
+---
+
 ## [v1.2.1] - 2025-08-15
 
 ### 关键Bug修复

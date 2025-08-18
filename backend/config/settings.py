@@ -78,6 +78,12 @@ class Settings(BaseSettings):
     # Performance Configuration
     max_workers: int = Field(default=4, description="最大工作线程数")
     
+    # Session Persistence Configuration
+    session_persistence_enabled: bool = Field(default=True, description="是否启用会话持久化")
+    session_persistence_dir: str = Field(default="./sessions", description="会话持久化存储目录")
+    session_max_persistence_hours: int = Field(default=24, description="会话最大持久化时间(小时)")
+    session_cleanup_interval_minutes: int = Field(default=60, description="会话清理间隔(分钟)")
+    
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

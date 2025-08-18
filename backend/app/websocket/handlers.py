@@ -17,10 +17,11 @@ from app.models.events import (
     ConversationStartEvent, MessageStartEvent, AudioStreamEvent, MessageEndEvent,
     ManualGenerateEvent, UserModificationEvent, UserSelectedResponseEvent,
     ScenarioSupplementEvent, ResponseCountUpdateEvent, ConversationEndEvent,
+    SessionResumeEvent,
     SessionCreatedEvent, MessageRecordedEvent, OpinionSuggestionsEvent,
-    LLMResponseEvent, StatusUpdateEvent, ErrorEvent,
+    LLMResponseEvent, StatusUpdateEvent, ErrorEvent, SessionRestoredEvent,
     SessionCreatedData, MessageRecordedData, OpinionSuggestionsData,
-    LLMResponseData, StatusUpdateData, ErrorData
+    LLMResponseData, StatusUpdateData, ErrorData, SessionRestoredData
 )
 
 logger = logging.getLogger(__name__)
@@ -36,16 +37,18 @@ class WebSocketHandler:
         self.stt_service = None      # 将在初始化时注入
         self.llm_service = None      # 将在初始化时注入
         self.request_manager = None  # 将在初始化时注入
+        self.persistence_manager = None  # 会话持久化管理器
         self.heartbeat_task = None   # 心跳检查任务
         self.heartbeat_interval = 30  # 心跳间隔（秒）
         self.connection_timeout = 300  # 连接超时时间（秒）
     
-    def set_services(self, session_manager, stt_service=None, llm_service=None, request_manager=None):
+    def set_services(self, session_manager, stt_service=None, llm_service=None, request_manager=None, persistence_manager=None):
         """注入服务依赖"""
         self.session_manager = session_manager
         self.stt_service = stt_service
         self.llm_service = llm_service
         self.request_manager = request_manager
+        self.persistence_manager = persistence_manager
     
     # ===============================
     # 连接管理
@@ -72,10 +75,18 @@ class WebSocketHandler:
         
         logger.info(f"WebSocket连接建立: {client_id}")
     
-    def disconnect(self, client_id: str):
+    async def disconnect(self, client_id: str):
         """断开WebSocket连接"""
         if client_id in self.active_connections:
             del self.active_connections[client_id]
+        
+        # 保存相关会话到持久化存储（非正常断连时）
+        if client_id in self.connection_info:
+            info = self.connection_info[client_id]
+            session_ids = info.get("session_ids", [])
+            
+            for session_id in session_ids:
+                await self._save_session_on_disconnect(session_id)
         
         # 清理连接信息并记录统计
         if client_id in self.connection_info:
@@ -201,6 +212,8 @@ class WebSocketHandler:
                 await self.handle_response_count_update(client_id, event_data)
             elif event_type == EventTypes.CONVERSATION_END:
                 await self.handle_conversation_end(client_id, event_data)
+            elif event_type == EventTypes.SESSION_RESUME:
+                await self.handle_session_resume(client_id, event_data)
             else:
                 await self.send_error(
                     client_id,
@@ -251,6 +264,10 @@ class WebSocketHandler:
                     content=history_msg.content,
                     is_user_selected=False
                 )
+        
+        # 记录连接与会话的关联
+        if client_id in self.connection_info:
+            self.connection_info[client_id]["session_ids"].append(session_id)
         
         # 发送会话创建确认
         await self.send_session_created(client_id, session_id)
@@ -360,12 +377,7 @@ class WebSocketHandler:
         session = self.session_manager.get_session(session_id)
         
         # 发送消息记录确认
-        await self.send_message_recorded(
-            session_id, 
-            message_id, 
-            content, 
-            session.current_message_sender or "unknown"
-        )
+        await self.send_message_recorded(session_id, message_id)
         
         # 自动触发意见生成
         await self.send_status_update(session_id, "generating_opinions", "生成意见建议")
@@ -465,7 +477,7 @@ class WebSocketHandler:
         )
         
         # 发送消息记录确认
-        await self.send_message_recorded(session_id, message_id, selected_content, sender)
+        await self.send_message_recorded(session_id, message_id)
         
         logger.info(f"用户选择回答: {session_id}, 消息ID: {message_id}")
     
@@ -536,7 +548,83 @@ class WebSocketHandler:
         # 销毁会话
         self.session_manager.destroy_session(session_id)
         
+        # 删除持久化的会话文件（正常结束）
+        if self.persistence_manager:
+            await self.persistence_manager.delete_session(session_id)
+        
         logger.info(f"对话结束: {session_id}")
+    
+    async def handle_session_resume(self, client_id: str, event_data: Dict[str, Any]):
+        """处理会话恢复事件"""
+        event = SessionResumeEvent(type="session_resume", data=event_data)
+        
+        session_id = event.data.session_id
+        
+        # 验证持久化管理器是否可用
+        if not self.persistence_manager:
+            await self.send_error(
+                client_id,
+                ErrorCodes.INTERNAL_ERROR,
+                "会话恢复功能未启用",
+                session_id=session_id
+            )
+            return
+        
+        # 尝试从持久化存储加载会话
+        session = await self.persistence_manager.load_session(session_id)
+        
+        if not session:
+            await self.send_error(
+                client_id,
+                ErrorCodes.SESSION_NOT_FOUND,
+                f"会话不存在或已过期: {session_id}",
+                session_id=session_id
+            )
+            return
+        
+        # 将会话恢复到内存中
+        try:
+            # 检查会话是否已在内存中
+            if self.session_manager.session_exists(session_id):
+                logger.warning(f"会话已在内存中，无需恢复: {session_id}")
+            else:
+                # 将会话添加到会话管理器
+                self.session_manager.sessions[session_id] = session
+                logger.info(f"会话已恢复到内存: {session_id}")
+            
+            # 记录连接与会话的关联
+            if client_id in self.connection_info:
+                self.connection_info[client_id]["session_ids"].append(session_id)
+            
+            # 发送会话恢复成功事件
+            await self.send_session_restored(client_id, session)
+            
+        except Exception as e:
+            logger.error(f"恢复会话失败 {session_id}: {e}")
+            await self.send_error(
+                client_id,
+                ErrorCodes.INTERNAL_ERROR,
+                f"会话恢复失败: {str(e)}",
+                session_id=session_id
+            )
+    
+    async def _save_session_on_disconnect(self, session_id: str):
+        """在连接断开时保存会话"""
+        if not self.persistence_manager or not self.session_manager:
+            return
+        
+        try:
+            session = self.session_manager.get_session(session_id)
+            if session:
+                # 只有在非正常结束的情况下才保存
+                # 这里可以根据会话状态判断是否需要保存
+                success = await self.persistence_manager.save_session(session)
+                if success:
+                    logger.info(f"连接断开时会话已保存: {session_id}")
+                else:
+                    logger.error(f"连接断开时保存会话失败: {session_id}")
+        except Exception as e:
+            logger.error(f"保存会话异常 {session_id}: {e}")
     
     # ===============================
     # 发送事件的便捷方法
@@ -550,7 +638,24 @@ class WebSocketHandler:
         )
         await self.send_event(client_id, event)
     
-    async def send_message_recorded(self, session_id: str, message_id: str, content: str, sender: str):
+    async def send_session_restored(self, client_id: str, session):
+        """发送会话恢复成功事件"""
+        event = SessionRestoredEvent(
+            type="session_restored",
+            data=SessionRestoredData(
+                session_id=session.id,
+                status=session.status.value,
+                message_count=len(session.messages),
+                scenario_description=session.scenario_description,
+                response_count=session.response_count,
+                has_modifications=len(session.modifications) > 0,
+                has_user_opinion=session.user_opinion is not None,
+                restored_at=datetime.utcnow().isoformat()
+            )
+        )
+        await self.send_event(client_id, event)
+    
+    async def send_message_recorded(self, session_id: str, message_id: str):
         """发送消息记录确认事件"""
         # 找到对应的客户端
         for client_id in self.active_connections:
@@ -558,9 +663,7 @@ class WebSocketHandler:
                 type="message_recorded",
                 data=MessageRecordedData(
                     session_id=session_id,
-                    message_id=message_id,
-                    content=content,
-                    sender=sender
+                    message_id=message_id
                 )
             )
             await self.send_event(client_id, event)

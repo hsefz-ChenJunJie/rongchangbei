@@ -161,6 +161,16 @@
 }
 ```
 
+#### 会话恢复
+```json
+{
+  "type": "session_resume", // [必需]
+  "data": {
+    "session_id": "要恢复的会话ID" // [必需] 之前保存的会话ID
+  }
+}
+```
+
 #### 用户反馈
 - 修改建议：
 ```json
@@ -211,9 +221,24 @@
   "type": "message_recorded", // [必需]
   "data": {
     "session_id": "会话ID", // [必需]
-    "message_id": "消息唯一ID", // [必需] 分配给消息的ID
-    "content": "转录或选择的消息内容", // [必需] 消息的文字内容
-    "sender": "消息发送者" // [必需] 消息发送者标识
+    "message_id": "消息唯一ID" // [必需] 分配给消息的ID
+  }
+}
+```
+
+#### 会话恢复成功
+```json
+{
+  "type": "session_restored", // [必需]
+  "data": {
+    "session_id": "恢复的会话ID", // [必需]
+    "status": "会话状态", // [必需] 如 "idle", "processing" 等
+    "message_count": 5, // [必需] 会话中的消息数量
+    "scenario_description": "对话情景描述", // [可选] 对话情景
+    "response_count": 3, // [必需] 回答生成数量
+    "has_modifications": false, // [必需] 是否有修改建议
+    "has_user_opinion": true, // [必需] 是否有用户意见
+    "restored_at": "2025-08-18T10:30:45.123Z" // [必需] 恢复时间
   }
 }
 ```
@@ -295,3 +320,200 @@
 
 ### 重连机制
 WebSocket 连接断开时，自动尝试重连（最多 5 次，间隔递增）。
+
+## 会话恢复功能
+
+### 功能概述
+当WebSocket连接因为网络问题或前端崩溃等非正常原因断开时，后端会自动保存会话状态到本地文件。前端重新连接后，可以使用会话ID恢复之前的对话状态。
+
+### 使用场景
+- 网络不稳定导致的连接中断
+- 前端应用崩溃或被意外关闭
+- 用户主动刷新页面或切换应用
+- 移动设备息屏或切换到后台
+
+### 实现机制
+1. **自动保存**：非正常断连时，后端自动将会话状态保存到 `./sessions/` 目录
+2. **文件存储**：使用JSON格式存储会话数据，包含消息历史、状态、配置等
+3. **定期清理**：过期会话（默认24小时）自动清理
+4. **状态恢复**：恢复会话的完整状态，包括消息、修改建议、用户意见等
+
+### 配置选项
+```bash
+# 环境变量配置
+SESSION_PERSISTENCE_ENABLED=true      # 是否启用会话持久化
+SESSION_PERSISTENCE_DIR=./sessions    # 会话存储目录
+SESSION_MAX_PERSISTENCE_HOURS=24      # 最大持久化时间(小时)
+SESSION_CLEANUP_INTERVAL_MINUTES=60   # 清理间隔(分钟)
+```
+
+### 前端实现指南
+
+#### 保存会话ID
+```javascript
+// 在收到 session_created 事件时保存会话ID
+ws.onmessage = function(event) {
+  const response = JSON.parse(event.data);
+  
+  if (response.type === 'session_created') {
+    const sessionId = response.data.session_id;
+    // 保存到 localStorage，以便页面刷新后恢复
+    localStorage.setItem('currentSessionId', sessionId);
+  }
+};
+```
+
+#### 检测并恢复会话
+```javascript
+// 页面加载时检查是否有未完成的会话
+window.onload = function() {
+  const savedSessionId = localStorage.getItem('currentSessionId');
+  
+  if (savedSessionId) {
+    // 连接WebSocket并尝试恢复会话
+    const ws = new WebSocket('ws://localhost:8000/conversation');
+    
+    ws.onopen = function() {
+      // 发送会话恢复请求
+      ws.send(JSON.stringify({
+        type: "session_resume",
+        data: {
+          session_id: savedSessionId
+        }
+      }));
+    };
+    
+    ws.onmessage = function(event) {
+      const response = JSON.parse(event.data);
+      
+      if (response.type === 'session_restored') {
+        // 会话恢复成功，更新UI状态
+        const sessionData = response.data;
+        console.log('会话恢复成功:', sessionData);
+        
+        // 根据返回的会话数据恢复UI状态
+        updateUIFromSession(sessionData);
+        
+      } else if (response.type === 'error') {
+        // 会话恢复失败，清理保存的会话ID
+        localStorage.removeItem('currentSessionId');
+        console.log('会话恢复失败:', response.data.message);
+      }
+    };
+  }
+};
+```
+
+#### 清理会话状态
+```javascript
+// 正常结束对话时清理保存的会话ID
+function endConversation(sessionId) {
+  // 发送对话结束事件
+  ws.send(JSON.stringify({
+    type: "conversation_end",
+    data: {
+      session_id: sessionId
+    }
+  }));
+  
+  // 清理本地保存的会话ID
+  localStorage.removeItem('currentSessionId');
+}
+```
+
+## 前端集成技术指南
+
+### 连接地址
+- **开发环境**：`ws://localhost:8000/conversation`
+- **生产环境**：`wss://your-domain.com/conversation`
+
+### 健康检查端点
+- **后端总健康检查**：`GET http://localhost:8000/`
+  - 用途：简单的进程存活检查，快速响应
+  - 适用于：负载均衡器 health check、监控系统
+
+- **对话服务健康检查**：`GET http://localhost:8000/conversation/health`
+  - 用途：深度检查对话相关服务状态（STT、LLM、会话管理等）
+  - 适用于：服务诊断、故障排查
+
+### WebSocket 连接示例
+```javascript
+// 建立WebSocket连接
+const ws = new WebSocket('ws://localhost:8000/conversation');
+
+ws.onopen = function() {
+  console.log('WebSocket连接已建立');
+  
+  // 检查是否有需要恢复的会话
+  const savedSessionId = localStorage.getItem('currentSessionId');
+  
+  if (savedSessionId) {
+    // 尝试恢复会话
+    ws.send(JSON.stringify({
+      type: "session_resume",
+      data: { session_id: savedSessionId }
+    }));
+  } else {
+    // 开始新对话
+    ws.send(JSON.stringify({
+      type: "conversation_start",
+      data: {
+        scenario_description: "商务会议讨论", // 可选
+        response_count: 3 // 必需，1-5之间的整数
+      }
+    }));
+  }
+};
+
+ws.onmessage = function(event) {
+  const response = JSON.parse(event.data);
+  console.log('收到消息:', response);
+  
+  switch(response.type) {
+    case 'session_created':
+      const sessionId = response.data.session_id;
+      localStorage.setItem('currentSessionId', sessionId);
+      console.log('会话创建成功，ID:', sessionId);
+      break;
+      
+    case 'session_restored':
+      console.log('会话恢复成功:', response.data);
+      // 根据恢复的会话数据更新UI
+      break;
+      
+    case 'message_recorded':
+      console.log('消息记录成功，ID:', response.data.message_id);
+      break;
+      
+    case 'opinion_suggestions':
+      console.log('意见建议:', response.data.suggestions);
+      break;
+      
+    case 'llm_response':
+      console.log('AI回答建议:', response.data.suggestions);
+      break;
+      
+    case 'error':
+      console.error('错误:', response.data.message);
+      if (response.data.error_code === 'SESSION_NOT_FOUND') {
+        // 会话不存在，清理本地存储
+        localStorage.removeItem('currentSessionId');
+      }
+      break;
+  }
+};
+
+ws.onerror = function(error) {
+  console.error('WebSocket错误:', error);
+};
+
+ws.onclose = function(event) {
+  console.log('WebSocket连接已关闭:', event.code, event.reason);
+  // 非正常关闭时，保留会话ID以便后续恢复
+};
+```
+
+### 错误码处理
+- `SESSION_NOT_FOUND`：会话不存在或已过期，清理本地存储
+- `INVALID_EVENT_DATA`：事件数据格式错误，检查发送的数据
+- `INTERNAL_ERROR`：服务器内部错误，稍后重试

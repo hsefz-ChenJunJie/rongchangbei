@@ -78,6 +78,11 @@ class ConversationEndData(BaseModel):
     session_id: str = Field(description="目标会话标识")
 
 
+class SessionResumeData(BaseModel):
+    """会话恢复请求事件数据"""
+    session_id: str = Field(description="要恢复的会话ID")
+
+
 # ===============================
 # 后端 → 前端事件数据模型
 # ===============================
@@ -91,8 +96,18 @@ class MessageRecordedData(BaseModel):
     """消息记录确认事件数据"""
     session_id: str = Field(description="目标会话标识")
     message_id: str = Field(description="分配给消息的ID")
-    content: str = Field(description="转录或选择的消息内容")
-    sender: str = Field(description="消息发送者标识")
+
+
+class SessionRestoredData(BaseModel):
+    """会话恢复成功事件数据"""
+    session_id: str = Field(description="恢复的会话ID")
+    status: str = Field(description="会话状态")
+    message_count: int = Field(description="消息数量")
+    scenario_description: Optional[str] = Field(default=None, description="对话情景描述")
+    response_count: int = Field(description="回答生成数量")
+    has_modifications: bool = Field(description="是否有修改建议")
+    has_user_opinion: bool = Field(description="是否有用户意见")
+    restored_at: str = Field(description="恢复时间")
 
 
 class OpinionSuggestionsData(BaseModel):
@@ -188,6 +203,11 @@ class ConversationEndEvent(BaseModel):
     data: ConversationEndData
 
 
+class SessionResumeEvent(BaseModel):
+    type: Literal["session_resume"] = "session_resume"
+    data: SessionResumeData
+
+
 # 后端发送事件类型定义
 class SessionCreatedEvent(BaseModel):
     type: Literal["session_created"] = "session_created"
@@ -219,6 +239,11 @@ class ErrorEvent(BaseModel):
     data: ErrorData
 
 
+class SessionRestoredEvent(BaseModel):
+    type: Literal["session_restored"] = "session_restored"
+    data: SessionRestoredData
+
+
 # 联合类型定义
 IncomingEvent = Union[
     ConversationStartEvent,
@@ -230,7 +255,8 @@ IncomingEvent = Union[
     UserSelectedResponseEvent,
     ScenarioSupplementEvent,
     ResponseCountUpdateEvent,
-    ConversationEndEvent
+    ConversationEndEvent,
+    SessionResumeEvent
 ]
 
 OutgoingEvent = Union[
@@ -239,7 +265,8 @@ OutgoingEvent = Union[
     OpinionSuggestionsEvent,
     LLMResponseEvent,
     StatusUpdateEvent,
-    ErrorEvent
+    ErrorEvent,
+    SessionRestoredEvent
 ]
 
 
@@ -261,6 +288,7 @@ class EventTypes:
     SCENARIO_SUPPLEMENT = "scenario_supplement"
     RESPONSE_COUNT_UPDATE = "response_count_update"
     CONVERSATION_END = "conversation_end"
+    SESSION_RESUME = "session_resume"
     
     # 后端 → 前端事件
     SESSION_CREATED = "session_created"
@@ -269,6 +297,7 @@ class EventTypes:
     LLM_RESPONSE = "llm_response"
     STATUS_UPDATE = "status_update"
     ERROR = "error"
+    SESSION_RESTORED = "session_restored"
 
 
 # ===============================

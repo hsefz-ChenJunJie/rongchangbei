@@ -17,6 +17,7 @@ from app.services.session_manager import SessionManager
 from app.services.stt_service import create_stt_service
 from app.services.llm_service import create_llm_service
 from app.services.request_manager import LLMRequestManager
+from app.services.session_persistence import SessionPersistenceManager, PeriodicCleanupTask
 from app.websocket.handlers import WebSocketHandler
 
 # 配置日志
@@ -31,6 +32,8 @@ session_manager = None
 stt_service = None
 llm_service = None
 request_manager = None
+persistence_manager = None
+cleanup_task = None
 websocket_handler = None
 
 
@@ -39,7 +42,7 @@ async def lifespan(app: FastAPI):
     """
     应用生命周期管理器
     """
-    global session_manager, stt_service, llm_service, request_manager, websocket_handler
+    global session_manager, stt_service, llm_service, request_manager, persistence_manager, cleanup_task, websocket_handler
     
     # 启动时初始化
     logger.info("AI对话应用后端启动中...")
@@ -73,13 +76,32 @@ async def lifespan(app: FastAPI):
         request_manager = LLMRequestManager(session_manager, llm_service)
         logger.info("请求管理器初始化完成")
         
+        # 初始化会话持久化管理器
+        if settings.session_persistence_enabled:
+            persistence_manager = SessionPersistenceManager(
+                persistence_dir=settings.session_persistence_dir,
+                max_persistence_hours=settings.session_max_persistence_hours
+            )
+            
+            # 启动定期清理任务
+            cleanup_task = PeriodicCleanupTask(
+                persistence_manager,
+                interval_minutes=settings.session_cleanup_interval_minutes
+            )
+            await cleanup_task.start()
+            
+            logger.info("会话持久化管理器初始化完成")
+        else:
+            logger.info("会话持久化功能已禁用")
+        
         # 初始化WebSocket处理器
         websocket_handler = WebSocketHandler()
         websocket_handler.set_services(
             session_manager=session_manager,
             stt_service=stt_service,
             llm_service=llm_service,
-            request_manager=request_manager
+            request_manager=request_manager,
+            persistence_manager=persistence_manager
         )
         
         # 设置请求管理器的WebSocket处理器
@@ -97,6 +119,14 @@ async def lifespan(app: FastAPI):
     logger.info("AI对话应用后端关闭中...")
     
     try:
+        # 停止定期清理任务
+        if cleanup_task:
+            await cleanup_task.stop()
+        
+        # 关闭WebSocket处理器
+        if websocket_handler:
+            await websocket_handler.shutdown()
+        
         # 关闭请求管理器
         if request_manager:
             await request_manager.shutdown()
