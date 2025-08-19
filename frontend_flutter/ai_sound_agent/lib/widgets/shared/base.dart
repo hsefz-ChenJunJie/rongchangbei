@@ -79,9 +79,12 @@ abstract class BasePageState<T extends BasePage> extends State<T> {
           (route) => false
         );
         break;
-      case 2: // 我的
-        // 暂时保留，后续可以添加个人中心页面
-        debugPrint('我的页面 - 待开发');
+      case 2: // 对话人
+        Navigator.pushNamedAndRemoveUntil(
+          context, 
+          Routes.chatPartners, 
+          (route) => false
+        );
         break;
     }
   }

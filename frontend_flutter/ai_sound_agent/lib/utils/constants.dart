@@ -33,8 +33,8 @@ const List<BottomNavItem> pagetiles = const [
     label: '发现',
   ),
   BottomNavItem(
-    icon: Icons.person_outline,
-    selectedIcon: Icons.person,
-    label: '我的',
+    icon: Icons.chat_outlined,
+    selectedIcon: Icons.chat,
+    label: '对话人',
   ),
 ];
