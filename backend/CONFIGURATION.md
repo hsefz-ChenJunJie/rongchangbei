@@ -58,7 +58,7 @@ OPENROUTER_MAX_TOKENS=1000
 |--------|----------|------|--------|------|------|
 | `stt_engine` | `STT_ENGINE` | str | `whisper` | 否 | STT引擎选择（mock/whisper/vosk） |
 
-#### Whisper STT 配置（12项）
+#### Whisper STT 配置（13项）
 
 用于集成 Whisper 本地语音转文字服务，支持GPU/CPU推理和多种优化选项。
 
@@ -76,6 +76,7 @@ OPENROUTER_MAX_TOKENS=1000
 | `whisper_word_timestamps` | `WHISPER_WORD_TIMESTAMPS` | bool | `False` | 否 | 生成词级时间戳 |
 | `whisper_temperature` | `WHISPER_TEMPERATURE` | float | `0.0` | 否 | 采样温度（0为贪婪解码） |
 | `whisper_condition_on_previous_text` | `WHISPER_CONDITION_ON_PREVIOUS_TEXT` | bool | `True` | 否 | 基于前文条件推理 |
+| `whisper_progressive_transcription_seconds` | `WHISPER_PROGRESSIVE_TRANSCRIPTION_SECONDS` | `float` | `1.0` | 否 | 渐进式转录的缓冲区时长（秒）。每次累积的音频达到该时长时，就会进行一次处理。 |
 
 #### Vosk STT 配置（3项）
 

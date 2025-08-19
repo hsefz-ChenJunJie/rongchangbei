@@ -67,9 +67,16 @@ class Settings(BaseSettings):
         default=None,
         description="强制指定语言（如'zh', 'en'），None为自动检测"
     )
+    # VAD Filter: Automatically filter out silence
     whisper_vad_filter: bool = Field(
         default=True,
-        description="是否启用语音活动检测(VAD)过滤静音"
+        description="Enable the VAD filter to remove silence from the audio."
+    )
+
+    # Progressive Transcription Buffer
+    whisper_progressive_transcription_seconds: float = Field(
+        default=1.0,
+        description="Buffer duration in seconds for progressive transcription. Audio chunks are processed each time this duration is reached."
     )
     whisper_word_timestamps: bool = Field(
         default=False,

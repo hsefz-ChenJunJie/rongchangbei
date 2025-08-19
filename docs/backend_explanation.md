@@ -91,9 +91,9 @@ sequenceDiagram
 
 消息录制是系统的核心输入功能，它将用户的实时语音流转化为结构化的文本消息。
 
-### 音频流与STT处理逻辑
+### 音频流与STT处理逻辑（渐进式转录）
 
-该过程的核心是 `app/services/stt_service.py` 中定义的 `STTService`，特别是 `WhisperSTTService` 子类。系统通过一个工厂函数 `create_stt_service` 根据配置选择使用 Whisper、Vosk 还是一个 Mock 服务。
+为了提升实时性和用户体验，系统采用了**渐进式转录 (Progressive Transcription)** 策略。该过程的核心是 `app/services/stt_service.py` 中定义的 `WhisperSTTService`。
 
 ```mermaid
 graph TD
@@ -101,43 +101,43 @@ graph TD
     B --> C["STTService: start_stream_processing"];
     D["Frontend: 持续发送 audio_stream"] --> E{"Backend: handle_audio_stream"};
     E --> F["STTService: process_audio_chunk"];
-    G["Frontend: 用户点击'结束消息'"] --> H{"Backend: handle_message_end"};
-    H --> I["STTService: get_final_transcription"];
-    I --> J["SessionManager: end_message"];
-    J --> K{"Backend: send_message_recorded"};
-    K --> L["Frontend: 收到消息确认"];
+    F --> G{达到缓冲时长?};
+    G -- 是 --> H["后台转录当前缓冲区音频"];
+    H --> I["累积转录文本"];
+    I --> J{"Backend: send_partial_transcription_update"};
+    J --> K["Frontend: 实时显示部分结果"];
+    G -- 否 --> F;
+    L["Frontend: 用户点击'结束消息'"] --> M{"Backend: handle_message_end"};
+    M --> N["STTService: get_final_transcription"];
+    N --> O["转录剩余音频并合并所有文本"];
+    O --> P{"Backend: send_message_recorded"};
+    P --> Q["Frontend: 显示最终完整消息"];
 ```
 
-1.  **启动**: `handle_message_start` 调用 `stt_service.start_stream_processing()`，为当前会话初始化一个音频流处理状态，包括缓冲区和时间戳记录。
-2.  **收集**: `handle_audio_stream` 调用 `stt_service.process_audio_chunk()`。在 `WhisperSTTService` 中，这个方法主要是将解码后的音频数据块收集到内存缓冲区 `audio_chunks` 中，并实施背压和缓冲区大小控制，防止内存溢出。
-3.  **转录**: `handle_message_end` 调用 `stt_service.get_final_transcription()`。这是 Whisper 实现的关键，它将所有收集到的音频块合并，写入一个临时的WAV文件，然后调用 `faster-whisper` 模型进行转录。
+1.  **启动**: `handle_message_start` 调用 `stt_service.start_stream_processing()`，为当前会话初始化一个音频流处理状态，包括一个空的音频缓冲区和一个空的累积文本字符串 (`accumulated_text`)。
+
+2.  **处理与转录**: `handle_audio_stream` 调用 `stt_service.process_audio_chunk()`。这是新逻辑的核心：
+    - 音频块被解码并添加到内存缓冲区。
+    - 系统会计算当前缓冲区的音频总时长。
+    - 一旦时长达到预设的阈值（默认为1秒，可在配置中修改 `WHISPER_PROGRESSIVE_TRANSCRIPTION_SECONDS`），系统会立即将**当前缓冲区内的所有音频**发送给 Whisper 模型进行转录。
+    - 转录后，音频缓冲区被**清空**，而识别出的文本则被**追加**到 `accumulated_text` 字符串中。
+
+3.  **实时反馈**: 每当一次部分转录完成，`handle_audio_stream` 就会收到累积的文本，并立即通过新的 `partial_transcription_update` 事件将其发送给前端。这使得用户可以在说话的同时几乎实时地看到文字结果。
 
     ```python
-    # app/services/stt_service.py (WhisperSTTService)
-    async def get_final_transcription(self, session_id: str) -> Optional[str]:
-        # ... (省略部分代码)
-        try:
-            # ...
-            # 合并所有音频块
-            combined_audio = b''.join(stream_info["audio_chunks"])
-
-            # 创建临时音频文件并写入
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_audio:
-                with wave.open(temp_audio.name, 'wb') as wav_file:
-                    # ... (设置WAV文件参数)
-                    wav_file.writeframes(combined_audio)
-                
-                # 使用Whisper进行转录
-                segments, info = await self._transcribe_audio(temp_audio.name)
-                
-                # 组合转录结果
-                final_text = "".join([segment.text.strip() for segment in segments])
-            # ...
-            return final_text
+    # app/websocket/handlers.py
+    async def handle_audio_stream(self, client_id: str, event_data: Dict[str, Any]):
         # ...
+        if self.stt_service:
+            partial_text = await self.stt_service.process_audio_chunk(session_id, audio_chunk)
+            if partial_text is not None:
+                temp_message_id = session.current_message_id or "unknown_message"
+                await self.send_partial_transcription_update(session_id, temp_message_id, partial_text)
     ```
 
-4.  **记录**: 拿到转录文本后，后端调用 `session_manager.end_message()` 将其作为正式消息存入会话历史，并返回 `message_recorded` 事件给前端。
+4.  **结束与整合**: `handle_message_end` 调用 `stt_service.get_final_transcription()`。此方法会处理缓冲区中**最后剩余的、不足一个转录时长的音频块**，将这最后一部分的转录结果与 `accumulated_text` 合并，形成最终的完整消息文本。
+
+5.  **断连恢复**: 此架构与断连恢复无缝集成。当断连发生时，`accumulated_text` 会被作为 `partial_transcription` 保存。重连后，`start_stream_processing` 会用这个已保存的文本作为初始值，从而在之前的基础上继续进行渐进式转录。
 
 ## 3. 建议生成
 

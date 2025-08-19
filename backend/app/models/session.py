@@ -59,6 +59,11 @@ class Session(BaseModel):
     active_opinion_request_id: Optional[str] = Field(default=None, description="进行中的意见生成请求ID")
     active_response_request_id: Optional[str] = Field(default=None, description="进行中的回答生成请求ID")
     
+    # 断连保护
+    partial_transcription: Optional[str] = Field(default=None, description="断连时的部分转录内容")
+    audio_chunks_count: int = Field(default=0, description="断连时已收集的音频块数量") 
+    is_recovering_from_disconnect: bool = Field(default=False, description="是否正在从断连中恢复")
+    
     # 时间戳
     created_at: datetime = Field(default_factory=datetime.utcnow, description="会话创建时间")
     updated_at: datetime = Field(default_factory=datetime.utcnow, description="会话更新时间")
@@ -166,12 +171,34 @@ class Session(BaseModel):
         # 添加消息到历史记录
         self.add_message(formal_id, self.current_message_sender, content)
         
-        # 清理临时状态
+        # 清理临时状态和断连保护状态
         self.current_message_id = None
         self.current_message_sender = None
+        self.partial_transcription = None
+        self.audio_chunks_count = 0
+        self.is_recovering_from_disconnect = False
         self.update_status(SessionStatus.IDLE)
         
         return formal_id
+
+    def set_partial_transcription(self, partial_text: str, chunks_count: int):
+        """设置断连时的部分转录内容"""
+        self.partial_transcription = partial_text
+        self.audio_chunks_count = chunks_count
+        self.updated_at = datetime.utcnow()
+        
+    def mark_recovering_from_disconnect(self):
+        """标记正在从断连中恢复"""
+        self.is_recovering_from_disconnect = True
+        self.updated_at = datetime.utcnow()
+        
+    def is_recording_message(self) -> bool:
+        """检查是否正在录制消息"""
+        return self.status == SessionStatus.RECORDING_MESSAGE
+        
+    def has_partial_content(self) -> bool:
+        """检查是否有部分转录内容"""
+        return self.partial_transcription is not None or self.audio_chunks_count > 0
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典格式"""
@@ -188,6 +215,9 @@ class Session(BaseModel):
             "user_opinion": self.user_opinion,
             "active_opinion_request_id": self.active_opinion_request_id,
             "active_response_request_id": self.active_response_request_id,
+            "partial_transcription": self.partial_transcription,
+            "audio_chunks_count": self.audio_chunks_count,
+            "is_recovering_from_disconnect": self.is_recovering_from_disconnect,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat()
         }

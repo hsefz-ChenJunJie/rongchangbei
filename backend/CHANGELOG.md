@@ -1,5 +1,38 @@
 # 更新日志
 
+## [v1.4.0] - 2025-08-19
+
+### 重大性能优化
+- **改造**: STT语音识别服务从一次性转录改为**渐进式转录**，显著提升实时性。
+- **新增**: `partial_transcription_update` WebSocket事件，用于向前端实时推送部分识别结果。
+- **新增**: `WHISPER_PROGRESSIVE_TRANSCRIPTION_SECONDS` 配置项，允许自定义渐进式转录的缓冲时长。
+
+### 技术实现
+- **渐进式处理**: `WhisperSTTService` 现在会累积音频数据，当达到设定的时长（默认为1秒）后立即进行一次转录，并将结果追加到累积文本中。
+- **实时反馈**: 每次部分转录完成后，后端会通过 `partial_transcription_update` 事件将当前的完整累积文本发送给前端。
+- **断连兼容**: 新的渐进式逻辑完全兼容现有的断连恢复机制。断连时会保存已累积的文本，重连后在此基础上继续进行转录。
+- **最终整合**: `message_end` 事件触发时，仅处理缓冲区中剩余的音频，并与已累积的文本合并，生成最终结果。
+
+### API 变更
+- **新增事件**: `partial_transcription_update` (后端→前端)
+  - `session_id`: 会话ID
+  - `message_id`: 正在录制的消息ID
+  - `partial_content`: 当前累积的部分转录内容
+
+### 配置更新
+- **新增配置**: `WHISPER_PROGRESSIVE_TRANSCRIPTION_SECONDS` (默认 `1.0`)
+
+### 文档更新
+- 全面更新 `docs/backend_explanation.md` 中的STT处理流程图和说明。
+- 在 `prompt.md` 和 `ai_development_prompt.md` 中添加新事件的定义。
+- 在 `CONFIGURATION.md` 中添加新配置项的说明。
+
+### 影响评估
+- **性能**: ✅ 大幅提升语音转文字的感知实时性，用户几乎可以在说话的同时看到文字结果。
+- **兼容性**: ✅ 完全向后兼容，不使用新事件的前端不受影响。
+
+---
+
 ## [v1.3.1] - 2025-08-19
 
 ### API 改进
