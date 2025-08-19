@@ -20,10 +20,10 @@ from app.models.events import (
     SessionResumeEvent, GetMessageHistoryEvent,
     SessionCreatedEvent, MessageRecordedEvent, OpinionSuggestionsEvent,
     LLMResponseEvent, StatusUpdateEvent, ErrorEvent, SessionRestoredEvent,
-    MessageHistoryResponseEvent,
+    MessageHistoryResponseEvent, PartialTranscriptionUpdateEvent,
     SessionCreatedData, MessageRecordedData, OpinionSuggestionsData,
     LLMResponseData, StatusUpdateData, ErrorData, SessionRestoredData,
-    MessageHistoryResponseData, MessageHistoryItem
+    MessageHistoryResponseData, MessageHistoryItem, PartialTranscriptionUpdateData
 )
 
 logger = logging.getLogger(__name__)

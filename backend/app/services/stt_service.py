@@ -578,6 +578,7 @@ class WhisperSTTService(STTService):
                 "accumulated_text": initial_text,  # 累积的转录文本
                 "sample_rate": settings.audio_sample_rate,
                 "sample_width": 2,  # 16-bit audio
+                "last_cleanup": datetime.utcnow(), # 添加缺失的字段
             }
             
             logger.info(f"开始Whisper渐进式音频流处理: {session_id}")
