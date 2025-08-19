@@ -32,5 +32,19 @@
     "enable_session_recovery_test": true,
     "disconnect_duration": 5,
     "max_persistence_test_hours": 1
+  },
+  "microphone_test": {
+    "channels": 1,
+    "sample_rate": 16000,
+    "chunk_size": 1024,
+    "record_seconds": 10,
+    "silence_threshold": 500,
+    "silence_duration": 2.0,
+    "audio_format": 8,
+    "transcription_timeout": 15.0,
+    "opinion_timeout": 10.0,
+    "transcription_max_attempts": 20,
+    "opinion_max_attempts": 15,
+    "progress_display_interval": 10
   }
 }
