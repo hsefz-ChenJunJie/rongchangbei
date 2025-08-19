@@ -169,6 +169,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         responseCount: _responseCount,
         modification: _modificationController.text,
         userOpinion: _userOpinionController.text,
+        override: true,
       );
       debugPrint('当前进度已保存到current.dp');
     } catch (e) {

@@ -323,10 +323,11 @@ class DPManager {
     String modification = '',
     String userOpinion = '',
     String scenarioSupplement = '',
+    bool override = false,
   }) async {
     final messages = chatMessages.map((msg) => Message.fromSelection(msg)).toList();
     
-    if (await exists(fileName)) {
+    if (await exists(fileName) && !override) {
       throw Exception('对话包已存在: $fileName');
     }
 
