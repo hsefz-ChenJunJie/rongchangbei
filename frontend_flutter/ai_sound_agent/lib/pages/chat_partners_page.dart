@@ -5,7 +5,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../services/partner_manager.dart';
 import '../widgets/shared/base.dart';
 import '../widgets/shared/base_line_input.dart';
-import '../widgets/shared/popup.dart';
+import '../widgets/shared/add_partner_dialog.dart';
 import '../services/theme_manager.dart';
 
 class ChatPartnersPage extends BasePage {
@@ -26,7 +26,7 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
   int getInitialBottomNavIndex() => 2; // 对话人页面索引为2
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
-  final GlobalKey<PopupState> _addPartnerPopupKey = GlobalKey<PopupState>();
+
   
   List<ChatPartner> _allPartners = [];
   List<ChatPartner> _filteredPartners = [];
@@ -128,15 +128,13 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
   }
 
   void _showAddPartnerDialog() {
-    final name = _searchController.text.trim();
-    if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入对话人名称')),
-      );
-      return;
-    }
-
-    _addPartnerPopupKey.currentState?.show(context: context);
+    showDialog(
+      context: context,
+      builder: (context) => AddPartnerDialog(
+        onAddPartner: (name) => _addPartner(name),
+        initialName: _searchController.text,
+      ),
+    );
   }
 
   Future<void> _addPartner(String name) async {
@@ -148,8 +146,7 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
         await _loadPartners();
         if (mounted) {
           _searchController.clear();
-          _addPartnerPopupKey.currentState?.close();
-          
+            
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text('已添加对话人: $name')),
           );
@@ -415,47 +412,7 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
           ],
         ),
         
-        // 添加对话人弹窗
-        Popup(
-          key: _addPartnerPopupKey,
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  '添加对话人',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                BaseLineInput(
-                  label: '姓名',
-                  text: _searchController.text,
-                  placeholder: '请输入对话人姓名',
-                  onSubmitted: (value) => _addPartner(value.trim()),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    TextButton(
-                      onPressed: () => _addPartnerPopupKey.currentState?.close(),
-                      child: const Text('取消'),
-                    ),
-                    const SizedBox(width: 12),
-                    ElevatedButton(
-                      onPressed: () => _addPartner(_searchController.text.trim()),
-                      child: const Text('确认添加'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
+
       ],
     );
   }
