@@ -55,45 +55,34 @@ class LLMService:
     async def _load_system_prompts(self):
         """加载系统提示词"""
         try:
-            # 从llm.md文件读取系统提示词
+            # 1. 为“意见生成”任务创建独立的、专注分析的系统提示词
+            self.opinion_system_prompt = """## Persona: 客观中立的对话分析师
+
+你的唯一任务是精准、客观地分析给定的对话内容，并提炼出核心的意见倾向或情感主题。
+
+### 你的行为准则
+- **绝对中立**: 你不表达任何观点，只作为镜子反映对话内容。
+- **高度概括**: 你的输出必须是精炼的关键词或短语。
+- **聚焦核心**: 你的分析应直指对话的要点、争议点或情感核心。
+- **严格遵循格式**: 你必须严格按照指定的JSON格式返回结果。"""
+
+            # 2. 为“回答生成”任务加载并配置主系统提示词
             import os
             llm_prompt_path = os.path.join(os.getcwd(), "llm.md")
             
             if os.path.exists(llm_prompt_path):
                 with open(llm_prompt_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
+                    base_prompt = f.read().strip()
                 
-                # 将内容作为基础系统提示词
-                base_prompt = content.strip()
-                
-                # 为意见生成和回答生成创建不同的系统提示词
-                self.opinion_system_prompt = f"""{base_prompt}
-
-你的当前任务是：根据用户的对话内容，生成3-5个简洁的意见倾向关键词，帮助用户理解对话中的不同观点和立场。
-
-要求：
-1. 关键词应该简洁明了，每个不超过6个字
-2. 关键词应该反映对话中的不同意见倾向和观点
-3. 优先关注对话中的情感色彩和态度倾向
-4. 返回格式为JSON，包含suggestions数组"""
-
-                self.response_system_prompt = f"""{base_prompt}
-
-你的当前任务是：根据用户的对话内容和意图，生成多个不同风格的回答建议，帮助用户流畅地进行交流。
-
-要求：
-1. 提供多种不同的回答风格（简洁直接、礼貌委婉、幽默友好、提出反问等）
-2. 回答应该自然、合适，符合对话语境
-3. 考虑用户的情感状态和对话目标
-4. 每个建议都应该是完整的、可直接使用的回答
-5. 返回格式为JSON，包含suggestions数组"""
-                
-                logger.info("系统提示词加载成功")
+                # 将加载的主提示词用于回答生成
+                self.response_system_prompt = base_prompt
+                logger.info("主系统提示词 (llm.md) 加载成功")
             else:
-                logger.warning(f"系统提示词文件不存在: {llm_prompt_path}")
-                # 使用默认提示词
-                self._set_default_prompts()
-                
+                logger.warning(f"主系统提示词文件不存在: {llm_prompt_path}，使用默认回答生成提示词")
+                self.response_system_prompt = """你是一个专业的沟通助手。请根据对话内容生成多个不同风格的回答建议，包括简洁直接、礼貌委婉、幽默友好等不同风格。每个建议都应该完整、自然、适合对话语境。返回JSON格式。"""
+
+            logger.info("系统提示词加载和配置完成")
+
         except Exception as e:
             logger.error(f"加载系统提示词失败: {e}")
             self._set_default_prompts()
@@ -209,11 +198,11 @@ class LLMService:
         
         # 添加消息历史
         if session.messages:
-            parts.append("\n## 消息历史")
+            parts.append("\n## 待分析的消息历史")
             for message in session.messages:
                 parts.append(f"消息{message.id} - {message.sender}: {message.content}")
         
-        parts.append("\n## 生成要求\n请基于以上对话内容，生成3-5个与对话相关的意见倾向关键词。")
+        parts.append("\n## 分析要求\n请基于以上对话，生成3-5个精准概括核心观点的意见关键词。")
         
         return "\n".join(parts)
     
@@ -258,7 +247,7 @@ class LLMService:
                 parts.append(f"{i}. {modification}")
         
         # 添加生成要求
-        parts.append(f"\n## 生成要求\n请生成 {count} 个不同风格的建议回答。")
+        parts.append(f"\n## 任务指令\n请激活你的“沟通辅助能力”，综合以上所有信息，为用户生成 {count} 个高质量、多样化的建议回答。")
         
         return "\n".join(parts)
     
