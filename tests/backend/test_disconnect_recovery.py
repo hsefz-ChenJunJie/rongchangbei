@@ -7,6 +7,7 @@ WebSocket断连恢复测试脚本
 import asyncio
 import sys
 import os
+import base64
 from datetime import datetime
 from typing import Dict, List, Any
 
