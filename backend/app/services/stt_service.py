@@ -578,7 +578,9 @@ class WhisperSTTService(STTService):
                 "accumulated_text": initial_text,  # 累积的转录文本
                 "sample_rate": settings.audio_sample_rate,
                 "sample_width": 2,  # 16-bit audio
-                "last_cleanup": datetime.utcnow(), # 添加缺失的字段
+                "last_cleanup": datetime.utcnow(),
+                "transcription_lock": asyncio.Lock(), # 用于保证文本追加的顺序
+                "transcription_tasks": [], # 用于追踪后台转录任务
             }
             
             logger.info(f"开始Whisper渐进式音频流处理: {session_id}")
@@ -588,65 +590,62 @@ class WhisperSTTService(STTService):
             logger.error(f"开始Whisper流处理失败 {session_id}: {e}")
             return False
     
-    async def process_audio_chunk(self, session_id: str, audio_chunk_base64: str) -> Optional[str]:
+    async def process_audio_chunk(self, session_id: str, audio_chunk_base64: str) -> None:
         """
-        处理音频数据块（Whisper渐进式处理）
-        
-        Returns:
-            Optional[str]: 如果完成了一次转录，返回累积的完整文本，否则返回None
+        处理音频数据块（非阻塞式）
         """
         if session_id not in self.active_streams:
-            logger.error(f"会话 {session_id} 的音频流未开始")
-            return None
+            return
 
         try:
             audio_data = base64.b64decode(audio_chunk_base64)
             stream_info = self.active_streams[session_id]
 
-            # --- 背压和缓冲区检查 (从父类继承或重写) ---
-            # (此处省略了详细的背压代码，实际应保留)
+            # (此处省略背压和缓冲区检查代码)
 
-            # 更新流状态
             stream_info["audio_chunks"].append(audio_data)
-            stream_info["total_bytes"] += len(audio_data)
 
-            # 计算当前缓冲区时长
             buffer_bytes = sum(len(chunk) for chunk in stream_info["audio_chunks"])
-            bytes_per_second = stream_info['sample_rate'] * stream_info['sample_width']
+            bytes_per_second = stream_info.get('sample_rate', 16000) * stream_info.get('sample_width', 2)
             buffer_duration = buffer_bytes / bytes_per_second if bytes_per_second > 0 else 0
 
-            # 如果缓冲区时长达到阈值，进行一次转录
             if buffer_duration >= settings.whisper_progressive_transcription_seconds:
-                logger.info(f"缓冲区达到 {buffer_duration:.2f}s，触发渐进式转录: {session_id}")
-                
-                # 获取当前要处理的音频
                 audio_to_process = b''.join(stream_info["audio_chunks"])
-                
-                # 清空缓冲区
                 stream_info["audio_chunks"] = []
-
-                # 异步执行转录
-                segments, _ = await self._transcribe_audio_bytes(audio_to_process)
-                if segments:
-                    new_text = "".join([segment.text.strip() for segment in segments])
-                    if new_text:
-                        # 追加到累积文本
-                        stream_info["accumulated_text"] += f" {new_text}"
-                        stream_info["accumulated_text"] = stream_info["accumulated_text"].strip()
-                        logger.debug(f"渐进式转录结果: {session_id}, 新增: '{new_text}', 累计: '{stream_info['accumulated_text']}'")
                 
-                # 返回当前累积的全部文本
-                return stream_info["accumulated_text"]
-
-            return None
+                # 创建后台任务进行转录，不阻塞当前方法
+                task = asyncio.create_task(
+                    self._background_transcribe(session_id, audio_to_process)
+                )
+                stream_info["transcription_tasks"].append(task)
+                logger.info(f"创建后台转录任务: {session_id}, 缓冲区时长: {buffer_duration:.2f}s")
 
         except Exception as e:
             logger.error(f"Whisper处理音频块失败 {session_id}: {e}")
-            return None
+
+    async def _background_transcribe(self, session_id: str, audio_bytes: bytes):
+        """在后台执行转录并安全地更新累积文本"""
+        stream_info = self.active_streams.get(session_id)
+        if not stream_info:
+            logger.warning(f"后台转录任务启动，但会话流已不存在: {session_id}")
+            return
+
+        try:
+            segments, _ = await self._transcribe_audio_bytes(audio_bytes)
+            new_text = "".join([segment.text.strip() for segment in segments])
+
+            if new_text:
+                async with stream_info['transcription_lock']:
+                    current_text = stream_info.get("accumulated_text", "")
+                    stream_info["accumulated_text"] = f"{current_text} {new_text}".strip()
+                logger.debug(f"后台转录完成并更新文本: {session_id}")
+
+        except Exception as e:
+            logger.error(f"后台转录任务失败 {session_id}: {e}")
     
     async def get_final_transcription(self, session_id: str) -> Optional[str]:
         """
-        获取Whisper最终转录结果（渐进式）
+        获取Whisper最终转录结果（非阻塞式）
         """
         if session_id not in self.active_streams:
             logger.error(f"会话 {session_id} 的音频流不存在")
@@ -654,26 +653,35 @@ class WhisperSTTService(STTService):
 
         try:
             stream_info = self.active_streams[session_id]
-            final_text = stream_info.get("accumulated_text", "")
-
-            # 处理缓冲区中剩余的音频
-            if stream_info["audio_chunks"]:
-                logger.info(f"处理剩余 {len(stream_info['audio_chunks'])} 个音频块: {session_id}")
-                audio_to_process = b''.join(stream_info["audio_chunks"])
-                stream_info["audio_chunks"] = []
-
-                segments, _ = await self._transcribe_audio_bytes(audio_to_process)
-                if segments:
-                    new_text = "".join([segment.text.strip() for segment in segments])
-                    if new_text:
-                        final_text += f" {new_text}"
-                        final_text = final_text.strip()
             
-            if not final_text:
-                final_text = "未识别到语音内容"
+            # 等待所有正在进行的后台转录任务完成
+            pending_tasks = stream_info.get("transcription_tasks", [])
+            if pending_tasks:
+                logger.info(f"等待 {len(pending_tasks)} 个后台转录任务完成: {session_id}")
+                await asyncio.gather(*pending_tasks, return_exceptions=True)
+                logger.info(f"所有后台任务已完成: {session_id}")
 
-            logger.info(f"Whisper最终转录完成 {session_id}: {final_text[:100]}")
-            return final_text
+            # 锁定资源，以安全地处理最后的数据和文本
+            async with stream_info['transcription_lock']:
+                final_text = stream_info.get("accumulated_text", "")
+
+                # 处理缓冲区中剩余的音频
+                if stream_info["audio_chunks"]:
+                    logger.info(f"处理最后剩余的 {len(stream_info['audio_chunks'])} 个音频块: {session_id}")
+                    audio_to_process = b''.join(stream_info["audio_chunks"])
+                    stream_info["audio_chunks"] = []
+
+                    segments, _ = await self._transcribe_audio_bytes(audio_to_process)
+                    if segments:
+                        new_text = "".join([segment.text.strip() for segment in segments])
+                        if new_text:
+                            final_text = f"{final_text} {new_text}".strip()
+                
+                if not final_text:
+                    final_text = "未识别到语音内容"
+
+                logger.info(f"Whisper最终转录完成 {session_id}: {final_text[:100]}")
+                return final_text
 
         except Exception as e:
             logger.error(f"Whisper获取最终转录失败 {session_id}: {e}")

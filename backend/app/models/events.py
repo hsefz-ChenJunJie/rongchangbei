@@ -168,13 +168,6 @@ class ErrorData(BaseModel):
     details: Optional[str] = Field(default=None, description="调试用的详细信息")
 
 
-class PartialTranscriptionUpdateData(BaseModel):
-    """渐进式转录更新事件数据"""
-    session_id: str = Field(description="会话唯一ID")
-    message_id: str = Field(description="正在录制的消息的唯一ID")
-    partial_content: str = Field(description="目前累积的部分转录内容")
-
-
 # ===============================
 # 完整的事件模型
 # ===============================
@@ -289,11 +282,6 @@ class MessageHistoryResponseEvent(BaseModel):
     data: MessageHistoryResponseData
 
 
-class PartialTranscriptionUpdateEvent(BaseModel):
-    type: Literal["partial_transcription_update"] = "partial_transcription_update"
-    data: PartialTranscriptionUpdateData
-
-
 # 联合类型定义
 IncomingEvent = Union[
     ConversationStartEvent,
@@ -318,8 +306,7 @@ OutgoingEvent = Union[
     StatusUpdateEvent,
     ErrorEvent,
     SessionRestoredEvent,
-    MessageHistoryResponseEvent,
-    PartialTranscriptionUpdateEvent
+    MessageHistoryResponseEvent
 ]
 
 
@@ -355,7 +342,6 @@ class EventTypes:
     ERROR = "error"
     SESSION_RESTORED = "session_restored"
     MESSAGE_HISTORY_RESPONSE = "message_history_response"
-PARTIAL_TRANSCRIPTION_UPDATE = "partial_transcription_update"
 
 # --- Data Models for Events ---
 

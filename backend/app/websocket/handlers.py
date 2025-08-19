@@ -20,10 +20,10 @@ from app.models.events import (
     SessionResumeEvent, GetMessageHistoryEvent,
     SessionCreatedEvent, MessageRecordedEvent, OpinionSuggestionsEvent,
     LLMResponseEvent, StatusUpdateEvent, ErrorEvent, SessionRestoredEvent,
-    MessageHistoryResponseEvent, PartialTranscriptionUpdateEvent,
+    MessageHistoryResponseEvent,
     SessionCreatedData, MessageRecordedData, OpinionSuggestionsData,
     LLMResponseData, StatusUpdateData, ErrorData, SessionRestoredData,
-    MessageHistoryResponseData, MessageHistoryItem, PartialTranscriptionUpdateData
+    MessageHistoryResponseData, MessageHistoryItem
 )
 
 logger = logging.getLogger(__name__)
@@ -357,11 +357,7 @@ class WebSocketHandler:
         
         # 处理音频数据
         if self.stt_service:
-            partial_text = await self.stt_service.process_audio_chunk(session_id, audio_chunk)
-            if partial_text is not None:
-                # 获取当前消息的临时ID
-                temp_message_id = session.current_message_id or "unknown_message"
-                await self.send_partial_transcription_update(session_id, temp_message_id, partial_text)
+            await self.stt_service.process_audio_chunk(session_id, audio_chunk)
         
         logger.debug(f"音频流处理: {session_id}, 数据长度: {len(audio_chunk)}")
     
@@ -976,21 +972,6 @@ class WebSocketHandler:
             )
         )
         await self.send_event(client_id, event)
-    
-    async def send_partial_transcription_update(self, session_id: str, message_id: str, partial_content: str):
-        """发送渐进式转录更新事件"""
-        # 找到对应的客户端
-        for client_id in self.active_connections:
-            # TODO: 优化为只发送给与该会话关联的客户端
-            event = PartialTranscriptionUpdateEvent(
-                type="partial_transcription_update",
-                data=PartialTranscriptionUpdateData(
-                    session_id=session_id,
-                    message_id=message_id,
-                    partial_content=partial_content
-                )
-            )
-            await self.send_event(client_id, event)
     
     async def send_status_update(self, session_id: str, status: str, message: str = None):
         """发送状态更新事件"""
