@@ -101,10 +101,10 @@ packages:
     dependency: "direct main"
     description:
       name: contacts_service
-      sha256: f6d5ea33b31dfcdcd2e65d8abdc836502e04ddb0f66a96aa726fa9891ea9671e
+      sha256: "29d3a735cd405860324faf29228eff2a6de1b131af614dbbbdab6fe6c5286420"
       url: "https://pub.flutter-io.cn"
     source: hosted
-    version: "0.6.3"
+    version: "0.6.2"
   crypto:
     dependency: "direct main"
     description:
