@@ -139,22 +139,28 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
       
       if (newPartner != null) {
         await _loadPartners();
-        _searchController.clear();
-        _addPartnerPopupKey.currentState?.close();
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('已添加对话人: $name')),
-        );
+        if (mounted) {
+          _searchController.clear();
+          _addPartnerPopupKey.currentState?.close();
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('已添加对话人: $name')),
+          );
+        }
       } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('添加对话人失败')),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('添加对话人失败: $e');
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('添加对话人失败')),
         );
       }
-    } catch (e) {
-      print('添加对话人失败: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('添加对话人失败')),
-      );
     }
   }
 
@@ -246,15 +252,19 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
 
       if (newPartner != null) {
         await _loadPartners();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('已导入: $name')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('已导入: $name')),
+          );
+        }
       }
     } catch (e) {
-      print('导入联系人失败: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('导入联系人失败')),
-      );
+      debugPrint('导入联系人失败: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('导入联系人失败')),
+        );
+      }
     }
   }
 
@@ -283,14 +293,18 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
         await partnerManager.removePartner(partner.id);
         await _loadPartners();
         
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('已删除: ${partner.name}')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('已删除: ${partner.name}')),
+          );
+        }
       } catch (e) {
-        print('删除对话人失败: $e');
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('删除对话人失败')),
-        );
+        debugPrint('删除对话人失败: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('删除对话人失败')),
+          );
+        }
       }
     }
   }
