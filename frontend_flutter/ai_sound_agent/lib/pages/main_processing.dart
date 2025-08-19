@@ -21,7 +21,9 @@ import 'package:ai_sound_agent/widgets/shared/save_dialogue_popup.dart';
 import 'package:ai_sound_agent/widgets/shared/edit_dialogue_info_popup.dart';
 
 class MainProcessingPage extends BasePage {
-  const MainProcessingPage({super.key})
+  final String? dpfile;
+  
+  const MainProcessingPage({super.key, this.dpfile})
       : super(
           title: 'AI语音助手',
           showBottomNav: true,
@@ -156,12 +158,20 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       final dpManager = DPManager();
       await dpManager.init();
 
+      // 确定要保存的dp文件名
+      String targetDpFile = 'current';
+      if (widget.dpfile != null && widget.dpfile!.isNotEmpty) {
+        if (await dpManager.exists(widget.dpfile!)) {
+          targetDpFile = widget.dpfile!;
+        }
+      }
+
       // 获取当前对话消息
       final currentMessages = _dialogueKey.currentState?.getAllMessages() ?? [];
       
       // 保存到DP
       await dpManager.createDpFromChatSelection(
-        "current",
+        targetDpFile,
         currentMessages, 
         packageName: _dialogueTitle,
         description: _dialogueDescription,
@@ -171,7 +181,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         userOpinion: _userOpinionController.text,
         override: true,
       );
-      debugPrint('当前进度已保存到current.dp');
+      debugPrint('当前进度已保存到$targetDpFile.dp');
     } catch (e) {
       debugPrint('保存当前进度时出错: $e');
     }
@@ -300,17 +310,29 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       final dpManager = DPManager();
       await dpManager.init();
 
+      // 确定要使用的dp文件名
+      String targetDpFile = 'current';
+      if (widget.dpfile != null && widget.dpfile!.isNotEmpty) {
+        // 检查指定的文件是否存在
+        if (await dpManager.exists(widget.dpfile!)) {
+          targetDpFile = widget.dpfile!;
+          debugPrint('使用指定的dp文件: $targetDpFile');
+        } else {
+          debugPrint('指定的dp文件不存在，使用默认的current.dp');
+        }
+      }
+
       setState(() {
         _currentStep = LoadingStep.settingUpPage;
       });
 
-      // 检查current.dp是否存在，如果不存在则创建
-      if (!await dpManager.exists('current')) {
+      // 检查目标dp文件是否存在，如果不存在则创建（仅当是current.dp时）
+      if (targetDpFile == 'current' && !await dpManager.exists('current')) {
         await dpManager.createNewDp('current', scenarioDescription: '当前对话');
       }
 
-      // 获取current.dp
-      final dialoguePackage = await dpManager.getDp('current');
+      // 获取目标dp文件
+      final dialoguePackage = await dpManager.getDp(targetDpFile);
       
       // 保存对话包数据并填充侧边栏
       _currentDialoguePackage = dialoguePackage;
@@ -1776,54 +1798,71 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
   // 保存对话包
   void _saveDialoguePackage() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return SaveDialoguePopup(
-          onSave: (fileName) async {
-            try {
-              // 获取所有聊天消息
-              final chatMessages = _dialogueKey.currentState?.getAllMessages() ?? [];
-              
-              // 获取侧边栏数据
-              final scenarioDescription = _currentDialoguePackage?.scenarioDescription ?? '';
-              final scenarioSupplement = _scenarioSupplementController.text;
-              final userOpinion = _userOpinionController.text;
-              final modification = _modificationController.text;
-              final responseCount = _responseCount;
-              
-              // 创建新的对话包
-              final dpManager = DPManager();
-              await dpManager.createDpFromChatSelection(
-                fileName,
-                chatMessages,
-                packageName: _dialogueTitle,
-                description: _dialogueDescription,
-                scenarioDescription: scenarioDescription,
-                responseCount: responseCount,
-                modification: modification,
-                userOpinion: userOpinion,
-                scenarioSupplement: scenarioSupplement,
-              );
-              
-              // 显示成功消息
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('对话包保存成功')),
-                );
-              }
-            } catch (e) {
-              debugPrint('保存对话包时出错: $e');
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('保存对话包失败')),
-                );
-              }
-            }
-          },
+    // 确定要保存的文件名
+    String targetFileName = 'current';
+    if (widget.dpfile != null && widget.dpfile!.isNotEmpty) {
+      targetFileName = widget.dpfile!;
+    }
+
+    // 如果有指定文件，直接保存，不弹出对话框
+    if (widget.dpfile != null && widget.dpfile!.isNotEmpty) {
+      _saveToFile(targetFileName);
+    } else {
+      // 未指定文件，弹出文件名输入框
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return SaveDialoguePopup(
+            onSave: (fileName) async {
+              await _saveToFile(fileName);
+            },
+          );
+        },
+      );
+    }
+  }
+
+  Future<void> _saveToFile(String fileName) async {
+    try {
+      // 获取所有聊天消息
+      final chatMessages = _dialogueKey.currentState?.getAllMessages() ?? [];
+      
+      // 获取侧边栏数据
+      final scenarioDescription = _currentDialoguePackage?.scenarioDescription ?? '';
+      final scenarioSupplement = _scenarioSupplementController.text;
+      final userOpinion = _userOpinionController.text;
+      final modification = _modificationController.text;
+      final responseCount = _responseCount;
+      
+      // 创建新的对话包
+      final dpManager = DPManager();
+      await dpManager.createDpFromChatSelection(
+        fileName,
+        chatMessages,
+        packageName: _dialogueTitle,
+        description: _dialogueDescription,
+        scenarioDescription: scenarioDescription,
+        responseCount: responseCount,
+        modification: modification,
+        userOpinion: userOpinion,
+        scenarioSupplement: scenarioSupplement,
+        override: true,
+      );
+      
+      // 显示成功消息
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('对话包保存成功: $fileName.dp')),
         );
-      },
-    );
+      }
+    } catch (e) {
+      debugPrint('保存对话包时出错: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('保存对话包失败')),
+        );
+      }
+    }
   }
 
 

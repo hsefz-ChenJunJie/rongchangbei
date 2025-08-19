@@ -1,7 +1,7 @@
 name: ai_sound_agent
 description: "AI语音助手应用，提供语音识别、语音合成和智能对话功能"
 publish_to: 'none'
-version: 0.1.4-alpha+2
+version: 0.1.4-rc+1
 
 
 environment:
@@ -22,6 +22,8 @@ dependencies:
   web_socket_channel: ^3.0.3
   loading_indicator: ^3.1.1
   flutter_tts: ^4.2.3
+  contacts_service: ^0.6.3
+  lpinyin: ^2.0.2
 
 dev_dependencies:
   flutter_test:

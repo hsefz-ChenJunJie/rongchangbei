@@ -15,6 +15,7 @@ class DialoguePackage {
   final String modification;
   final String userOpinion;
   final String scenarioSupplement;
+  final String subjectMatter; // 主题事项
 
   DialoguePackage({
     required this.type,
@@ -27,6 +28,7 @@ class DialoguePackage {
     required this.modification,
     required this.userOpinion,
     required this.scenarioSupplement,
+    this.subjectMatter = '默认主题', // 默认主题
   });
 
   factory DialoguePackage.fromJson(Map<String, dynamic> json) {
@@ -44,6 +46,7 @@ class DialoguePackage {
       modification: json['modification'] ?? '',
       userOpinion: json['user_opinion'] ?? '',
       scenarioSupplement: json['scenario_supplement'] ?? '',
+      subjectMatter: json['subject_matter'] ?? '默认主题',
     );
   }
 
@@ -59,6 +62,7 @@ class DialoguePackage {
       'modification': modification,
       'user_opinion': userOpinion,
       'scenario_supplement': scenarioSupplement,
+      'subject_matter': subjectMatter,
     };
   }
 
@@ -159,6 +163,11 @@ class DPManager {
       final String defaultDpJson = await rootBundle.loadString('defaults/default_dialogue_package.json');
       final Map<String, dynamic> defaultData = json.decode(defaultDpJson);
       
+      // 确保包含subject_matter字段
+      if (!defaultData.containsKey('subject_matter')) {
+        defaultData['subject_matter'] = '默认主题';
+      }
+      
       // 保存到目标文件
       await targetFile.writeAsString(json.encode(defaultData));
     } catch (e) {
@@ -181,7 +190,8 @@ class DPManager {
         ],
         "modification": "",
         "user_opinion": "", 
-        "scenario_supplement": ""
+        "scenario_supplement": "",
+        "subject_matter": "默认主题"
       };
       
       await targetFile.writeAsString(json.encode(defaultData));
@@ -290,6 +300,7 @@ class DPManager {
     String description = '',
     String scenarioDescription = '新的对话情景',
     List<Message>? initialMessages,
+    String subjectMatter = '默认主题', // 添加主题参数
   }) async {
     if (await exists(fileName)) {
       throw Exception('对话包已存在: $fileName');
@@ -306,6 +317,7 @@ class DPManager {
       modification: '',
       userOpinion: '',
       scenarioSupplement: '',
+      subjectMatter: subjectMatter,
     );
 
     await saveDp(newDp);
@@ -323,6 +335,7 @@ class DPManager {
     String modification = '',
     String userOpinion = '',
     String scenarioSupplement = '',
+    String subjectMatter = '默认主题', // 添加主题参数
     bool override = false,
   }) async {
     final messages = chatMessages.map((msg) => Message.fromSelection(msg)).toList();
@@ -342,6 +355,7 @@ class DPManager {
       modification: modification,
       userOpinion: userOpinion,
       scenarioSupplement: scenarioSupplement,
+      subjectMatter: subjectMatter,
     );
 
     await saveDp(newDp);

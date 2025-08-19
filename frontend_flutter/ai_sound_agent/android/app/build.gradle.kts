@@ -41,8 +41,8 @@ android {
         applicationId = "com.efzzz.ai_sound_agent"
         minSdk = 23
         targetSdk = 36
-        versionCode = 7
-        versionName = "0.1.4-alpha"
+        versionCode = 9
+        versionName = "0.1.4-rc"
     }
 
     buildTypes {
