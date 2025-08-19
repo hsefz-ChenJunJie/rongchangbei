@@ -4,6 +4,9 @@
 .vscode/
 prompt.md
 tools.md
+ai_development_prompt.md
+problems*.md
+requests.md
 
 # macOS
 .DS_Store
@@ -120,5 +123,3 @@ temp/
 tmp/
 
 AutoSubmit.bat
-ai_development_prompt.md
-problems*.md
