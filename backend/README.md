@@ -255,12 +255,18 @@ curl http://localhost:8000/conversation/health
 ```bash
 # 运行完整的功能验证测试套件
 cd ../tests/backend
-python run_all_tests.py
+python run_remote_tests.py
 
 # 或单独运行特定测试
-python test_audio_stream_fix.py      # 音频流处理测试
-python test_response_count_fix.py    # response_count更新测试
+python test_websocket_features.py     # WebSocket基础功能测试
+python test_conversation_features.py  # 完整对话功能测试
+python test_message_history.py        # 消息历史功能测试（开发专用）
 ```
+
+**🧪 测试功能说明：**
+- ✅ **WebSocket连接测试**: 验证连接建立和基础通信
+- ✅ **完整对话流程测试**: 音频消息、LLM回答、用户选择
+- ✅ **消息历史测试**: 验证get_message_history测试事件（**仅供开发测试使用**）
 
 > 📋 **测试详情**: 完整的测试说明请参考 [`../tests/backend/README.md`](../tests/backend/README.md)
 

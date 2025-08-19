@@ -84,6 +84,32 @@ class SessionResumeData(BaseModel):
 
 
 # ===============================
+# 测试专用事件数据模型
+# ===============================
+
+class GetMessageHistoryData(BaseModel):
+    """获取消息历史测试事件数据"""
+    session_id: str = Field(description="目标会话标识")
+
+
+class MessageHistoryItem(BaseModel):
+    """消息历史项数据"""
+    message_id: str = Field(description="消息唯一ID")
+    sender: str = Field(description="消息发送者")
+    content: str = Field(description="消息内容")
+    created_at: str = Field(description="消息创建时间")
+    message_type: Literal["history", "recording", "selected_response"] = Field(description="消息类型")
+
+
+class MessageHistoryResponseData(BaseModel):
+    """消息历史响应事件数据"""
+    session_id: str = Field(description="目标会话标识")
+    messages: List[MessageHistoryItem] = Field(description="消息历史列表")
+    total_count: int = Field(description="总消息数量")
+    request_id: Optional[str] = Field(default=None, description="用于请求追踪")
+
+
+# ===============================
 # 后端 → 前端事件数据模型
 # ===============================
 
@@ -209,6 +235,12 @@ class SessionResumeEvent(BaseModel):
     data: SessionResumeData
 
 
+# 测试专用事件类型定义
+class GetMessageHistoryEvent(BaseModel):
+    type: Literal["get_message_history"] = "get_message_history"
+    data: GetMessageHistoryData
+
+
 # 后端发送事件类型定义
 class SessionCreatedEvent(BaseModel):
     type: Literal["session_created"] = "session_created"
@@ -245,6 +277,11 @@ class SessionRestoredEvent(BaseModel):
     data: SessionRestoredData
 
 
+class MessageHistoryResponseEvent(BaseModel):
+    type: Literal["message_history_response"] = "message_history_response"
+    data: MessageHistoryResponseData
+
+
 # 联合类型定义
 IncomingEvent = Union[
     ConversationStartEvent,
@@ -257,7 +294,8 @@ IncomingEvent = Union[
     ScenarioSupplementEvent,
     ResponseCountUpdateEvent,
     ConversationEndEvent,
-    SessionResumeEvent
+    SessionResumeEvent,
+    GetMessageHistoryEvent
 ]
 
 OutgoingEvent = Union[
@@ -267,7 +305,8 @@ OutgoingEvent = Union[
     LLMResponseEvent,
     StatusUpdateEvent,
     ErrorEvent,
-    SessionRestoredEvent
+    SessionRestoredEvent,
+    MessageHistoryResponseEvent
 ]
 
 
@@ -291,6 +330,9 @@ class EventTypes:
     CONVERSATION_END = "conversation_end"
     SESSION_RESUME = "session_resume"
     
+    # 测试专用事件
+    GET_MESSAGE_HISTORY = "get_message_history"
+    
     # 后端 → 前端事件
     SESSION_CREATED = "session_created"
     MESSAGE_RECORDED = "message_recorded"
@@ -299,6 +341,7 @@ class EventTypes:
     STATUS_UPDATE = "status_update"
     ERROR = "error"
     SESSION_RESTORED = "session_restored"
+    MESSAGE_HISTORY_RESPONSE = "message_history_response"
 
 
 # ===============================

@@ -16,6 +16,13 @@ class SessionStatus(str, Enum):
     GENERATING_RESPONSE = "generating_response"  # 手动触发的回答生成中
 
 
+class HistoryMessage(BaseModel):
+    """历史消息数据模型（对话开始时传入）"""
+    message_id: str = Field(description="历史消息ID")
+    sender: str = Field(description="消息发送者标识")
+    content: str = Field(description="消息内容")
+
+
 class Message(BaseModel):
     """消息数据模型"""
     id: str = Field(description="消息唯一ID")
@@ -38,6 +45,7 @@ class Session(BaseModel):
     status: SessionStatus = Field(default=SessionStatus.IDLE, description="会话状态")
     
     # 消息相关
+    history_messages: List[HistoryMessage] = Field(default_factory=list, description="历史消息（对话开始时传入）")
     messages: List[Message] = Field(default_factory=list, description="消息历史")
     current_message_id: Optional[str] = Field(default=None, description="当前处理中的消息ID")
     current_message_sender: Optional[str] = Field(default=None, description="当前消息发送者")
@@ -120,6 +128,17 @@ class Session(BaseModel):
     def set_user_opinion(self, opinion: str):
         """设置用户意见倾向"""
         self.user_opinion = opinion
+        self.updated_at = datetime.utcnow()
+    
+    def set_history_messages(self, history_messages: List[Dict[str, str]]):
+        """设置历史消息"""
+        self.history_messages = [
+            HistoryMessage(
+                message_id=msg["message_id"],
+                sender=msg["sender"],
+                content=msg["content"]
+            ) for msg in history_messages
+        ]
         self.updated_at = datetime.utcnow()
 
     def update_status(self, status: SessionStatus):

@@ -17,11 +17,13 @@ from app.models.events import (
     ConversationStartEvent, MessageStartEvent, AudioStreamEvent, MessageEndEvent,
     ManualGenerateEvent, UserModificationEvent, UserSelectedResponseEvent,
     ScenarioSupplementEvent, ResponseCountUpdateEvent, ConversationEndEvent,
-    SessionResumeEvent,
+    SessionResumeEvent, GetMessageHistoryEvent,
     SessionCreatedEvent, MessageRecordedEvent, OpinionSuggestionsEvent,
     LLMResponseEvent, StatusUpdateEvent, ErrorEvent, SessionRestoredEvent,
+    MessageHistoryResponseEvent,
     SessionCreatedData, MessageRecordedData, OpinionSuggestionsData,
-    LLMResponseData, StatusUpdateData, ErrorData, SessionRestoredData
+    LLMResponseData, StatusUpdateData, ErrorData, SessionRestoredData,
+    MessageHistoryResponseData, MessageHistoryItem
 )
 
 logger = logging.getLogger(__name__)
@@ -215,6 +217,8 @@ class WebSocketHandler:
                 await self.handle_conversation_end(client_id, event_data)
             elif event_type == EventTypes.SESSION_RESUME:
                 await self.handle_session_resume(client_id, event_data)
+            elif event_type == EventTypes.GET_MESSAGE_HISTORY:
+                await self.handle_get_message_history(client_id, event_data)
             else:
                 await self.send_error(
                     client_id,
@@ -254,17 +258,17 @@ class WebSocketHandler:
             response_count=event.data.response_count
         )
         
-        # 记录历史消息（如果有）
+        # 设置历史消息（如果有）
         if event.data.history_messages:
-            logger.info(f"记录历史消息: {session_id}, 共 {len(event.data.history_messages)} 条")
-            for history_msg in event.data.history_messages:
-                # 使用前端提供的消息ID
-                self.session_manager.get_session(session_id).add_message(
-                    message_id=history_msg.message_id,
-                    sender=history_msg.sender,
-                    content=history_msg.content,
-                    is_user_selected=False
-                )
+            logger.info(f"设置历史消息: {session_id}, 共 {len(event.data.history_messages)} 条")
+            history_msgs = [
+                {
+                    "message_id": history_msg.message_id,
+                    "sender": history_msg.sender,
+                    "content": history_msg.content
+                } for history_msg in event.data.history_messages
+            ]
+            self.session_manager.get_session(session_id).set_history_messages(history_msgs)
         
         # 记录连接与会话的关联
         if client_id in self.connection_info:
@@ -618,6 +622,80 @@ class WebSocketHandler:
                 session_id=session_id
             )
     
+    async def handle_get_message_history(self, client_id: str, event_data: Dict[str, Any]):
+        """处理获取消息历史测试事件"""
+        event = GetMessageHistoryEvent(type="get_message_history", data=event_data)
+        
+        session_id = event.data.session_id
+        
+        # 检查会话是否存在
+        if not self.session_manager.session_exists(session_id):
+            await self.send_error(
+                client_id,
+                ErrorCodes.SESSION_NOT_FOUND,
+                f"会话不存在: {session_id}",
+                session_id=session_id
+            )
+            return
+        
+        try:
+            # 获取会话数据
+            session = self.session_manager.get_session(session_id)
+            if not session:
+                await self.send_error(
+                    client_id,
+                    ErrorCodes.SESSION_NOT_FOUND,
+                    f"无法获取会话数据: {session_id}",
+                    session_id=session_id
+                )
+                return
+            
+            # 构建消息历史列表
+            message_history = []
+            
+            # 添加历史消息（对话开始时传入的）
+            if hasattr(session, 'history_messages') and session.history_messages:
+                for hist_msg in session.history_messages:
+                    message_history.append(MessageHistoryItem(
+                        message_id=hist_msg.message_id,
+                        sender=hist_msg.sender,
+                        content=hist_msg.content,
+                        created_at=session.created_at.isoformat() if hasattr(session, 'created_at') else datetime.utcnow().isoformat(),
+                        message_type="history"
+                    ))
+            
+            # 添加录制消息和用户选择的回答
+            for message in session.messages:
+                # 根据is_user_selected字段判断类型
+                message_type = "selected_response" if message.is_user_selected else "recording"
+                
+                message_history.append(MessageHistoryItem(
+                    message_id=message.id,
+                    sender=message.sender,
+                    content=message.content,
+                    created_at=message.timestamp.isoformat(),
+                    message_type=message_type
+                ))
+            
+            # 发送消息历史响应
+            await self.send_message_history_response(
+                client_id, 
+                session_id, 
+                message_history,
+                str(uuid.uuid4())  # 生成请求ID
+            )
+            
+            logger.info(f"已发送消息历史，会话 {session_id}，消息数量: {len(message_history)}")
+            
+        except Exception as e:
+            logger.error(f"获取消息历史失败 {session_id}: {e}")
+            await self.send_error(
+                client_id,
+                ErrorCodes.INTERNAL_ERROR,
+                f"获取消息历史失败: {str(e)}",
+                session_id=session_id
+            )
+    
     async def _save_session_on_disconnect(self, session_id: str):
         """在连接断开时保存会话"""
         if not self.persistence_manager or not self.session_manager:
@@ -707,6 +785,19 @@ class WebSocketHandler:
                 )
             )
             await self.send_event(client_id, event)
+    
+    async def send_message_history_response(self, client_id: str, session_id: str, messages: list, request_id: str = None):
+        """发送消息历史响应事件（测试专用）"""
+        event = MessageHistoryResponseEvent(
+            type="message_history_response",
+            data=MessageHistoryResponseData(
+                session_id=session_id,
+                messages=messages,
+                total_count=len(messages),
+                request_id=request_id
+            )
+        )
+        await self.send_event(client_id, event)
     
     async def send_status_update(self, session_id: str, status: str, message: str = None):
         """发送状态更新事件"""
