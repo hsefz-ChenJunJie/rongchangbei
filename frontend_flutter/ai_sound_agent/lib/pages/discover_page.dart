@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:ai_sound_agent/widgets/shared/base.dart';
 import 'package:ai_sound_agent/services/theme_manager.dart';
 import 'package:ai_sound_agent/services/dp_download_manager.dart';
+import 'package:ai_sound_agent/services/dp_manager.dart';
 import 'package:ai_sound_agent/app/route.dart';
 
 class DiscoverPage extends BasePage {
@@ -133,6 +134,10 @@ class _DiscoverPageState extends BasePageState<DiscoverPage> {
         resource.fileName,
         expectedHash: resource.sha256,
       );
+
+      // 刷新DPManager的文件列表
+      final dpManager = DPManager();
+      await dpManager.refreshDpFileList();
 
       final downloadedFiles = await _downloadManager.getDownloadedOnlinePackages();
       if (mounted) {

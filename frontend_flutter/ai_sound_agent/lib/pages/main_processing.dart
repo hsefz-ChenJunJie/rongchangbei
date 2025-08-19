@@ -88,6 +88,10 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   // TTS相关状态
   final FlutterTts _flutterTts = FlutterTts();
 
+  // 新增：角色队列
+  List<String> _roleQueue = [];
+
+
   final Map<LoadingStep, String> _stepDescriptions = {
     LoadingStep.readingFile: '正在读取对话文件...',
     LoadingStep.settingUpPage: '正在设置页面...',
@@ -172,29 +176,28 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       debugPrint('修改意见: ${dialoguePackage.modification}');
       
       // 转换为ChatMessage列表并添加到对话中，但不指定message_id
-      final chatMessages = dpManager.toChatMessages(dialoguePackage);
+      List<Map<String, dynamic>> chatMessages = dpManager.toChatMessages(dialoguePackage);
       debugPrint('从DP加载的消息数量: ${chatMessages.length}');
       debugPrint('消息内容: $chatMessages');
       
       // 根据对话消息自动添加新角色
       _autoAddRolesFromMessages(chatMessages);
       
+      // 将消息添加到对话组件（仅用于显示，不用于发送）
       if (chatMessages.isNotEmpty) {
-        // 延迟添加消息，确保组件已完全加载
+        final completer = Completer<void>();
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (_dialogueKey.currentState != null) {
             _dialogueKey.currentState!.addMessages(chatMessages);
             debugPrint('消息已添加到对话组件');
-            
-            // 消息添加完成后，获取带有message_id的消息并发送到websocket
-            _sendHistoryMessagesWithIds();
+            chatMessages = _dialogueKey.currentState!.getAllMessages();
+            debugPrint('已经重新读取消息: $chatMessages');
           } else {
             debugPrint('对话组件状态为null');
           }
+          completer.complete();
         });
-      } else {
-        // 如果没有历史消息，直接发送空的历史消息列表
-        _sendHistoryMessagesWithIds();
+        await completer.future; // 等待消息处理完成
       }
 
       // 加载用户数据以获取用户名和base_url
@@ -207,11 +210,12 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         _currentStep = LoadingStep.sendingStartRequest;
       });
 
-      // 建立持久WebSocket连接（但不立即发送历史消息）
+      // 建立WebSocket连接并直接发送包含历史消息的启动包
       await _establishWebSocketConnection(
         baseUrl: baseUrl,
         username: username,
         dialoguePackage: dialoguePackage,
+        historyMessages: chatMessages,
       );
 
     } catch (e) {
@@ -227,6 +231,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     required String baseUrl,
     required String username,
     required DialoguePackage dialoguePackage,
+    required List<Map<String, dynamic>> historyMessages,
   }) async {
     try {
       // 创建WebSocket连接
@@ -271,14 +276,23 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         },
       );
 
-      // 构建并发送对话启动数据包（不包含历史消息）
+      // 转换历史消息格式为符合websocket要求的格式
+      final formattedHistoryMessages = historyMessages.map((msg) {
+        return {
+          'message_id': msg['message_id']?.toString() ?? '',
+          'sender': msg['name']?.toString() ?? '',
+          'content': msg['content']?.toString() ?? '',
+        };
+      }).toList();
+
+      // 构建并发送对话启动数据包（包含历史消息）
       final startMessage = {
         'type': 'conversation_start',
         'data': {
           'username': username,
           'scenario_description': dialoguePackage.scenarioDescription,
           'response_count': dialoguePackage.responseCount.clamp(1, 5), // 确保在1-5之间
-          'history_messages': [], // 初始为空，后续通过单独的消息发送
+          'history_messages': formattedHistoryMessages,
         }
       };
 
@@ -359,9 +373,17 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         // 处理消息记录消息
         final receivedSessionId = data['data']['session_id'] as String;
         final messageId = data['data']['message_id'] as String;
-        final content = data['data']['content'] as String;
-        final sender = data['data']['sender'] as String;
-        
+        final content = data['data']['message_content'] as String;
+
+        String? sender = data['data']['sender'];
+
+        if (sender == null) {
+          debugPrint('收到消息但.sender为空');
+          sender = _roleQueue[0];
+          _roleQueue.removeAt(0);
+        }
+
+
         final userdata = Userdata();
         await userdata.loadUserData();
 
@@ -465,6 +487,8 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       // 获取发送者名称
       String sender = await _getRecordingSender();
       _recordingSender = sender;
+      _roleQueue.add(sender);
+
 
       // 发送message_start消息
       _sendMessageStart(sender);
@@ -1555,47 +1579,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     );
   }
 
-  /// 获取带有message_id的历史消息并发送到WebSocket
-  // 将_sendHistoryMessagesWithIds方法添加到类内部
-  /// 获取带有message_id的历史消息并发送到WebSocket
-  void _sendHistoryMessagesWithIds() {
-    if (_dialogueKey.currentState == null || _sessionId == null) {
-      debugPrint('对话组件状态或session_id为null，无法发送历史消息');
-      return;
-    }
-  
-    try {
-      // 从chat_dialogue中获取所有带有message_id的消息
-      final allMessages = _dialogueKey.currentState!.getAllMessages();
-      debugPrint('获取到的带有message_id的消息数量: ${allMessages.length}');
-      
-      // 转换为符合websocket格式要求的历史消息
-      final historyMessages = allMessages.map((msg) {
-        return {
-          'message_id': msg['message_id'] as String,
-          'sender': msg['name'] as String,
-          'content': msg['content'] as String,
-        };
-      }).toList();
-  
-      debugPrint('转换后的历史消息: $historyMessages');
-  
-      // 发送历史消息到WebSocket
-      final historyMessage = {
-        'type': 'history_messages',
-        'data': {
-          'session_id': _sessionId,
-          'messages': historyMessages,
-        }
-      };
-  
-      _webSocketChannel?.sink.add(json.encode(historyMessage));
-      debugPrint('已发送历史消息到WebSocket: ${json.encode(historyMessage)}');
-      
-    } catch (e) {
-      debugPrint('发送历史消息时出错: $e');
-    }
-  }
+
 }
 
 
@@ -1661,7 +1645,6 @@ void _autoAddRolesFromMessages(List<Map<String, dynamic>> messages) {
 
 
 
-// 根据单个发送者自动添加角色
 // 根据单个发送者自动添加角色
 void _autoAddRoleFromSender(String senderName) {
   if (senderName.isEmpty || senderName == '未知用户' || senderName == '错误用户') {
