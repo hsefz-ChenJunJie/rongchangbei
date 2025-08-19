@@ -377,8 +377,8 @@ class WebSocketHandler:
         message_id = self.session_manager.end_message(session_id, content)
         session = self.session_manager.get_session(session_id)
         
-        # 发送消息记录确认
-        await self.send_message_recorded(session_id, message_id)
+        # 发送消息记录确认（包含消息内容）
+        await self.send_message_recorded(session_id, message_id, content)
         
         # 主动保存会话（有新消息时）
         if self.persistence_manager:
@@ -668,7 +668,7 @@ class WebSocketHandler:
         )
         await self.send_event(client_id, event)
     
-    async def send_message_recorded(self, session_id: str, message_id: str):
+    async def send_message_recorded(self, session_id: str, message_id: str, message_content: Optional[str] = None):
         """发送消息记录确认事件"""
         # 找到对应的客户端
         for client_id in self.active_connections:
@@ -676,7 +676,8 @@ class WebSocketHandler:
                 type="message_recorded",
                 data=MessageRecordedData(
                     session_id=session_id,
-                    message_id=message_id
+                    message_id=message_id,
+                    message_content=message_content
                 )
             )
             await self.send_event(client_id, event)

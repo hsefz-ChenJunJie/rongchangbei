@@ -1,5 +1,53 @@
 # 更新日志
 
+## [v1.3.1] - 2025-08-19
+
+### API 改进
+- **撤回变更**: 恢复 `message_recorded` 事件中的 `message_content` 字段，但实现差异化逻辑
+- **优化**: 录制消息时包含消息内容，用户选择回答时不包含消息内容
+
+### 详细变更
+- **录制消息场景**: `message_recorded` 事件包含 `message_content` 字段，内容为STT转录结果
+- **用户选择回答场景**: `message_recorded` 事件不包含 `message_content` 字段，前端自行管理内容
+- **技术实现**: 使用 `Optional[str]` 类型实现可选字段，保持向后兼容性
+
+### 事件格式示例
+
+**录制消息后**:
+```json
+{
+  "type": "message_recorded",
+  "data": {
+    "session_id": "session_123",
+    "message_id": "msg_001", 
+    "message_content": "这是语音转录的内容"
+  }
+}
+```
+
+**用户选择回答后**:
+```json
+{
+  "type": "message_recorded",
+  "data": {
+    "session_id": "session_123",
+    "message_id": "msg_002"
+    // 注意：没有 message_content 字段
+  }
+}
+```
+
+### 文档更新
+- 同步更新 `prompt.md`、`docs/doc.md`、`ai_development_prompt.md` 中的事件格式说明
+- 更新字段规范，明确可选字段的使用场景
+
+### 向后兼容性
+- ✅ 完全向后兼容，`message_content` 字段为可选字段
+- ✅ 不影响不使用该字段的现有前端实现
+- ✅ 为需要消息内容的前端提供了便利
+
+---
+
 ## [v1.3.0] - 2025-08-18
 
 ### 重大功能更新

@@ -221,7 +221,8 @@
   "type": "message_recorded", // [必需]
   "data": {
     "session_id": "会话ID", // [必需]
-    "message_id": "消息唯一ID" // [必需] 分配给消息的ID
+    "message_id": "消息唯一ID", // [必需] 分配给消息的ID
+    "message_content": "消息内容" // [可选] 消息内容，仅录制消息时包含
   }
 }
 ```

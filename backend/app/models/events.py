@@ -96,6 +96,7 @@ class MessageRecordedData(BaseModel):
     """消息记录确认事件数据"""
     session_id: str = Field(description="目标会话标识")
     message_id: str = Field(description="分配给消息的ID")
+    message_content: Optional[str] = Field(default=None, description="消息内容（仅录制消息时包含）")
 
 
 class SessionRestoredData(BaseModel):
