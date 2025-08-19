@@ -97,15 +97,15 @@ sequenceDiagram
 
 ```mermaid
 graph TD
-    A[Frontend: 用户点击"开始消息"] --> B{Backend: handle_message_start};
-    B --> C[STTService: start_stream_processing];
-    D[Frontend: 持续发送 audio_stream] --> E{Backend: handle_audio_stream};
-    E --> F[STTService: process_audio_chunk];
-    G[Frontend: 用户点击"结束消息"] --> H{Backend: handle_message_end};
-    H --> I[STTService: get_final_transcription];
-    I --> J[SessionManager: end_message];
-    J --> K{Backend: send_message_recorded};
-    K --> L[Frontend: 收到消息确认];
+    A["Frontend: 用户点击'开始消息'"] --> B{"Backend: handle_message_start"};
+    B --> C["STTService: start_stream_processing"];
+    D["Frontend: 持续发送 audio_stream"] --> E{"Backend: handle_audio_stream"};
+    E --> F["STTService: process_audio_chunk"];
+    G["Frontend: 用户点击'结束消息'"] --> H{"Backend: handle_message_end"};
+    H --> I["STTService: get_final_transcription"];
+    I --> J["SessionManager: end_message"];
+    J --> K{"Backend: send_message_recorded"};
+    K --> L["Frontend: 收到消息确认"];
 ```
 
 1.  **启动**: `handle_message_start` 调用 `stt_service.start_stream_processing()`，为当前会话初始化一个音频流处理状态，包括缓冲区和时间戳记录。
@@ -143,7 +143,7 @@ graph TD
 
 建议生成是后端系统的智能核心，由 `app/services/llm_service.py` 和 `app/services/request_manager.py` 协同完成。
 
-### 两种生成模式与提示词工程 (最新优化)
+### 两种生成模式与提示词工程
 
 为了提升AI输出的质量和相关性，系统采用了**双重提示词策略**：为两种不同的生成任务配置了完全独立的系统提示词，让LLM在执行任务时扮演更专注、更专业的角色。
 
