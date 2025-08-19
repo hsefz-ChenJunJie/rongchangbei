@@ -11,7 +11,9 @@
 """
 
 import asyncio
+import base64
 import json
+import time
 import websockets
 import uuid
 from datetime import datetime
@@ -119,10 +121,10 @@ class MessageHistoryTest(RemoteTestBase):
                 }
             }
             
-            await self.send_websocket_event(websocket, start_event)
+            await self.send_websocket_event(websocket, "conversation_start", start_event["data"])
             
-            # 等待session_created事件
-            session_created = await self.receive_websocket_event(websocket, "session_created")
+            # 等待session_created事件（使用容错接收）
+            session_created = await self.receive_any_websocket_event(websocket, ["session_created"], timeout=10)
             if not session_created:
                 print("未收到session_created事件")
                 return False
@@ -143,10 +145,10 @@ class MessageHistoryTest(RemoteTestBase):
                 }
             }
             
-            await self.send_websocket_event(websocket, manual_generate_event)
+            await self.send_websocket_event(websocket, "manual_generate", manual_generate_event["data"])
             
-            # 等待LLM回答
-            llm_response = await self.receive_websocket_event(websocket, "llm_response")
+            # 等待LLM回答（使用容错接收）
+            llm_response = await self.receive_any_websocket_event(websocket, ["llm_response"], timeout=15)
             if not llm_response:
                 print("未收到llm_response事件")
                 return False
@@ -162,10 +164,10 @@ class MessageHistoryTest(RemoteTestBase):
                 }
             }
             
-            await self.send_websocket_event(websocket, select_event)
+            await self.send_websocket_event(websocket, "user_selected_response", select_event["data"])
             
-            # 等待消息记录确认
-            message_recorded = await self.receive_websocket_event(websocket, "message_recorded")
+            # 等待消息记录确认（使用容错接收）
+            message_recorded = await self.receive_any_websocket_event(websocket, ["message_recorded"], timeout=10)
             if not message_recorded:
                 print("未收到用户选择的message_recorded事件")
                 return False
@@ -178,10 +180,10 @@ class MessageHistoryTest(RemoteTestBase):
                 }
             }
             
-            await self.send_websocket_event(websocket, history_event)
+            await self.send_websocket_event(websocket, "get_message_history", history_event["data"])
             
-            # 等待消息历史响应
-            history_response = await self.receive_websocket_event(websocket, "message_history_response")
+            # 等待消息历史响应（使用容错接收）
+            history_response = await self.receive_any_websocket_event(websocket, ["message_history_response"], timeout=10)
             if not history_response:
                 print("未收到message_history_response事件")
                 return False
@@ -235,10 +237,10 @@ class MessageHistoryTest(RemoteTestBase):
                 }
             }
             
-            await self.send_websocket_event(websocket, start_event)
+            await self.send_websocket_event(websocket, "conversation_start", start_event["data"])
             
             # 等待session_created事件
-            session_created = await self.receive_websocket_event(websocket, "session_created")
+            session_created = await self.receive_any_websocket_event(websocket, ["session_created"])
             if not session_created:
                 return False
             
@@ -252,10 +254,10 @@ class MessageHistoryTest(RemoteTestBase):
                 }
             }
             
-            await self.send_websocket_event(websocket, history_event)
+            await self.send_websocket_event(websocket, "get_message_history", history_event["data"])
             
             # 等待响应
-            history_response = await self.receive_websocket_event(websocket, "message_history_response")
+            history_response = await self.receive_any_websocket_event(websocket, ["message_history_response"])
             if not history_response:
                 return False
             
@@ -291,10 +293,10 @@ class MessageHistoryTest(RemoteTestBase):
                 }
             }
             
-            await self.send_websocket_event(websocket, history_event)
+            await self.send_websocket_event(websocket, "get_message_history", history_event["data"])
             
             # 应该收到错误事件
-            error_response = await self.receive_websocket_event(websocket, "error")
+            error_response = await self.receive_any_websocket_event(websocket, ["error"])
             if not error_response:
                 print("未收到期望的错误事件")
                 return False
@@ -324,7 +326,7 @@ class MessageHistoryTest(RemoteTestBase):
                 "sender": sender
             }
         }
-        await self.send_websocket_event(websocket, message_start)
+        await self.send_websocket_event(websocket, "message_start", message_start["data"])
         
         # 发送音频流（模拟）
         audio_chunk = base64.b64encode(b"fake_audio_data").decode()
@@ -335,7 +337,7 @@ class MessageHistoryTest(RemoteTestBase):
                 "audio_chunk": audio_chunk
             }
         }
-        await self.send_websocket_event(websocket, audio_stream)
+        await self.send_websocket_event(websocket, "audio_stream", audio_stream["data"])
         
         # 发送消息结束
         message_end = {
@@ -344,47 +346,16 @@ class MessageHistoryTest(RemoteTestBase):
                 "session_id": session_id
             }
         }
-        await self.send_websocket_event(websocket, message_end)
+        await self.send_websocket_event(websocket, "message_end", message_end["data"])
         
         # 等待消息记录确认
-        message_recorded = await self.receive_websocket_event(websocket, "message_recorded")
+        message_recorded = await self.receive_any_websocket_event(websocket, ["message_recorded"])
         if message_recorded:
             print(f"📝 录制消息已确认: {message_recorded['data']['message_id']}")
             return True
         
         return False
     
-    async def receive_any_websocket_event(self, websocket, expected_types, timeout=10):
-        """接收任意指定类型的WebSocket事件，自动跳过status_update"""
-        if isinstance(expected_types, str):
-            expected_types = [expected_types]
-            
-        start_time = time.time()
-        
-        while time.time() - start_time < timeout:
-            try:
-                message = await asyncio.wait_for(websocket.recv(), timeout=2)
-                event = json.loads(message)
-                event_type = event.get("type")
-                
-                # 跳过状态更新事件
-                if event_type == "status_update":
-                    continue
-                
-                # 检查是否是期望的事件类型
-                if event_type in expected_types:
-                    return event
-                else:
-                    print(f"🔄 跳过非期望事件: {event_type}")
-                    
-            except asyncio.TimeoutError:
-                continue
-            except Exception as e:
-                print(f"接收事件时出错: {e}")
-                break
-        
-        print(f"⏰ 超时未收到期望事件: {expected_types}")
-        return None
     
     async def save_test_report(self):
         """保存测试报告"""
