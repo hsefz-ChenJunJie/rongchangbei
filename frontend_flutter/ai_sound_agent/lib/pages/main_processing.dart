@@ -91,6 +91,12 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   // 新增：角色队列
   List<String> _roleQueue = [];
 
+  // 新增：重连相关状态
+  int _reconnectAttempts = 0;
+  bool _isReconnecting = false;
+  Timer? _reconnectTimer;
+  static const int maxReconnectAttempts = 5;
+  static const Duration baseReconnectDelay = Duration(seconds: 1);
 
   final Map<LoadingStep, String> _stepDescriptions = {
     LoadingStep.readingFile: '正在读取对话文件...',
@@ -112,6 +118,162 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       _initializeDefaultRoles();
       _loadCurrentDialogue();
     });
+  }
+
+  // 处理断线重连
+  Future<void> _handleDisconnectionAndReconnect() async {
+    if (_reconnectAttempts >= maxReconnectAttempts) {
+      debugPrint('已达到最大重连次数，停止重连');
+      setState(() {
+        _sessionId = null;
+        _isReconnecting = false;
+      });
+      return;
+    }
+
+    // 保存当前进度到current.dp
+    await _saveCurrentProgress();
+
+    // 开始重连
+    setState(() {
+      _isReconnecting = true;
+      _reconnectAttempts++;
+    });
+
+    final delay = baseReconnectDelay * (1 << (_reconnectAttempts - 1)); // 指数退避
+    debugPrint('WebSocket连接断开，${delay.inSeconds}秒后尝试第$_reconnectAttempts次重连');
+
+    _reconnectTimer = Timer(delay, () async {
+      await _attemptReconnect();
+    });
+  }
+
+  // 保存当前进度到current.dp
+  Future<void> _saveCurrentProgress() async {
+    try {
+      if (_currentDialoguePackage == null) return;
+
+      final dpManager = DPManager();
+      await dpManager.init();
+
+      // 获取当前对话消息
+      final currentMessages = _dialogueKey.currentState?.getAllMessages() ?? [];
+      
+      // 保存到DP
+      await dpManager.createDpFromChatSelection(
+        "current",
+        currentMessages, 
+        packageName: _dialogueTitle,
+        description: _dialogueDescription,
+        scenarioDescription: _scenarioSupplementController.text,
+        responseCount: _responseCount,
+        modification: _modificationController.text,
+        userOpinion: _userOpinionController.text,
+      );
+      debugPrint('当前进度已保存到current.dp');
+    } catch (e) {
+      debugPrint('保存当前进度时出错: $e');
+    }
+  }
+
+  // 尝试重新连接 - 使用原session_id恢复会话
+  Future<void> _attemptReconnect() async {
+    try {
+      final userdata = Userdata();
+      await userdata.loadUserData();
+      final baseUrl = userdata.preferences['base_url'] ?? 'ws://localhost:8000/conservation';
+
+      if (_sessionId == null) {
+        debugPrint('没有可用的session_id，无法进行会话恢复，创建新会话');
+        // 如果没有session_id，回退到创建新会话
+        final currentMessages = _dialogueKey.currentState?.getAllMessages() ?? [];
+        if (_currentDialoguePackage != null) {
+          await _establishWebSocketConnection(
+            baseUrl: baseUrl,
+            username: userdata.username,
+            dialoguePackage: _currentDialoguePackage!,
+            historyMessages: currentMessages,
+          );
+        }
+      } else {
+        // 使用原session_id恢复会话
+        await _resumeWebSocketSession(
+          baseUrl: baseUrl,
+          sessionId: _sessionId!,
+        );
+      }
+      
+      debugPrint('WebSocket重连成功');
+      setState(() {
+        _isReconnecting = false;
+        _reconnectAttempts = 0;
+      });
+    } catch (e) {
+      debugPrint('WebSocket重连失败: $e');
+      if (mounted) {
+        // 重连失败，继续下一次重连尝试
+        _handleDisconnectionAndReconnect();
+      }
+    }
+  }
+
+  // 恢复WebSocket会话 - 使用原session_id
+  Future<void> _resumeWebSocketSession({
+    required String baseUrl,
+    required String sessionId,
+  }) async {
+    try {
+      // 创建WebSocket连接
+      _webSocketChannel = WebSocketChannel.connect(
+        Uri.parse(baseUrl),
+      );
+
+      // 添加连接超时处理
+      await _webSocketChannel!.ready.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          debugPrint('WebSocket会话恢复连接超时');
+          throw TimeoutException('WebSocket会话恢复连接超时');
+        },
+      );
+
+      // 监听WebSocket消息
+      _webSocketChannel!.stream.listen(
+        (message) {
+          _handleWebSocketMessage(message);
+        },
+        onError: (error) {
+          debugPrint('WebSocket会话恢复错误: $error');
+          if (mounted && !_isReconnecting) {
+            // 会话恢复失败，触发重连
+            _handleDisconnectionAndReconnect();
+          }
+        },
+        onDone: () {
+          debugPrint('WebSocket会话恢复连接关闭');
+          if (mounted && !_isReconnecting) {
+            // 会话恢复连接断开，触发重连
+            _handleDisconnectionAndReconnect();
+          }
+        },
+      );
+
+      // 发送会话恢复消息
+      final resumeMessage = {
+        'type': 'session_resume',
+        'data': {
+          'session_id': sessionId,
+        }
+      };
+
+      // 发送数据包
+      _webSocketChannel!.sink.add(json.encode(resumeMessage));
+      debugPrint('已发送会话恢复消息: ${json.encode(resumeMessage)}');
+      
+    } catch (e) {
+      debugPrint('WebSocket会话恢复失败: $e');
+      rethrow;
+    }
   }
 
   // 初始化TTS
@@ -255,23 +417,31 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         },
         onError: (error) {
           debugPrint('WebSocket错误: $error');
-          if (mounted && _isLoading) {
-            setState(() {
-              _isLoading = false;
-              _currentStep = LoadingStep.completed;
-            });
+          if (mounted) {
+            if (_isLoading) {
+              setState(() {
+                _isLoading = false;
+                _currentStep = LoadingStep.completed;
+              });
+            } else if (!_isReconnecting && _sessionId != null) {
+              // 中途连接错误，触发重连
+              _handleDisconnectionAndReconnect();
+            }
           }
         },
         onDone: () {
           debugPrint('WebSocket连接关闭');
           if (mounted) {
-            setState(() {
-              _sessionId = null;
-              if (_isLoading) {
+            // 如果是正常加载过程中，不触发重连
+            if (_isLoading) {
+              setState(() {
                 _isLoading = false;
                 _currentStep = LoadingStep.completed;
-              }
-            });
+              });
+            } else if (!_isReconnecting && _sessionId != null) {
+              // 中途断开连接，触发重连
+              _handleDisconnectionAndReconnect();
+            }
           }
         },
       );
@@ -739,6 +909,8 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   @override
   void dispose() {
     // 发送 conversation_end 消息并关闭 WebSocket 连接
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
     _sendConversationEndAndClose();
     
     // 清理计时器
@@ -977,6 +1149,41 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         // 主内容
         _buildMainContent(),
         
+        // 重连状态提示
+        if (_isReconnecting)
+          Positioned(
+            top: 60,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '连接断开，正在重连... ($_reconnectAttempts/$maxReconnectAttempts)',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        
         // 侧边栏覆盖层
         if (_isSidebarOpen)
           Positioned.fill(
@@ -1007,25 +1214,64 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
   // 平板/桌面模式布局
   Widget _buildTabletLayout() {
-    return Row(
+    return Stack(
       children: [
-        // 侧边栏（抽屉式）
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-          width: _isSidebarOpen ? 250 : 0,
-          child: _isSidebarOpen
-              ? Container(
-                  color: Theme.of(context).colorScheme.surface,
-                  child: _buildSidebarMenu(),
-                )
-              : const SizedBox.shrink(),
+        Row(
+          children: [
+            // 侧边栏（抽屉式）
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              curve: Curves.easeInOut,
+              width: _isSidebarOpen ? 250 : 0,
+              child: _isSidebarOpen
+                  ? Container(
+                      color: Theme.of(context).colorScheme.surface,
+                      child: _buildSidebarMenu(),
+                    )
+                  : const SizedBox.shrink(),
+            ),
+              
+            // 主内容区域
+            Expanded(
+              child: _buildMainContent(),
+            ),
+          ],
         ),
-          
-        // 主内容区域
-        Expanded(
-          child: _buildMainContent(),
-        ),
+        
+        // 重连状态提示
+        if (_isReconnecting)
+          Positioned(
+            top: 20,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.9),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '连接断开，正在重连... ($_reconnectAttempts/$maxReconnectAttempts)',
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -1180,7 +1426,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
                           padding: const EdgeInsets.only(bottom: 8),
                           child: _buildLLMResponseButton(suggestion),
                         )
-                      ).toList(),
+                      ),
                       const SizedBox(height: 8),
                     ],
                   ),
@@ -1581,6 +1827,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
 
 }
+
 
 
 // 根据对话消息自动添加新角色
