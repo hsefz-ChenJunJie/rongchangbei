@@ -39,8 +39,196 @@ class DisconnectRecoveryTester(RemoteTestBase):
                     "name": "短暂断连",
                     "disconnect_duration": 3,
                     "expected_result": "session_restored"
+                },
+                {
+                    "name": "录音中断连保护测试",
+                    "disconnect_during": "recording",
+                    "disconnect_duration": 5,
+                    "expected_result": "recording_protected",
+                    "test_audio_recovery": True
                 }
             ]
+    
+    async def test_recording_disconnect_protection(self, scenario: Dict[str, Any]) -> bool:
+        """测试录音过程中的断连保护功能"""
+        scenario_name = scenario.get("name", "录音断连保护测试")
+        disconnect_duration = scenario.get("disconnect_duration", 5)
+        test_audio_recovery = scenario.get("test_audio_recovery", True)
+        
+        print(f"\n🎙️ 测试录音断连保护: {scenario_name}")
+        print(f"   断连时长: {disconnect_duration} 秒")
+        print(f"   测试音频恢复: {'是' if test_audio_recovery else '否'}")
+        
+        websocket = None
+        session_id = None
+        
+        try:
+            # 1. 建立连接并创建会话
+            print("🔌 建立WebSocket连接...")
+            websocket = await self.connect_websocket()
+            if not websocket:
+                self.log_test_result(f"录音断连保护-{scenario_name}", False, "无法建立WebSocket连接")
+                return False
+            
+            # 2. 开始对话
+            print("🆕 创建测试会话...")
+            session_id = await self.start_conversation(
+                websocket,
+                scenario_description=f"录音断连保护测试-{scenario_name}",
+                response_count=2
+            )
+            if not session_id:
+                self.log_test_result(f"录音断连保护-{scenario_name}", False, "无法创建会话")
+                return False
+            
+            print(f"✅ 会话创建成功: {session_id}")
+            
+            # 3. 开始录音消息
+            print("🎙️ 开始录音消息...")
+            success = await self.send_websocket_event(websocket, "message_start", {
+                "session_id": session_id,
+                "sender": "录音断连测试用户"
+            })
+            if not success:
+                self.log_test_result(f"录音断连保护-{scenario_name}", False, "无法开始录音")
+                return False
+            
+            # 等待状态更新
+            status_event = await self.receive_websocket_event(websocket, "status_update", 5)
+            if not status_event or status_event["data"]["status"] != "recording_message":
+                print("⚠️ 未收到录音状态确认，但继续测试")
+            
+            # 4. 发送部分音频数据
+            print("📡 发送部分音频数据...")
+            for i in range(3):
+                audio_data = f"recording_disconnect_test_chunk_{i}".encode()
+                success = await self.send_websocket_event(websocket, "audio_stream", {
+                    "session_id": session_id,
+                    "audio_chunk": base64.b64encode(audio_data).decode()
+                })
+                if not success:
+                    print(f"⚠️ 音频块 {i} 发送失败")
+                await asyncio.sleep(0.5)  # 模拟录音间隔
+            
+            print("✅ 部分音频数据已发送")
+            
+            # 5. 在录音过程中断连
+            print(f"🔌 在录音过程中断开连接（{disconnect_duration}秒）...")
+            await websocket.close()
+            websocket = None
+            
+            # 6. 等待指定的断连时长
+            print(f"⏳ 等待 {disconnect_duration} 秒（后台STT处理）...")
+            await asyncio.sleep(disconnect_duration)
+            
+            # 7. 重新连接
+            print("🔄 尝试重新连接...")
+            websocket = await self.connect_websocket()
+            if not websocket:
+                self.log_test_result(f"录音断连保护-{scenario_name}", False, "重连失败")
+                return False
+            
+            print("✅ 重连成功")
+            
+            # 8. 尝试恢复会话
+            print(f"🔄 尝试恢复会话: {session_id}")
+            success = await self.send_websocket_event(websocket, "session_resume", {
+                "session_id": session_id
+            })
+            if not success:
+                self.log_test_result(f"录音断连保护-{scenario_name}", False, "恢复请求发送失败")
+                return False
+            
+            # 9. 检查恢复结果
+            print(f"⏳ 等待恢复结果（超时: {self.recovery_timeout}秒）...")
+            restore_event = await self.receive_websocket_event(websocket, "session_restored", self.recovery_timeout)
+            
+            if not restore_event:
+                error_event = await self.receive_websocket_event(websocket, "error", 5)
+                if error_event:
+                    error_code = error_event["data"].get("error_code")
+                    error_message = error_event["data"].get("message", "未知错误")
+                    print(f"❌ 收到错误: {error_code} - {error_message}")
+                    self.log_test_result(f"录音断连保护-{scenario_name}", False, f"恢复失败: {error_code}")
+                else:
+                    print("❌ 恢复超时")
+                    self.log_test_result(f"录音断连保护-{scenario_name}", False, "恢复超时")
+                return False
+            
+            # 10. 验证录音状态恢复
+            restored_data = restore_event["data"]
+            session_status = restored_data.get("status", "unknown")
+            print(f"✅ 会话已恢复，状态: {session_status}")
+            
+            # 检查是否恢复到录音状态
+            if session_status == "recording_message":
+                print("✅ 录音状态已恢复！")
+                
+                # 检查是否收到部分转录内容
+                recorded_event = await self.receive_websocket_event(websocket, "message_recorded", 5)
+                if recorded_event and recorded_event["data"].get("message_content"):
+                    partial_content = recorded_event["data"]["message_content"]
+                    print(f"📝 收到部分转录内容: {partial_content}")
+                    if "[恢复]" in partial_content:
+                        print("✅ 检测到断连恢复标记")
+                
+                # 11. 如果需要测试音频恢复，继续发送音频
+                if test_audio_recovery:
+                    print("🎙️ 继续发送音频测试恢复功能...")
+                    for i in range(2):
+                        audio_data = f"recovery_test_chunk_{i}".encode()
+                        success = await self.send_websocket_event(websocket, "audio_stream", {
+                            "session_id": session_id,
+                            "audio_chunk": base64.b64encode(audio_data).decode()
+                        })
+                        if not success:
+                            print(f"⚠️ 恢复后音频块 {i} 发送失败")
+                        await asyncio.sleep(0.5)
+                    
+                    # 12. 结束消息
+                    print("🔚 结束录音消息...")
+                    success = await self.send_websocket_event(websocket, "message_end", {
+                        "session_id": session_id
+                    })
+                    if not success:
+                        print("⚠️ 结束消息失败")
+                        return False
+                    
+                    # 13. 等待最终的消息记录确认
+                    final_recorded_event = await self.receive_websocket_event(websocket, "message_recorded", 10)
+                    if final_recorded_event:
+                        final_content = final_recorded_event["data"].get("message_content", "")
+                        print(f"📝 最终消息内容: {final_content}")
+                        
+                        # 验证内容是否包含断连前和断连后的音频
+                        if "recording_disconnect_test_chunk" in final_content and "recovery_test_chunk" in final_content:
+                            print("✅ 音频内容合并成功！")
+                        else:
+                            print("⚠️ 未检测到完整的音频内容合并")
+                    else:
+                        print("⚠️ 未收到最终消息记录")
+                
+                self.log_test_result(f"录音断连保护-{scenario_name}", True, "录音断连保护功能正常")
+                return True
+                
+            else:
+                print(f"❌ 会话状态不正确: 期望 'recording_message'，实际 '{session_status}'")
+                self.log_test_result(f"录音断连保护-{scenario_name}", False, f"状态恢复错误: {session_status}")
+                return False
+                
+        except Exception as e:
+            print(f"❌ 录音断连保护测试异常: {e}")
+            self.log_test_result(f"录音断连保护-{scenario_name}", False, f"测试异常: {str(e)}")
+            return False
+        
+        finally:
+            # 清理连接
+            if websocket:
+                try:
+                    await websocket.close()
+                    print("🔌 测试连接已关闭")
+                except:
+                    pass
     
     async def test_single_disconnect_scenario(self, scenario: Dict[str, Any]) -> bool:
         """测试单个断连场景"""
@@ -213,7 +401,12 @@ class DisconnectRecoveryTester(RemoteTestBase):
             print(f"📋 场景 {i}/{total_scenarios}: {scenario_name}")
             print(f"{'='*50}")
             
-            success = await self.test_single_disconnect_scenario(scenario)
+            # 检查是否是录音断连保护测试
+            if scenario.get("disconnect_during") == "recording" or scenario.get("expected_result") == "recording_protected":
+                success = await self.test_recording_disconnect_protection(scenario)
+            else:
+                success = await self.test_single_disconnect_scenario(scenario)
+            
             results[scenario_name] = success
             
             if success:

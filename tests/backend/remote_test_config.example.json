@@ -33,6 +33,32 @@
     "disconnect_duration": 5,
     "max_persistence_test_hours": 1
   },
+  "disconnect_test": {
+    "enable_disconnect_test": true,
+    "test_rounds": 2,
+    "round_interval": 3,
+    "reconnection_timeout": 15,
+    "recovery_timeout": 10,
+    "disconnect_scenarios": [
+      {
+        "name": "短暂断连",
+        "disconnect_duration": 3,
+        "expected_result": "session_restored"
+      },
+      {
+        "name": "录音中断连保护测试",
+        "disconnect_during": "recording",
+        "disconnect_duration": 5,
+        "expected_result": "recording_protected",
+        "test_audio_recovery": true
+      },
+      {
+        "name": "长时间断连",
+        "disconnect_duration": 10,
+        "expected_result": "session_restored"
+      }
+    ]
+  },
   "microphone_test": {
     "channels": 1,
     "sample_rate": 16000,
