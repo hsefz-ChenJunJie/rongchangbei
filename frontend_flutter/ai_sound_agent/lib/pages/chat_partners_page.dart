@@ -9,13 +9,21 @@ import '../widgets/shared/popup.dart';
 import '../services/theme_manager.dart';
 
 class ChatPartnersPage extends BasePage {
-  const ChatPartnersPage({super.key}) : super(title: '对话人管理');
+  const ChatPartnersPage({super.key})
+      : super(
+          title: '对话人管理',
+          showBottomNav: true,
+          showBreadcrumb: true,
+          showSettingsFab: true,
+        );
 
   @override
   ChatPartnersPageState createState() => ChatPartnersPageState();
 }
 
 class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
+  @override
+  int getInitialBottomNavIndex() => 2; // 对话人页面索引为2
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   final GlobalKey<PopupState> _addPartnerPopupKey = GlobalKey<PopupState>();
@@ -553,6 +561,4 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
     }
   }
 
-  @override
-  int getInitialBottomNavIndex() => 0;
 }
