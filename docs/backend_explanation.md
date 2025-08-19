@@ -91,53 +91,53 @@ sequenceDiagram
 
 消息录制是系统的核心输入功能，它将用户的实时语音流转化为结构化的文本消息。
 
-### 音频流与STT处理逻辑（渐进式转录）
+### 音频流与STT处理逻辑（非阻塞式）
 
-为了提升实时性和用户体验，系统采用了**渐进式转录 (Progressive Transcription)** 策略。该过程的核心是 `app/services/stt_service.py` 中定义的 `WhisperSTTService`。
+为了解决语音识别阻塞主线程的问题并实现真正的并行处理，系统采用了一种**非阻塞的后台转录**策略。该过程的核心是 `app/services/stt_service.py` 中定义的 `WhisperSTTService`。
 
 ```mermaid
 graph TD
-    A["Frontend: 用户点击'开始消息'"] --> B{"Backend: handle_message_start"};
-    B --> C["STTService: start_stream_processing"];
-    D["Frontend: 持续发送 audio_stream"] --> E{"Backend: handle_audio_stream"};
-    E --> F["STTService: process_audio_chunk"];
-    F --> G{达到缓冲时长?};
-    G -- 是 --> H["后台转录当前缓冲区音频"];
-    H --> I["累积转录文本"];
-    I --> J{"Backend: send_partial_transcription_update"};
-    J --> K["Frontend: 实时显示部分结果"];
-    G -- 否 --> F;
-    L["Frontend: 用户点击'结束消息'"] --> M{"Backend: handle_message_end"};
-    M --> N["STTService: get_final_transcription"];
-    N --> O["转录剩余音频并合并所有文本"];
-    O --> P{"Backend: send_message_recorded"};
-    P --> Q["Frontend: 显示最终完整消息"];
+    A["Frontend: 持续发送 audio_stream"] --> B{"Backend: handle_audio_stream"};
+    B --> C["STTService: process_audio_chunk"];
+    C --> D{音频缓冲区达到阈值?};
+    D -- 是 --> E[创建后台转录任务];
+    E --> F((后台线程池));
+    F --> G[Whisper模型处理];
+    G --> H[获取文本结果];
+    H --> I{Lock};
+    I --> J[安全地追加到累积文本];
+    D -- 否 --> B;
+    B -- 继续接收下一音频块 --> C;
+    K["Frontend: 用户点击'结束消息'"] --> L{"Backend: handle_message_end"};
+    L --> M["等待所有后台任务完成"];
+    M --> N["处理剩余音频并整合所有文本"];
+    N --> O{"Backend: send_message_recorded"};
 ```
 
-1.  **启动**: `handle_message_start` 调用 `stt_service.start_stream_processing()`，为当前会话初始化一个音频流处理状态，包括一个空的音频缓冲区和一个空的累积文本字符串 (`accumulated_text`)。
+1.  **接收与派发**: `handle_audio_stream` 接收到音频块后，立即调用 `stt_service.process_audio_chunk()`。此方法将音频块存入缓冲区后**立即返回**，不会进行任何耗时的等待。
 
-2.  **处理与转录**: `handle_audio_stream` 调用 `stt_service.process_audio_chunk()`。这是新逻辑的核心：
-    - 音频块被解码并添加到内存缓冲区。
-    - 系统会计算当前缓冲区的音频总时长。
-    - 一旦时长达到预设的阈值（默认为1秒，可在配置中修改 `WHISPER_PROGRESSIVE_TRANSCRIPTION_SECONDS`），系统会立即将**当前缓冲区内的所有音频**发送给 Whisper 模型进行转录。
-    - 转录后，音频缓冲区被**清空**，而识别出的文本则被**追加**到 `accumulated_text` 字符串中。
-
-3.  **实时反馈**: 每当一次部分转录完成，`handle_audio_stream` 就会收到累积的文本，并立即通过新的 `partial_transcription_update` 事件将其发送给前端。这使得用户可以在说话的同时几乎实时地看到文字结果。
+2.  **后台任务创建**: 当 `process_audio_chunk` 检测到缓冲区内的音频时长达到阈值（如1秒）时，它不会阻塞等待，而是使用 `asyncio.create_task()` 将该缓冲区的转录工作**作为一个独立的后台任务来运行**。创建任务后，主线程立刻被释放，可以继续接收下一个音频块。
 
     ```python
-    # app/websocket/handlers.py
-    async def handle_audio_stream(self, client_id: str, event_data: Dict[str, Any]):
+    # app/services/stt_service.py
+    async def process_audio_chunk(self, session_id: str, audio_chunk_base64: str) -> None:
         # ...
-        if self.stt_service:
-            partial_text = await self.stt_service.process_audio_chunk(session_id, audio_chunk)
-            if partial_text is not None:
-                temp_message_id = session.current_message_id or "unknown_message"
-                await self.send_partial_transcription_update(session_id, temp_message_id, partial_text)
+        if buffer_duration >= settings.whisper_progressive_transcription_seconds:
+            audio_to_process = b''.join(stream_info["audio_chunks"])
+            stream_info["audio_chunks"] = []
+            
+            # 创建后台任务进行转录，不阻塞当前方法
+            task = asyncio.create_task(
+                self._background_transcribe(session_id, audio_to_process)
+            )
+            stream_info["transcription_tasks"].append(task)
     ```
 
-4.  **结束与整合**: `handle_message_end` 调用 `stt_service.get_final_transcription()`。此方法会处理缓冲区中**最后剩余的、不足一个转录时长的音频块**，将这最后一部分的转录结果与 `accumulated_text` 合并，形成最终的完整消息文本。
+3.  **并行处理**: 这种机制实现了**音频接收和语音识别的真正并行**。前端可以毫无延迟地持续发送音频流，后端也能在不中断接收的情况下，在后台的线程池中对收到的音频块进行分段处理。
 
-5.  **断连恢复**: 此架构与断连恢复无缝集成。当断连发生时，`accumulated_text` 会被作为 `partial_transcription` 保存。重连后，`start_stream_processing` 会用这个已保存的文本作为初始值，从而在之前的基础上继续进行渐进式转录。
+4.  **顺序保证**: 为防止多个并行的后台任务在写回结果时造成文本顺序混乱，每个会话都配有一把异步锁 (`asyncio.Lock`)。后台任务在完成转录后，必须先**获取锁**，才能将自己的结果安全地追加到总的累积文本中，从而确保了最终文本的顺序正确性。
+
+5.  **最终整合**: 当用户发送 `message_end` 事件时，后端的 `get_final_transcription` 方法会首先使用 `asyncio.gather()` **等待所有已创建的后台转录任务全部执行完毕**。然后，它会处理缓冲区中最后剩余的不足一个转录时长的音频块，并将结果与之前累积的文本合并，形成最终的完整消息，通过 `message_recorded` 事件一次性返回给前端。
 
 ## 3. 建议生成
 
