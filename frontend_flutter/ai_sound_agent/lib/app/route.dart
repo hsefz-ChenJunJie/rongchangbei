@@ -6,6 +6,7 @@ import 'package:ai_sound_agent/pages/advanced_settings.dart';
 import 'package:ai_sound_agent/pages/device_test_page.dart';
 import 'package:ai_sound_agent/pages/main_processing.dart';
 import 'package:ai_sound_agent/pages/manage_local_dp_file.dart';
+import 'package:ai_sound_agent/pages/chat_partners_page.dart';
 
 // 定义路由名称常量
 class Routes {
@@ -16,6 +17,7 @@ class Routes {
   static const String deviceTest = '/device-test';
   static const String mainProcessing = '/main-processing';
   static const String manageLocalDpFile = '/manage-local-dp-file';
+  static const String chatPartners = '/chat-partners';
 }
 
 // 路由映射配置
@@ -27,6 +29,7 @@ final Map<String, WidgetBuilder> appRoutes = {
   Routes.deviceTest: (context) => const DeviceTestPage(),
   Routes.mainProcessing: (context) => const MainProcessingPage(),
   Routes.manageLocalDpFile: (context) => const ManageLocalDpFilePage(),
+  Routes.chatPartners: (context) => const ChatPartnersPage(),
 };
 
 // 路由状态类 (存储当前路由状态)
