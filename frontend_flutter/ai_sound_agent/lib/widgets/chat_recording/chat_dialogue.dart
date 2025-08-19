@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/theme_manager.dart';
 import 'role_selector.dart';
 import 'role_manager.dart';
@@ -9,6 +10,7 @@ class ChatMessage {
   final DateTime time;
   final bool isMe;
   final IconData? icon;
+  final String messageId; // 新增：消息唯一ID
 
   ChatMessage({
     required this.name,
@@ -16,7 +18,35 @@ class ChatMessage {
     DateTime? time,
     required this.isMe,
     this.icon,
-  }) : time = time ?? DateTime.now();
+    String? messageId, // 可选参数
+  }) : time = time ?? DateTime.now(),
+       messageId = _normalizeMessageId(messageId);
+
+  // 标准化消息ID（补全短格式或验证格式）
+  static String _normalizeMessageId(String? id) {
+    if (id == null) return 'msg_0000000';
+    
+    // 匹配msg_开头的各种格式
+    final match = RegExp(r'^msg_([0-9A-Fa-f]{1,7})$').firstMatch(id);
+    if (match != null) {
+      final hexPart = match.group(1)!;
+      // 补全到7位十六进制
+      return 'msg_${hexPart.toUpperCase().padLeft(7, '0')}';
+    }
+    
+    // 完全匹配7位格式
+    if (RegExp(r'^msg_[0-9A-Fa-f]{7}$').hasMatch(id)) {
+      return id.toUpperCase();
+    }
+    
+    return 'msg_0000000';
+  }
+
+  // 从消息ID中提取序号（十六进制转十进制）
+  static int extractSequence(String messageId) {
+    if (!RegExp(r'^msg_[0-9A-Fa-f]{7}$').hasMatch(messageId)) return 0;
+    return int.tryParse(messageId.substring(4), radix: 16) ?? 0;
+  }
 
   // 根据角色名称获取对应的角色信息
   ChatRole? get role {
@@ -42,7 +72,7 @@ class ChatMessage {
 
   Map<String, dynamic> toJson() {
     return {
-      'idx': 0, // 将在组件中设置
+      'message_id': messageId, // 新增：包含消息ID
       'name': name,
       'content': content,
       'time': '${time.year}/${time.month}/${time.day} ${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}:${time.second.toString().padLeft(2, '0')}',
@@ -63,6 +93,75 @@ class ChatDialogueState extends State<ChatDialogue> {
   final List<bool> _selectedMessages = [];
   bool _showSelection = false;
   final ScrollController _scrollController = ScrollController();
+  int _currentMessageSequence = 0; // 当前消息序号
+  static const String _prefsKey = 'last_message_sequence';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCurrentSequence();
+  }
+
+  // 加载当前消息序号
+  Future<void> _loadCurrentSequence() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _currentMessageSequence = prefs.getInt(_prefsKey) ?? 0;
+      debugPrint('加载当前消息序号: $_currentMessageSequence');
+    } catch (e) {
+      debugPrint('加载消息序号失败: $e');
+      _currentMessageSequence = 0;
+    }
+  }
+
+  // 保存当前消息序号
+  Future<void> _saveCurrentSequence() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_prefsKey, _currentMessageSequence);
+      debugPrint('保存当前消息序号: $_currentMessageSequence');
+    } catch (e) {
+      debugPrint('保存消息序号失败: $e');
+    }
+  }
+
+  // 生成新的消息ID
+  String _generateNewMessageId() {
+    _currentMessageSequence++;
+    if (_currentMessageSequence > 0xFFFFFF) { // 超过7位十六进制的最大值
+      _currentMessageSequence = 1; // 循环回到1
+    }
+    
+    final hexSequence = _currentMessageSequence.toRadixString(16).toUpperCase().padLeft(7, '0');
+    final messageId = 'msg_$hexSequence';
+    
+    // 异步保存序号
+    _saveCurrentSequence();
+    
+    return messageId;
+  }
+
+  // 验证并处理消息ID，支持短格式并更新currentMessageSequence
+  String _validateAndGetMessageId(String? providedId) {
+    if (providedId != null) {
+      final normalizedId = ChatMessage._normalizeMessageId(providedId);
+      
+      // 检查提供的ID是否已存在
+      final existingIds = _messages.map((msg) => msg.messageId).toSet();
+      if (!existingIds.contains(normalizedId)) {
+        // 提取序号并更新currentMessageSequence
+        final sequence = ChatMessage.extractSequence(normalizedId);
+        if (sequence > _currentMessageSequence) {
+          _currentMessageSequence = sequence;
+          _saveCurrentSequence();
+        }
+        return normalizedId;
+      }
+    }
+    
+    // 使用系统生成的ID
+    return _generateNewMessageId();
+  }
 
   // 添加一条新消息
   void addMessage({
@@ -71,8 +170,12 @@ class ChatDialogueState extends State<ChatDialogue> {
     DateTime? time,
     required bool isMe,
     IconData? icon,
+    String? messageId, // 可选：消息ID
   }) {
     setState(() {
+      // 验证并获取消息ID
+      final actualMessageId = _validateAndGetMessageId(messageId);
+      
       // 尝试从Role Manager获取角色信息
       final roleManager = RoleManager.instance;
       ChatRole? matchedRole;
@@ -90,6 +193,7 @@ class ChatDialogueState extends State<ChatDialogue> {
         time: time,
         isMe: isMe,
         icon: icon ?? matchedRole?.icon ?? Icons.person,
+        messageId: actualMessageId, // 使用验证后的消息ID
       );
       
       _messages.add(newMessage);
@@ -164,6 +268,10 @@ class ChatDialogueState extends State<ChatDialogue> {
         final senderName = msg['name']?.toString() ?? '未知用户';
         final isMe = msg['isMe'] as bool? ?? false;
         
+        // 获取消息ID，支持从message_id字段读取
+        final providedId = msg['message_id']?.toString();
+        final messageId = _validateAndGetMessageId(providedId);
+        
         // 尝试从Role Manager获取角色图标
         ChatRole? matchedRole;
         try {
@@ -189,6 +297,7 @@ class ChatDialogueState extends State<ChatDialogue> {
           time: parsedTime,
           isMe: isMe,
           icon: effectiveIcon,
+          messageId: messageId, // 使用验证后的消息ID
         );
       } catch (e) {
         debugPrint('处理消息时出错: $e');
@@ -312,7 +421,7 @@ class ChatDialogueState extends State<ChatDialogue> {
       if (_selectedMessages[i]) {
         final message = _messages[i];
         selected.add({
-          'idx': i,
+          'message_id': message.messageId, // 新增：消息ID
           'name': message.name,
           'content': message.content,
           'time': '${message.time.year}/${message.time.month}/${message.time.day} '
@@ -330,7 +439,7 @@ class ChatDialogueState extends State<ChatDialogue> {
     for (int i = 0; i < _messages.length; i++) {
       final message = _messages[i];
       allMessages.add({
-        'idx': i,
+        'message_id': message.messageId, // 新增：消息ID
         'name': message.name,
         'content': message.content,
         'time': '${message.time.year}/${message.time.month}/${message.time.day} '

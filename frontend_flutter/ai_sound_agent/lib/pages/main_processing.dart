@@ -171,7 +171,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       debugPrint('用户意见: ${dialoguePackage.userOpinion}');
       debugPrint('修改意见: ${dialoguePackage.modification}');
       
-      // 转换为ChatMessage列表并添加到对话中
+      // 转换为ChatMessage列表并添加到对话中，但不指定message_id
       final chatMessages = dpManager.toChatMessages(dialoguePackage);
       debugPrint('从DP加载的消息数量: ${chatMessages.length}');
       debugPrint('消息内容: $chatMessages');
@@ -185,14 +185,17 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
           if (_dialogueKey.currentState != null) {
             _dialogueKey.currentState!.addMessages(chatMessages);
             debugPrint('消息已添加到对话组件');
+            
+            // 消息添加完成后，获取带有message_id的消息并发送到websocket
+            _sendHistoryMessagesWithIds();
           } else {
             debugPrint('对话组件状态为null');
           }
         });
+      } else {
+        // 如果没有历史消息，直接发送空的历史消息列表
+        _sendHistoryMessagesWithIds();
       }
-
-      // 转换为历史消息列表（用于发送到服务器）
-      final historyMessages = dpManager.toHistoryMessages(dialoguePackage);
 
       // 加载用户数据以获取用户名和base_url
       final userdata = Userdata();
@@ -204,12 +207,11 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         _currentStep = LoadingStep.sendingStartRequest;
       });
 
-      // 建立持久WebSocket连接并发送对话启动数据包
+      // 建立持久WebSocket连接（但不立即发送历史消息）
       await _establishWebSocketConnection(
         baseUrl: baseUrl,
         username: username,
         dialoguePackage: dialoguePackage,
-        historyMessages: historyMessages,
       );
 
     } catch (e) {
@@ -225,7 +227,6 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     required String baseUrl,
     required String username,
     required DialoguePackage dialoguePackage,
-    required List<Map<String, dynamic>> historyMessages,
   }) async {
     try {
       // 创建WebSocket连接
@@ -270,14 +271,14 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         },
       );
 
-      // 构建并发送对话启动数据包
+      // 构建并发送对话启动数据包（不包含历史消息）
       final startMessage = {
         'type': 'conversation_start',
         'data': {
           'username': username,
           'scenario_description': dialoguePackage.scenarioDescription,
           'response_count': dialoguePackage.responseCount.clamp(1, 5), // 确保在1-5之间
-          'history_messages': historyMessages,
+          'history_messages': [], // 初始为空，后续通过单独的消息发送
         }
       };
 
@@ -577,7 +578,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
   void _startAudioStreamListener(Stream<List<int>> stream) {
     List<int> audioBuffer = [];
-    const int chunkSize = 1024; // 大约1秒的16kHz单声道PCM数据
+    const int chunkSize = 16000; // 大约1秒的16kHz单声道PCM数据
     
     // 取消之前的订阅
     _audioStreamSubscription?.cancel();
@@ -1553,6 +1554,48 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       },
     );
   }
+
+  /// 获取带有message_id的历史消息并发送到WebSocket
+  // 将_sendHistoryMessagesWithIds方法添加到类内部
+  /// 获取带有message_id的历史消息并发送到WebSocket
+  void _sendHistoryMessagesWithIds() {
+    if (_dialogueKey.currentState == null || _sessionId == null) {
+      debugPrint('对话组件状态或session_id为null，无法发送历史消息');
+      return;
+    }
+  
+    try {
+      // 从chat_dialogue中获取所有带有message_id的消息
+      final allMessages = _dialogueKey.currentState!.getAllMessages();
+      debugPrint('获取到的带有message_id的消息数量: ${allMessages.length}');
+      
+      // 转换为符合websocket格式要求的历史消息
+      final historyMessages = allMessages.map((msg) {
+        return {
+          'message_id': msg['message_id'] as String,
+          'sender': msg['name'] as String,
+          'content': msg['content'] as String,
+        };
+      }).toList();
+  
+      debugPrint('转换后的历史消息: $historyMessages');
+  
+      // 发送历史消息到WebSocket
+      final historyMessage = {
+        'type': 'history_messages',
+        'data': {
+          'session_id': _sessionId,
+          'messages': historyMessages,
+        }
+      };
+  
+      _webSocketChannel?.sink.add(json.encode(historyMessage));
+      debugPrint('已发送历史消息到WebSocket: ${json.encode(historyMessage)}');
+      
+    } catch (e) {
+      debugPrint('发送历史消息时出错: $e');
+    }
+  }
 }
 
 
@@ -1667,4 +1710,11 @@ void _autoAddRoleFromSender(String senderName) {
     debugPrint('已自动添加新角色: $senderName');
   }
 }
+
+
+
+
+
+
+
 
