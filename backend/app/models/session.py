@@ -59,9 +59,10 @@ class Session(BaseModel):
     active_opinion_request_id: Optional[str] = Field(default=None, description="进行中的意见生成请求ID")
     active_response_request_id: Optional[str] = Field(default=None, description="进行中的回答生成请求ID")
     
-    # 断连保护
+    # 断连保护（累积模式）
     partial_transcription: Optional[str] = Field(default=None, description="断连时的部分转录内容")
     audio_chunks_count: int = Field(default=0, description="断连时已收集的音频块数量") 
+    accumulated_audio_data: Optional[bytes] = Field(default=None, description="断连时累积的音频数据")
     is_recovering_from_disconnect: bool = Field(default=False, description="是否正在从断连中恢复")
     
     # 时间戳
@@ -176,6 +177,7 @@ class Session(BaseModel):
         self.current_message_sender = None
         self.partial_transcription = None
         self.audio_chunks_count = 0
+        self.accumulated_audio_data = None
         self.is_recovering_from_disconnect = False
         self.update_status(SessionStatus.IDLE)
         
@@ -186,6 +188,16 @@ class Session(BaseModel):
         self.partial_transcription = partial_text
         self.audio_chunks_count = chunks_count
         self.updated_at = datetime.utcnow()
+
+    def set_accumulated_audio(self, audio_data: bytes):
+        """设置断连时的累积音频数据"""
+        self.accumulated_audio_data = audio_data
+        self.audio_chunks_count = len(audio_data) if audio_data else 0
+        self.updated_at = datetime.utcnow()
+
+    def get_accumulated_audio(self) -> Optional[bytes]:
+        """获取断连时保存的累积音频数据"""
+        return self.accumulated_audio_data
         
     def mark_recovering_from_disconnect(self):
         """标记正在从断连中恢复"""

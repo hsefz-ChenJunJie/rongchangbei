@@ -1,5 +1,5 @@
 """
-STT (Speech-to-Text) 服务
+STT (Speech-to-Text) 服务 - 累积处理模式
 """
 import asyncio
 import base64
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class STTService:
-    """Vosk STT服务管理器"""
+    """STT服务管理器 - 累积处理模式"""
     
     def __init__(self):
         self.is_initialized = False
@@ -23,10 +23,8 @@ class STTService:
         self.active_streams: Dict[str, Dict[str, Any]] = {}
         self.cleanup_task = None
         
-        # 缓冲区和背压控制配置
+        # 缓冲区配置
         self.max_buffer_size = settings.audio_buffer_max_size
-        self.cleanup_interval = settings.audio_buffer_cleanup_interval
-        self.max_chunks_per_second = settings.audio_max_chunks_per_second
         
     async def initialize(self) -> bool:
         """
@@ -45,10 +43,7 @@ class STTService:
             
             self.is_initialized = True
             
-            # 启动缓冲区清理任务
-            self.cleanup_task = asyncio.create_task(self._cleanup_buffer_loop())
-            
-            logger.info("STT服务初始化完成")
+            logger.info("STT服务初始化完成（累积处理模式）")
             
             return True
             
@@ -59,20 +54,10 @@ class STTService:
     async def shutdown(self):
         """关闭STT服务"""
         try:
-            # 停止清理任务
-            if self.cleanup_task and not self.cleanup_task.done():
-                self.cleanup_task.cancel()
-                try:
-                    await self.cleanup_task
-                except asyncio.CancelledError:
-                    pass
-            
             # 停止所有活动流
             session_ids = list(self.active_streams.keys())
             for session_id in session_ids:
                 await self.stop_stream_processing(session_id)
-            
-            # TODO: 清理Vosk资源
             
             self.is_initialized = False
             logger.info("STT服务已关闭")
@@ -80,12 +65,13 @@ class STTService:
         except Exception as e:
             logger.error(f"STT服务关闭时发生错误: {e}")
     
-    async def start_stream_processing(self, session_id: str) -> bool:
+    async def start_stream_processing(self, session_id: str, existing_audio: bytes = None) -> bool:
         """
-        开始音频流处理
+        开始音频流处理（支持断连恢复）
         
         Args:
             session_id: 会话ID
+            existing_audio: 现有的音频数据（用于断连恢复）
             
         Returns:
             bool: 是否成功开始
@@ -95,24 +81,24 @@ class STTService:
             return False
         
         if session_id in self.active_streams:
-            logger.warning(f"会话 {session_id} 的音频流已在处理中")
-            return True
+            logger.warning(f"会话 {session_id} 的音频流已在处理中，重置流状态")
+            # 保留现有音频数据
+            existing_stream = self.active_streams[session_id]
+            existing_audio = existing_audio or b''.join(existing_stream.get("audio_chunks", []))
         
         try:
             # 创建流处理状态
             self.active_streams[session_id] = {
                 "start_time": datetime.utcnow(),
-                "audio_chunks": [],
-                "partial_results": [],
-                "final_result": None,
-                "total_bytes": 0,
-                "last_cleanup": datetime.utcnow(),
-                "chunk_timestamps": [],  # 记录每个chunk的时间戳（用于背压控制）
-                "rejected_chunks": 0,    # 因背压被拒绝的chunk数量
-                "last_chunk_time": None
+                "audio_chunks": [existing_audio] if existing_audio else [],
+                "total_bytes": len(existing_audio) if existing_audio else 0,
+                "is_disconnection_recovery": existing_audio is not None
             }
             
-            logger.info(f"开始音频流处理: {session_id}")
+            if existing_audio:
+                logger.info(f"恢复音频流处理: {session_id}, 已有音频: {len(existing_audio)} 字节")
+            else:
+                logger.info(f"开始音频流处理: {session_id}")
             return True
             
         except Exception as e:
@@ -121,14 +107,14 @@ class STTService:
     
     async def process_audio_chunk(self, session_id: str, audio_chunk_base64: str) -> Optional[Dict[str, Any]]:
         """
-        处理音频数据块
+        处理音频数据块（累积模式）
         
         Args:
             session_id: 会话ID
             audio_chunk_base64: base64编码的音频数据
             
         Returns:
-            Optional[Dict[str, Any]]: 处理结果，包含部分识别结果
+            Optional[Dict[str, Any]]: 如果缓冲区满，返回背压控制信息
         """
         if not self.is_initialized:
             logger.error("STT服务未初始化")
@@ -144,71 +130,22 @@ class STTService:
             
             # 获取流状态
             stream_info = self.active_streams[session_id]
-            current_time = time.time()
-            
-            # 背压控制：检查每秒chunk数量
-            now = datetime.utcnow()
-            chunk_timestamps = stream_info["chunk_timestamps"]
-            
-            # 清理1秒前的时间戳
-            cutoff_time = now - timedelta(seconds=1)
-            chunk_timestamps[:] = [ts for ts in chunk_timestamps if ts > cutoff_time]
-            
-            # 检查是否超过每秒最大chunk数量
-            if len(chunk_timestamps) >= self.max_chunks_per_second:
-                stream_info["rejected_chunks"] += 1
-                logger.warning(f"音频流背压控制触发 {session_id}: 当前每秒chunk数量 {len(chunk_timestamps)}, 拒绝第 {stream_info['rejected_chunks']} 个chunk")
-                return {
-                    "backpressure": True,
-                    "message": f"超过每秒最大chunk数量限制 ({self.max_chunks_per_second})",
-                    "rejected_count": stream_info["rejected_chunks"]
-                }
             
             # 缓冲区大小检查
             new_total_bytes = stream_info["total_bytes"] + len(audio_data)
             if new_total_bytes > self.max_buffer_size:
-                # 强制清理旧的audio_chunks以释放内存
-                self._cleanup_old_chunks(stream_info)
-                new_total_bytes = stream_info["total_bytes"] + len(audio_data)
-                
-                # 如果清理后仍然超限，拒绝这个chunk
-                if new_total_bytes > self.max_buffer_size:
-                    stream_info["rejected_chunks"] += 1
-                    logger.warning(f"音频缓冲区已满 {session_id}: 当前 {stream_info['total_bytes']} 字节, 最大 {self.max_buffer_size} 字节")
-                    return {
-                        "buffer_full": True,
-                        "message": f"音频缓冲区已满 (当前: {stream_info['total_bytes']}, 最大: {self.max_buffer_size})",
-                        "rejected_count": stream_info["rejected_chunks"]
-                    }
+                logger.warning(f"音频缓冲区已满 {session_id}: 当前 {stream_info['total_bytes']} 字节, 最大 {self.max_buffer_size} 字节")
+                return {
+                    "buffer_full": True,
+                    "message": f"音频缓冲区已满 (当前: {stream_info['total_bytes']}, 最大: {self.max_buffer_size})"
+                }
             
-            # 更新流状态
+            # 累积音频数据
             stream_info["audio_chunks"].append(audio_data)
             stream_info["total_bytes"] += len(audio_data)
-            stream_info["chunk_timestamps"].append(now)
-            stream_info["last_chunk_time"] = current_time
             
-            # TODO: 实际的Vosk音频处理
-            # 目前返回Mock结果
-            
-            # 模拟部分识别结果
-            chunk_count = len(stream_info["audio_chunks"])
-            if chunk_count % 3 == 0:  # 每3个chunk返回一次部分结果
-                partial_text = f"部分识别结果 {chunk_count//3}"
-                result = {
-                    "partial": True,
-                    "text": partial_text,
-                    "confidence": 0.8,
-                    "timestamp": datetime.utcnow().isoformat()
-                }
-                
-                stream_info["partial_results"].append(result)
-                
-                logger.debug(f"音频块处理 {session_id}: 部分结果 - {partial_text}")
-                
-                return result
-            else:
-                logger.debug(f"音频块处理 {session_id}: 数据长度 {len(audio_data)}")
-                return None
+            logger.debug(f"累积音频块 {session_id}: 数据长度 {len(audio_data)}, 总长度 {stream_info['total_bytes']}")
+            return None  # 累积模式下，不返回部分结果
                 
         except Exception as e:
             logger.error(f"处理音频块失败 {session_id}: {e}")
@@ -243,7 +180,7 @@ class STTService:
     
     async def get_final_transcription(self, session_id: str) -> Optional[str]:
         """
-        获取最终转录结果
+        获取最终转录结果（累积处理模式）
         
         Args:
             session_id: 会话ID
@@ -258,22 +195,32 @@ class STTService:
         try:
             stream_info = self.active_streams[session_id]
             
-            # TODO: 从Vosk获取最终结果
+            # 合并所有音频块
+            all_audio = b''.join(stream_info["audio_chunks"])
+            total_bytes = len(all_audio)
+            
+            logger.info(f"开始一次性处理累积音频: {session_id}, 总字节数: {total_bytes}")
+            
+            # TODO: 使用实际的STT服务处理合并的音频
             # 目前返回Mock结果
             
-            # 模拟最终转录结果
-            chunk_count = len(stream_info["audio_chunks"])
-            if chunk_count > 0:
-                final_text = f"这是测试转录文本，基于 {chunk_count} 个音频块，总计 {stream_info['total_bytes']} 字节"
+            if total_bytes > 0:
+                # 模拟处理时间（基于音频大小）
+                processing_time = min(0.1 + total_bytes / 100000, 2.0)  # 最多2秒
+                await asyncio.sleep(processing_time)
+                
+                final_text = f"这是累积转录文本，处理了 {total_bytes} 字节的音频数据"
+                
+                # 如果是断连恢复，添加标记
+                if stream_info.get("is_disconnection_recovery"):
+                    final_text = f"[恢复] {final_text}"
             else:
                 final_text = "未检测到音频内容"
-            
-            stream_info["final_result"] = final_text
             
             # 清理流状态
             del self.active_streams[session_id]
             
-            logger.info(f"获取最终转录 {session_id}: {final_text}")
+            logger.info(f"累积转录完成 {session_id}: {final_text[:100]}...")
             
             return final_text
             
@@ -281,58 +228,28 @@ class STTService:
             logger.error(f"获取最终转录失败 {session_id}: {e}")
             return None
     
-    def _cleanup_old_chunks(self, stream_info: Dict[str, Any]):
+    def get_accumulated_audio(self, session_id: str) -> Optional[bytes]:
         """
-        清理旧的音频块以释放内存
+        获取已累积的音频数据（用于断连恢复）
         
         Args:
-            stream_info: 流状态信息
+            session_id: 会话ID
+            
+        Returns:
+            Optional[bytes]: 累积的音频数据
         """
-        chunks = stream_info["audio_chunks"]
-        if len(chunks) > 50:  # 保留最近50个chunk
-            # 计算要删除的chunk数量
-            chunks_to_remove = len(chunks) - 50
-            removed_chunks = chunks[:chunks_to_remove]
-            
-            # 更新状态
-            stream_info["audio_chunks"] = chunks[chunks_to_remove:]
-            
-            # 重新计算总字节数
-            stream_info["total_bytes"] = sum(len(chunk) for chunk in stream_info["audio_chunks"])
-            
-            removed_bytes = sum(len(chunk) for chunk in removed_chunks)
-            logger.debug(f"清理了 {chunks_to_remove} 个旧音频块，释放 {removed_bytes} 字节内存")
+        if session_id not in self.active_streams:
+            return None
+        
+        try:
+            stream_info = self.active_streams[session_id]
+            all_audio = b''.join(stream_info["audio_chunks"])
+            logger.info(f"获取累积音频数据: {session_id}, 大小: {len(all_audio)} 字节")
+            return all_audio
+        except Exception as e:
+            logger.error(f"获取累积音频数据失败 {session_id}: {e}")
+            return None
     
-    async def _cleanup_buffer_loop(self):
-        """
-        定期清理缓冲区的后台任务
-        """
-        while True:
-            try:
-                await asyncio.sleep(self.cleanup_interval)
-                
-                if not self.active_streams:
-                    continue
-                
-                current_time = datetime.utcnow()
-                cleanup_count = 0
-                
-                for session_id, stream_info in self.active_streams.items():
-                    # 检查是否需要清理
-                    time_since_cleanup = current_time - stream_info["last_cleanup"]
-                    if time_since_cleanup.total_seconds() > self.cleanup_interval:
-                        self._cleanup_old_chunks(stream_info)
-                        stream_info["last_cleanup"] = current_time
-                        cleanup_count += 1
-                
-                if cleanup_count > 0:
-                    logger.debug(f"定期清理完成，清理了 {cleanup_count} 个活动流的缓冲区")
-                    
-            except asyncio.CancelledError:
-                logger.info("缓冲区清理任务已停止")
-                break
-            except Exception as e:
-                logger.error(f"缓冲区清理任务出错: {e}")
     
     def get_stream_status(self, session_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -354,12 +271,9 @@ class STTService:
             "start_time": stream_info["start_time"].isoformat(),
             "chunk_count": len(stream_info["audio_chunks"]),
             "total_bytes": stream_info["total_bytes"],
-            "partial_result_count": len(stream_info["partial_results"]),
             "duration_seconds": (datetime.utcnow() - stream_info["start_time"]).total_seconds(),
-            "rejected_chunks": stream_info["rejected_chunks"],
-            "chunks_per_second_current": len(stream_info["chunk_timestamps"]),
-            "last_chunk_time": stream_info["last_chunk_time"],
-            "buffer_usage_percent": round((stream_info["total_bytes"] / self.max_buffer_size) * 100, 2)
+            "buffer_usage_percent": round((stream_info["total_bytes"] / self.max_buffer_size) * 100, 2),
+            "is_disconnection_recovery": stream_info.get("is_disconnection_recovery", False)
         }
     
     def get_all_stream_status(self) -> List[Dict[str, Any]]:
@@ -397,7 +311,6 @@ class STTService:
             Dict[str, Any]: 健康状态信息
         """
         total_buffer_usage = sum(stream["total_bytes"] for stream in self.active_streams.values())
-        total_rejected_chunks = sum(stream["rejected_chunks"] for stream in self.active_streams.values())
         
         return {
             "service": "STT",
@@ -406,16 +319,13 @@ class STTService:
             "active_streams": len(self.active_streams),
             "model_path": settings.vosk_model_path,
             "sample_rate": settings.vosk_sample_rate,
-            "mode": "mock",  # 标识当前为Mock模式
+            "mode": "mock_cumulative",  # 标识当前为Mock累积模式
             "buffer_config": {
-                "max_buffer_size": self.max_buffer_size,
-                "cleanup_interval": self.cleanup_interval,
-                "max_chunks_per_second": self.max_chunks_per_second
+                "max_buffer_size": self.max_buffer_size
             },
             "buffer_usage": {
                 "total_bytes": total_buffer_usage,
-                "usage_percent": round((total_buffer_usage / self.max_buffer_size) * 100, 2),
-                "total_rejected_chunks": total_rejected_chunks
+                "usage_percent": round((total_buffer_usage / self.max_buffer_size) * 100, 2) if self.max_buffer_size > 0 else 0
             }
         }
 
@@ -426,7 +336,7 @@ class STTService:
 
 class WhisperSTTService(STTService):
     """
-    基于faster-whisper的STT服务实现
+    基于faster-whisper的STT服务实现 - 累积处理模式
     
     注意：需要安装faster-whisper库
     pip install faster-whisper
@@ -486,10 +396,7 @@ class WhisperSTTService(STTService):
             
             self.is_initialized = True
             
-            # 启动缓冲区清理任务
-            self.cleanup_task = asyncio.create_task(self._cleanup_buffer_loop())
-            
-            logger.info("Whisper STT服务初始化完成")
+            logger.info("Whisper STT服务初始化完成（累积处理模式）")
             return True
             
         except ImportError:
@@ -553,99 +460,74 @@ class WhisperSTTService(STTService):
         # 如果都不存在，返回CT2路径（用于错误提示）
         return ct2_model_path
     
-    async def start_stream_processing(self, session_id: str, initial_text: str = "") -> bool:
+    async def start_stream_processing(self, session_id: str, existing_audio: bytes = None) -> bool:
         """
-        开始Whisper音频流处理（渐进式）
+        开始Whisper音频流处理（累积模式）
         """
         if not self.is_initialized:
             logger.error("Whisper服务未初始化")
             return False
 
         if session_id in self.active_streams:
-            logger.warning(f"会话 {session_id} 的音频流已在处理中，将重置")
-            # 可以在这里决定是返回True还是重置状态
-            # pass
+            logger.warning(f"会话 {session_id} 的音频流已在处理中，重置流状态")
+            # 保留现有音频数据
+            existing_stream = self.active_streams[session_id]
+            existing_audio = existing_audio or b''.join(existing_stream.get("audio_chunks", []))
 
         try:
             # 创建流处理状态
             self.active_streams[session_id] = {
                 "start_time": datetime.utcnow(),
-                "audio_chunks": [],
-                "total_bytes": 0,
-                "chunk_timestamps": [],
-                "rejected_chunks": 0,
-                "last_chunk_time": None,
-                "accumulated_text": initial_text,  # 累积的转录文本
-                "sample_rate": settings.audio_sample_rate,
-                "sample_width": 2,  # 16-bit audio
-                "last_cleanup": datetime.utcnow(),
-                "transcription_lock": asyncio.Lock(), # 用于保证文本追加的顺序
-                "transcription_tasks": [], # 用于追踪后台转录任务
+                "audio_chunks": [existing_audio] if existing_audio else [],
+                "total_bytes": len(existing_audio) if existing_audio else 0,
+                "is_disconnection_recovery": existing_audio is not None
             }
             
-            logger.info(f"开始Whisper渐进式音频流处理: {session_id}")
+            if existing_audio:
+                logger.info(f"恢复Whisper音频流处理: {session_id}, 已有音频: {len(existing_audio)} 字节")
+            else:
+                logger.info(f"开始Whisper累积音频流处理: {session_id}")
             return True
             
         except Exception as e:
             logger.error(f"开始Whisper流处理失败 {session_id}: {e}")
             return False
     
-    async def process_audio_chunk(self, session_id: str, audio_chunk_base64: str) -> None:
+    async def process_audio_chunk(self, session_id: str, audio_chunk_base64: str) -> Optional[Dict[str, Any]]:
         """
-        处理音频数据块（非阻塞式）
+        处理音频数据块（累积模式）
         """
         if session_id not in self.active_streams:
-            return
+            logger.error(f"会话 {session_id} 的音频流未开始")
+            return None
 
         try:
             audio_data = base64.b64decode(audio_chunk_base64)
             stream_info = self.active_streams[session_id]
 
-            # (此处省略背压和缓冲区检查代码)
+            # 缓冲区大小检查
+            new_total_bytes = stream_info["total_bytes"] + len(audio_data)
+            if new_total_bytes > self.max_buffer_size:
+                logger.warning(f"Whisper音频缓冲区已满 {session_id}: 当前 {stream_info['total_bytes']} 字节")
+                return {
+                    "buffer_full": True,
+                    "message": f"音频缓冲区已满 (当前: {stream_info['total_bytes']}, 最大: {self.max_buffer_size})"
+                }
 
+            # 累积音频数据
             stream_info["audio_chunks"].append(audio_data)
+            stream_info["total_bytes"] += len(audio_data)
 
-            buffer_bytes = sum(len(chunk) for chunk in stream_info["audio_chunks"])
-            bytes_per_second = stream_info.get('sample_rate', 16000) * stream_info.get('sample_width', 2)
-            buffer_duration = buffer_bytes / bytes_per_second if bytes_per_second > 0 else 0
-
-            if buffer_duration >= settings.whisper_progressive_transcription_seconds:
-                audio_to_process = b''.join(stream_info["audio_chunks"])
-                stream_info["audio_chunks"] = []
-                
-                # 创建后台任务进行转录，不阻塞当前方法
-                task = asyncio.create_task(
-                    self._background_transcribe(session_id, audio_to_process)
-                )
-                stream_info["transcription_tasks"].append(task)
-                logger.info(f"创建后台转录任务: {session_id}, 缓冲区时长: {buffer_duration:.2f}s")
+            logger.debug(f"Whisper累积音频块 {session_id}: 数据长度 {len(audio_data)}, 总长度 {stream_info['total_bytes']}")
+            return None  # 累积模式下，不返回部分结果
 
         except Exception as e:
             logger.error(f"Whisper处理音频块失败 {session_id}: {e}")
+            return None
 
-    async def _background_transcribe(self, session_id: str, audio_bytes: bytes):
-        """在后台执行转录并安全地更新累积文本"""
-        stream_info = self.active_streams.get(session_id)
-        if not stream_info:
-            logger.warning(f"后台转录任务启动，但会话流已不存在: {session_id}")
-            return
-
-        try:
-            segments, _ = await self._transcribe_audio_bytes(audio_bytes)
-            new_text = "".join([segment.text.strip() for segment in segments])
-
-            if new_text:
-                async with stream_info['transcription_lock']:
-                    current_text = stream_info.get("accumulated_text", "")
-                    stream_info["accumulated_text"] = f"{current_text} {new_text}".strip()
-                logger.debug(f"后台转录完成并更新文本: {session_id}")
-
-        except Exception as e:
-            logger.error(f"后台转录任务失败 {session_id}: {e}")
-    
     async def get_final_transcription(self, session_id: str) -> Optional[str]:
         """
-        获取Whisper最终转录结果（非阻塞式）
+        获取Whisper最终转录结果（累积模式）
         """
         if session_id not in self.active_streams:
             logger.error(f"会话 {session_id} 的音频流不存在")
@@ -654,34 +536,29 @@ class WhisperSTTService(STTService):
         try:
             stream_info = self.active_streams[session_id]
             
-            # 等待所有正在进行的后台转录任务完成
-            pending_tasks = stream_info.get("transcription_tasks", [])
-            if pending_tasks:
-                logger.info(f"等待 {len(pending_tasks)} 个后台转录任务完成: {session_id}")
-                await asyncio.gather(*pending_tasks, return_exceptions=True)
-                logger.info(f"所有后台任务已完成: {session_id}")
+            # 合并所有音频块
+            all_audio = b''.join(stream_info["audio_chunks"])
+            total_bytes = len(all_audio)
+            
+            logger.info(f"开始一次性Whisper转录: {session_id}, 总字节数: {total_bytes}")
 
-            # 锁定资源，以安全地处理最后的数据和文本
-            async with stream_info['transcription_lock']:
-                final_text = stream_info.get("accumulated_text", "")
-
-                # 处理缓冲区中剩余的音频
-                if stream_info["audio_chunks"]:
-                    logger.info(f"处理最后剩余的 {len(stream_info['audio_chunks'])} 个音频块: {session_id}")
-                    audio_to_process = b''.join(stream_info["audio_chunks"])
-                    stream_info["audio_chunks"] = []
-
-                    segments, _ = await self._transcribe_audio_bytes(audio_to_process)
-                    if segments:
-                        new_text = "".join([segment.text.strip() for segment in segments])
-                        if new_text:
-                            final_text = f"{final_text} {new_text}".strip()
+            if total_bytes > 0:
+                # 执行转录
+                segments, _ = await self._transcribe_audio_bytes(all_audio)
                 
-                if not final_text:
-                    final_text = "未识别到语音内容"
-
-                logger.info(f"Whisper最终转录完成 {session_id}: {final_text[:100]}")
-                return final_text
+                if segments:
+                    final_text = "".join([segment.text.strip() for segment in segments])
+                    
+                    # 如果是断连恢复，添加标记
+                    if stream_info.get("is_disconnection_recovery"):
+                        final_text = f"[恢复] {final_text}"
+                else:
+                    final_text = "Whisper未识别到语音内容"
+            else:
+                final_text = "未检测到音频内容"
+                
+            logger.info(f"Whisper累积转录完成 {session_id}: {final_text[:100]}...")
+            return final_text
 
         except Exception as e:
             logger.error(f"Whisper获取最终转录失败 {session_id}: {e}")
@@ -690,7 +567,7 @@ class WhisperSTTService(STTService):
             # 确保清理流状态
             if session_id in self.active_streams:
                 del self.active_streams[session_id]
-                logger.debug(f"已清理会话流: {session_id}")
+                logger.debug(f"已清理Whisper会话流: {session_id}")
     
     async def _transcribe_audio_bytes(self, audio_bytes: bytes):
         """
@@ -738,7 +615,7 @@ class WhisperSTTService(STTService):
         """
         base_status = await super().health_check()
         base_status.update({
-            "mode": "whisper",
+            "mode": "whisper_cumulative",
             "model_info": self.model_info,
             "model_loaded": self.model is not None
         })
@@ -751,7 +628,7 @@ class WhisperSTTService(STTService):
 
 class VoskSTTService(STTService):
     """
-    真实的Vosk STT服务实现
+    真实的Vosk STT服务实现 - 累积处理模式
     
     注意：需要安装vosk库和下载模型文件
     pip install vosk
@@ -759,7 +636,6 @@ class VoskSTTService(STTService):
     
     def __init__(self):
         super().__init__()
-        self.recognizers: Dict[str, Any] = {}
     
     async def initialize(self) -> bool:
         """
@@ -779,7 +655,7 @@ class VoskSTTService(STTService):
             self.model = vosk.Model(settings.vosk_model_path)
             
             self.is_initialized = True
-            logger.info(f"Vosk STT服务初始化完成，模型路径: {settings.vosk_model_path}")
+            logger.info(f"Vosk STT服务初始化完成（累积处理模式），模型路径: {settings.vosk_model_path}")
             
             return True
             
@@ -790,104 +666,62 @@ class VoskSTTService(STTService):
             logger.error(f"Vosk STT服务初始化失败: {e}")
             return False
     
-    async def start_stream_processing(self, session_id: str) -> bool:
-        """开始真实的Vosk音频流处理"""
-        if not self.is_initialized:
-            return False
+    async def get_final_transcription(self, session_id: str) -> Optional[str]:
+        """获取Vosk最终转录结果（累积模式）"""
+        if session_id not in self.active_streams:
+            logger.error(f"会话 {session_id} 的音频流不存在")
+            return None
         
         try:
             import vosk
+            import json
             
-            # 创建识别器
-            recognizer = vosk.KaldiRecognizer(self.model, settings.vosk_sample_rate)
-            recognizer.SetWords(True)
-            recognizer.SetPartialWords(True)
-            
-            self.recognizers[session_id] = recognizer
-            
-            # 调用父类方法初始化流状态
-            return await super().start_stream_processing(session_id)
-            
-        except Exception as e:
-            logger.error(f"启动Vosk流处理失败 {session_id}: {e}")
-            return False
-    
-    async def process_audio_chunk(self, session_id: str, audio_chunk_base64: str) -> Optional[Dict[str, Any]]:
-        """处理真实的音频数据"""
-        if session_id not in self.recognizers or session_id not in self.active_streams:
-            return None
-        
-        try:
-            # 解码音频数据
-            audio_data = base64.b64decode(audio_chunk_base64)
-            
-            # Vosk处理
-            recognizer = self.recognizers[session_id]
-            
-            if recognizer.AcceptWaveform(audio_data):
-                # 完整结果
-                result = json.loads(recognizer.Result())
-                if result.get("text"):
-                    return {
-                        "partial": False,
-                        "text": result["text"],
-                        "confidence": result.get("confidence", 1.0),
-                        "words": result.get("words", []),
-                        "timestamp": datetime.utcnow().isoformat()
-                    }
-            else:
-                # 部分结果
-                partial_result = json.loads(recognizer.PartialResult())
-                if partial_result.get("partial"):
-                    return {
-                        "partial": True,
-                        "text": partial_result["partial"],
-                        "confidence": 0.8,
-                        "timestamp": datetime.utcnow().isoformat()
-                    }
-            
-            # 更新流状态
             stream_info = self.active_streams[session_id]
-            stream_info["audio_chunks"].append(audio_data)
-            stream_info["total_bytes"] += len(audio_data)
             
-            return None
+            # 合并所有音频块
+            all_audio = b''.join(stream_info["audio_chunks"])
+            total_bytes = len(all_audio)
             
-        except Exception as e:
-            logger.error(f"Vosk处理音频块失败 {session_id}: {e}")
-            return None
-    
-    async def get_final_transcription(self, session_id: str) -> Optional[str]:
-        """获取Vosk最终转录结果"""
-        if session_id not in self.recognizers:
-            return None
-        
-        try:
-            recognizer = self.recognizers[session_id]
+            logger.info(f"开始一次性Vosk转录: {session_id}, 总字节数: {total_bytes}")
             
-            # 获取最终结果
-            final_result = json.loads(recognizer.FinalResult())
-            final_text = final_result.get("text", "")
+            if total_bytes > 0:
+                # 创建识别器
+                recognizer = vosk.KaldiRecognizer(self.model, settings.vosk_sample_rate)
+                recognizer.SetWords(True)
+                
+                # 处理所有音频数据
+                if recognizer.AcceptWaveform(all_audio):
+                    result = json.loads(recognizer.Result())
+                    final_text = result.get("text", "")
+                else:
+                    final_result = json.loads(recognizer.FinalResult())
+                    final_text = final_result.get("text", "")
+                
+                # 如果是断连恢复，添加标记
+                if stream_info.get("is_disconnection_recovery"):
+                    final_text = f"[恢复] {final_text}" if final_text else "[恢复] 未识别到语音"
+                elif not final_text:
+                    final_text = "Vosk未识别到语音内容"
+            else:
+                final_text = "未检测到音频内容"
             
-            # 清理资源
-            del self.recognizers[session_id]
-            if session_id in self.active_streams:
-                del self.active_streams[session_id]
-            
-            logger.info(f"Vosk最终转录 {session_id}: {final_text}")
-            
+            logger.info(f"Vosk累积转录完成 {session_id}: {final_text}")
             return final_text
             
         except Exception as e:
             logger.error(f"获取Vosk最终转录失败 {session_id}: {e}")
             return None
+        finally:
+            # 确保清理流状态
+            if session_id in self.active_streams:
+                del self.active_streams[session_id]
+                logger.debug(f"已清理Vosk会话流: {session_id}")
     
     async def health_check(self) -> Dict[str, Any]:
         """Vosk健康检查"""
         base_status = await super().health_check()
         base_status.update({
-            "mode": "vosk",
-            "active_recognizers": len(self.recognizers)
+            "mode": "vosk_cumulative"
         })
         return base_status
 

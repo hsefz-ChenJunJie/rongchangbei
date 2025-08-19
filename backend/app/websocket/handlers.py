@@ -741,41 +741,24 @@ class WebSocketHandler:
             logger.error(f"处理会话断连异常 {session_id}: {e}")
 
     async def _handle_recording_disconnect(self, session_id: str, session):
-        """处理录音过程中的断连"""
+        """处理录音过程中的断连（累积模式）"""
         try:
             logger.info(f"检测到录音中断连，开始保护性处理: {session_id}")
             
-            # 获取当前音频流状态
-            partial_content = ""
-            chunks_count = 0
+            # 获取累积的音频数据
+            accumulated_audio = None
+            audio_size = 0
             
             if self.stt_service and self.stt_service.is_stream_active(session_id):
-                # 获取已收集的音频块信息
-                stream_status = self.stt_service.get_stream_status(session_id)
-                if stream_status:
-                    chunks_count = stream_status.get("chunk_count", 0)
-                    logger.info(f"音频流状态: {chunks_count} 个音频块，{stream_status.get('total_bytes', 0)} 字节")
-                
-                # 尝试获取当前的部分转录结果（如果有）
-                try:
-                    # 对于Whisper，这里可能没有部分结果，但我们记录音频块数量
-                    # 对于实时STT服务，可以尝试获取当前的部分结果
-                    partial_content = f"录音中断连，已收集 {chunks_count} 个音频块"
-                    logger.info(f"设置部分转录内容: {partial_content}")
-                except Exception as e:
-                    logger.warning(f"获取部分转录结果失败: {e}")
-                    partial_content = f"录音中断连，已收集 {chunks_count} 个音频块"
-                
-                # 如果有足够的音频数据，尝试完成STT转录
-                if chunks_count > 0:
-                    logger.info(f"尝试完成断连时的STT转录: {session_id}")
-                    try:
-                        # 在后台异步完成STT转录
-                        asyncio.create_task(self._complete_disconnected_stt(session_id, session))
-                    except Exception as e:
-                        logger.error(f"启动断连STT转录任务失败: {e}")
-                        # 如果无法完成STT，设置部分转录内容
-                        session.set_partial_transcription(partial_content, chunks_count)
+                # 获取已累积的音频数据
+                accumulated_audio = self.stt_service.get_accumulated_audio(session_id)
+                if accumulated_audio:
+                    audio_size = len(accumulated_audio)
+                    logger.info(f"保存累积音频数据: {session_id}, 大小: {audio_size} 字节")
+                    
+                    # 将音频数据保存到会话中
+                    session.set_accumulated_audio(accumulated_audio)
+                    session.set_partial_transcription(f"录音中断连，已保存 {audio_size} 字节音频", audio_size)
                 else:
                     # 没有音频数据，只记录状态
                     session.set_partial_transcription("录音开始但无音频数据", 0)
@@ -787,7 +770,7 @@ class WebSocketHandler:
             # 这样重连后可以继续接收音频
             logger.info(f"保持录音状态用于重连恢复: {session_id}")
             
-            # 保存会话（包含部分转录信息）
+            # 保存会话（包含累积音频数据）
             await self._save_session_on_disconnect(session_id)
             
         except Exception as e:
@@ -795,34 +778,8 @@ class WebSocketHandler:
             # 发生异常时也要保存会话状态
             await self._save_session_on_disconnect(session_id)
     
-    async def _complete_disconnected_stt(self, session_id: str, session):
-        """在后台完成断连时的STT转录"""
-        try:
-            logger.info(f"开始后台STT转录: {session_id}")
-            
-            # 获取最终转录结果
-            if self.stt_service:
-                content = await self.stt_service.get_final_transcription(session_id)
-                
-                if content and content.strip():
-                    logger.info(f"断连STT转录完成: {session_id}, 内容: {content[:100]}{'...' if len(content) > 100 else ''}")
-                    
-                    # 更新会话的部分转录内容
-                    session.set_partial_transcription(content, 0)
-                    
-                    # 重新保存会话
-                    if self.persistence_manager:
-                        await self.persistence_manager.save_session(session)
-                        logger.info(f"断连STT转录结果已保存: {session_id}")
-                else:
-                    logger.warning(f"断连STT转录无结果: {session_id}")
-                    session.set_partial_transcription("录音中断连，转录无结果", 0)
-                    
-        except Exception as e:
-            logger.error(f"后台STT转录失败 {session_id}: {e}")
-
     async def _check_recording_recovery(self, client_id: str, session):
-        """检查是否需要恢复录音流"""
+        """检查是否需要恢复录音流（累积模式）"""
         try:
             session_id = session.id
             
@@ -835,7 +792,6 @@ class WebSocketHandler:
                 
                 # 如果有部分转录内容，发送给前端
                 if session.has_partial_content():
-                    # 发送部分转录内容作为消息记录确认
                     if session.partial_transcription:
                         await self.send_message_recorded(
                             session_id, 
@@ -848,11 +804,12 @@ class WebSocketHandler:
                 if self.stt_service:
                     # 检查是否需要重启STT流
                     if not self.stt_service.is_stream_active(session_id):
-                        # 传入已有的部分转录内容作为初始文本
-                        initial_text = session.partial_transcription or ""
-                        success = await self.stt_service.start_stream_processing(session_id, initial_text=initial_text)
+                        # 获取保存的累积音频数据
+                        existing_audio = session.get_accumulated_audio()
+                        
+                        success = await self.stt_service.start_stream_processing(session_id, existing_audio=existing_audio)
                         if success:
-                            logger.info(f"重连后重新启动音频流处理: {session_id}")
+                            logger.info(f"重连后重新启动音频流处理: {session_id}, 恢复音频: {len(existing_audio) if existing_audio else 0} 字节")
                         else:
                             logger.error(f"重连后启动音频流处理失败: {session_id}")
                     else:
