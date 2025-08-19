@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:lpinyin/lpinyin.dart';
 import 'package:contacts_service/contacts_service.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -10,7 +9,7 @@ import '../widgets/shared/popup.dart';
 import '../services/theme_manager.dart';
 
 class ChatPartnersPage extends BasePage {
-  const ChatPartnersPage({Key? key}) : super(key: key, title: '对话人管理');
+  const ChatPartnersPage({super.key}) : super(title: '对话人管理');
 
   @override
   ChatPartnersPageState createState() => ChatPartnersPageState();
