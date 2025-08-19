@@ -30,8 +30,16 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# 安装uv包管理器
-RUN pip install --no-cache-dir uv
+# 安装uv包管理器（多镜像源回退策略）
+RUN pip config set global.timeout 60 && \
+    # 尝试清华镜像源
+    (pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple/ --trusted-host pypi.tuna.tsinghua.edu.cn uv || \
+    # 回退到阿里云镜像源
+    pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com uv || \
+    # 回退到豆瓣镜像源
+    pip install --no-cache-dir -i https://pypi.douban.com/simple/ --trusted-host pypi.douban.com uv || \
+    # 最后回退到官方源
+    pip install --no-cache-dir uv)
 
 # 设置工作目录
 WORKDIR /app
@@ -39,14 +47,18 @@ WORKDIR /app
 # 创建虚拟环境
 RUN python -m venv /app/venv
 
-# 激活虚拟环境并安装依赖
+# 激活虚拟环境并安装依赖（多镜像源回退策略）
 COPY requirements.txt .
 RUN --mount=type=cache,target=/tmp/uv-cache \
     /app/venv/bin/python -m pip install --upgrade pip && \
-    uv pip install --python=/app/venv/bin/python \
-    --index-url https://pypi.tuna.tsinghua.edu.cn/simple/ \
-    --trusted-host pypi.tuna.tsinghua.edu.cn \
-    -r requirements.txt
+    # 尝试清华镜像源
+    (uv pip install --python=/app/venv/bin/python --index-url https://pypi.tuna.tsinghua.edu.cn/simple/ --trusted-host pypi.tuna.tsinghua.edu.cn -r requirements.txt || \
+    # 回退到阿里云镜像源
+    uv pip install --python=/app/venv/bin/python --index-url https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com -r requirements.txt || \
+    # 回退到豆瓣镜像源
+    uv pip install --python=/app/venv/bin/python --index-url https://pypi.douban.com/simple/ --trusted-host pypi.douban.com -r requirements.txt || \
+    # 最后回退到官方源
+    uv pip install --python=/app/venv/bin/python -r requirements.txt)
 
 # ====== 运行阶段 ======
 FROM python:3.12-slim as runtime

@@ -44,20 +44,30 @@ WORKDIR /app
 # 创建必要目录
 RUN mkdir -p /tmp/uv-cache /app/logs /app/model/whisper-models /app/model/vosk-model
 
-# 配置pip镜像源并安装uv
-RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple/ && \
-    pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn && \
-    pip config set global.timeout 60 && \
-    pip install --no-cache-dir uv
+# 配置pip镜像源并安装uv（多镜像源回退策略）
+RUN pip config set global.timeout 60 && \
+    # 尝试清华镜像源
+    (pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple/ --trusted-host pypi.tuna.tsinghua.edu.cn uv || \
+    # 回退到阿里云镜像源
+    pip install --no-cache-dir -i https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com uv || \
+    # 回退到豆瓣镜像源
+    pip install --no-cache-dir -i https://pypi.douban.com/simple/ --trusted-host pypi.douban.com uv || \
+    # 最后回退到官方源
+    pip install --no-cache-dir uv)
 
 # 复制 requirements.txt（利用Docker层缓存）
 COPY requirements.txt .
 
-# 使用uv安装Python依赖（最大化缓存利用）
+# 使用uv安装Python依赖（多镜像源回退策略）
 RUN --mount=type=cache,target=/tmp/uv-cache \
-    uv pip install --system --index-url https://pypi.tuna.tsinghua.edu.cn/simple/ \
-    --trusted-host pypi.tuna.tsinghua.edu.cn \
-    -r requirements.txt && \
+    # 尝试清华镜像源
+    (uv pip install --system --index-url https://pypi.tuna.tsinghua.edu.cn/simple/ --trusted-host pypi.tuna.tsinghua.edu.cn -r requirements.txt || \
+    # 回退到阿里云镜像源
+    uv pip install --system --index-url https://mirrors.aliyun.com/pypi/simple/ --trusted-host mirrors.aliyun.com -r requirements.txt || \
+    # 回退到豆瓣镜像源
+    uv pip install --system --index-url https://pypi.douban.com/simple/ --trusted-host pypi.douban.com -r requirements.txt || \
+    # 最后回退到官方源
+    uv pip install --system -r requirements.txt) && \
     rm -rf /tmp/pip-cache
 
 # 创建非root用户（安全最佳实践）
