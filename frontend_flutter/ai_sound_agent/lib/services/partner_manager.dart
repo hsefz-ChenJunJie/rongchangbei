@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:contacts_service/contacts_service.dart';  
+import 'package:flutter_contacts/flutter_contacts.dart';  
 import 'package:lpinyin/lpinyin.dart';
 import 'dp_manager.dart';
 
@@ -360,8 +360,15 @@ class PartnerManager {
   /// 从联系人导入聊天对象并创建对应对话包
   static Future<ChatPartner?> importFromContacts(String contactId) async {
     try {
-      final contacts = await ContactsService.getContacts();
-      final contact = contacts.firstWhere((c) => c.identifier == contactId);
+      // 请求联系人权限
+      if (!await FlutterContacts.requestPermission()) {
+        print('没有联系人访问权限');
+        return null;
+      }
+
+      // 获取所有联系人
+      final contacts = await FlutterContacts.getContacts(withProperties: true);
+      final contact = contacts.firstWhere((c) => c.id == contactId);
       
       if (contact == null) return null;
 
@@ -370,12 +377,12 @@ class PartnerManager {
       
       // 使用createPartner创建对象和对话包
       return await partnerManager.createPartner(
-        name: contact.displayName ?? '未知联系人',
-        phoneNumber: contact.phones?.isNotEmpty == true 
-            ? contact.phones!.first.value 
+        name: contact.displayName.isNotEmpty ? contact.displayName : '未知联系人',
+        phoneNumber: contact.phones.isNotEmpty 
+            ? contact.phones.first.number 
             : null,
-        email: contact.emails?.isNotEmpty == true 
-            ? contact.emails!.first.value 
+        email: contact.emails.isNotEmpty 
+            ? contact.emails.first.address 
             : null,
       );
     } catch (e) {

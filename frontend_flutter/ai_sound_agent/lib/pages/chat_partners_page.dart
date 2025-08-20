@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:lpinyin/lpinyin.dart';
-import 'package:contacts_service/contacts_service.dart';
+import 'package:flutter_contacts/flutter_contacts.dart' as flutter_contacts;
 import 'package:permission_handler/permission_handler.dart';
 import '../services/partner_manager.dart';
 import '../widgets/shared/base.dart';
@@ -180,7 +180,17 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
         return;
       }
 
-      final contacts = await ContactsService.getContacts();
+      // 检查flutter_contacts权限
+      if (!await flutter_contacts.FlutterContacts.requestPermission()) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('需要通讯录权限才能导入')),
+          );
+        }
+        return;
+      }
+
+      final contacts = await flutter_contacts.FlutterContacts.getContacts(withProperties: true);
       if (contacts.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -204,7 +214,7 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
     }
   }
 
-  void _showContactSelectionDialog(List<Contact> contacts) {
+  void _showContactSelectionDialog(List<dynamic> contacts) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -215,11 +225,11 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
             shrinkWrap: true,
             itemCount: contacts.length,
             itemBuilder: (context, index) {
-              final contact = contacts[index];
+              final contact = contacts[index] as flutter_contacts.Contact;
               return ListTile(
-                title: Text(contact.displayName ?? '未知'),
-                subtitle: contact.phones?.isNotEmpty == true
-                    ? Text(contact.phones!.first.value ?? '')
+                title: Text(contact.displayName.isNotEmpty ? contact.displayName : '未知'),
+                subtitle: contact.phones.isNotEmpty
+                    ? Text(contact.phones.first.number)
                     : null,
                 onTap: () async {
                   Navigator.pop(context);
@@ -239,18 +249,19 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
     );
   }
 
-  Future<void> _importContact(Contact contact) async {
+  Future<void> _importContact(dynamic contact) async {
     try {
+      final flutterContact = contact as flutter_contacts.Contact;
       final partnerManager = await PartnerManager.getInstance();
-      final name = contact.displayName ?? '未知联系人';
+      final name = flutterContact.displayName.isNotEmpty ? flutterContact.displayName : '未知联系人';
       
       final newPartner = await partnerManager.createPartner(
         name: name,
-        phoneNumber: contact.phones?.isNotEmpty == true 
-            ? contact.phones!.first.value 
+        phoneNumber: flutterContact.phones.isNotEmpty 
+            ? flutterContact.phones.first.number 
             : null,
-        email: contact.emails?.isNotEmpty == true 
-            ? contact.emails!.first.value 
+        email: flutterContact.emails.isNotEmpty 
+            ? flutterContact.emails.first.address 
             : null,
       );
 
