@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'base_line_input.dart';
 
 class AddPartnerDialog extends StatefulWidget {
-  final Function(String) onAddPartner;
+  final Function(String, String) onAddPartner; // 修改为接受两个参数：name和description
   final String? initialName;
 
   const AddPartnerDialog({
@@ -17,23 +17,27 @@ class AddPartnerDialog extends StatefulWidget {
 
 class _AddPartnerDialogState extends State<AddPartnerDialog> {
   late TextEditingController _nameController;
+  late TextEditingController _descriptionController;
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.initialName ?? '');
+    _descriptionController = TextEditingController();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
   void _handleAdd() {
     final name = _nameController.text.trim();
+    final description = _descriptionController.text.trim();
     if (name.isNotEmpty) {
-      widget.onAddPartner(name);
+      widget.onAddPartner(name, description);
       Navigator.of(context).pop();
     }
   }
@@ -63,6 +67,14 @@ class _AddPartnerDialogState extends State<AddPartnerDialog> {
               label: '姓名',
               controller: _nameController,
               placeholder: '请输入对话人姓名',
+              onSubmitted: (value) => _handleAdd(),
+            ),
+            const SizedBox(height: 16),
+            BaseLineInput(
+              label: '备注',
+              controller: _descriptionController,
+              placeholder: '请输入备注信息（可选）',
+              maxLines: 3,
               onSubmitted: (value) => _handleAdd(),
             ),
             const SizedBox(height: 20),

@@ -330,7 +330,8 @@ class PartnerManager {
     return partners.where((partner) =>
       partner.name.toLowerCase().contains(lowerQuery) ||
       partner.phoneNumber?.toLowerCase().contains(lowerQuery) == true ||
-      partner.email?.toLowerCase().contains(lowerQuery) == true
+      partner.email?.toLowerCase().contains(lowerQuery) == true ||
+      partner.desc.toLowerCase().contains(lowerQuery)
     ).toList();
   }
 

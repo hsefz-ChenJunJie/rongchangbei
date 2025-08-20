@@ -7,6 +7,7 @@ import '../widgets/shared/base.dart';
 import '../widgets/shared/base_line_input.dart';
 import '../widgets/shared/add_partner_dialog.dart';
 import '../services/theme_manager.dart';
+import '../pages/main_processing.dart'; // 添加MainProcessingPage的导入
 
 class ChatPartnersPage extends BasePage {
   const ChatPartnersPage({super.key})
@@ -131,16 +132,19 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
     showDialog(
       context: context,
       builder: (context) => AddPartnerDialog(
-        onAddPartner: (name) => _addPartner(name),
+        onAddPartner: (name, description) => _addPartner(name, description: description),
         initialName: _searchController.text,
       ),
     );
   }
 
-  Future<void> _addPartner(String name) async {
+  Future<void> _addPartner(String name, {String description = ''}) async {
     try {
       final partnerManager = await PartnerManager.getInstance();
-      final newPartner = await partnerManager.createPartner(name: name);
+      final newPartner = await partnerManager.createPartner(
+        name: name,
+        desc: description,
+      );
       
       if (newPartner != null) {
         await _loadPartners();
@@ -255,6 +259,19 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
       final partnerManager = await PartnerManager.getInstance();
       final name = flutterContact.displayName.isNotEmpty ? flutterContact.displayName : '未知联系人';
       
+      // 从通讯录生成备注信息
+      String description = '';
+      if (flutterContact.phones.isNotEmpty || flutterContact.emails.isNotEmpty) {
+        List<String> infoParts = [];
+        if (flutterContact.phones.isNotEmpty) {
+          infoParts.add('电话: ${flutterContact.phones.first.number}');
+        }
+        if (flutterContact.emails.isNotEmpty) {
+          infoParts.add('邮箱: ${flutterContact.emails.first.address}');
+        }
+        description = infoParts.join(', ');
+      }
+      
       final newPartner = await partnerManager.createPartner(
         name: name,
         phoneNumber: flutterContact.phones.isNotEmpty 
@@ -263,6 +280,7 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
         email: flutterContact.emails.isNotEmpty 
             ? flutterContact.emails.first.address 
             : null,
+        desc: description,
       );
 
       if (newPartner != null) {
@@ -485,30 +503,52 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
               Text(partner.phoneNumber!),
             if (partner.email != null)
               Text(partner.email!),
+            if (partner.desc.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  partner.desc,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey,
+                    fontStyle: FontStyle.italic,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             Text(
               '最后聊天: ${_formatDate(partner.lastChatTime)}',
               style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ],
         ),
-        trailing: PopupMenuButton(
-          itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'delete',
-              child: Text('删除'),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              icon: const Icon(Icons.play_arrow, color: Colors.green),
+              onPressed: () => _startChatWithPartner(partner),
+              tooltip: '开始对话',
+            ),
+            PopupMenuButton(
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: Text('删除'),
+                ),
+              ],
+              onSelected: (value) {
+                if (value == 'delete') {
+                  _deletePartner(partner);
+                }
+              },
             ),
           ],
-          onSelected: (value) {
-            if (value == 'delete') {
-              _deletePartner(partner);
-            }
-          },
         ),
         onTap: () {
-          // TODO: 跳转到对话详情页面
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('点击了: ${partner.name}')),
-          );
+          // 点击卡片也可以开始对话
+          _startChatWithPartner(partner);
         },
       ),
     );
@@ -529,4 +569,17 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
     }
   }
 
+
+
+  void _startChatWithPartner(ChatPartner partner) {
+    // 导航到main_processing页面，传入对话包名称
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MainProcessingPage(
+          dpfile: partner.dialoguePackageName,
+        ),
+      ),
+    );
+  }
 }
