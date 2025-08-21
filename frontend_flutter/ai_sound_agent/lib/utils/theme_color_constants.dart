@@ -41,6 +41,14 @@ enum ThemeColor {
     Color(0xffb26dff),
     Color(0xffe7d3ff),
     Color(0xffbf86ff)
+  ),
+  a1c3e6Color(
+    'a1c3e6Color',
+    Color(0xff0f8acc),
+    Color(0xffe0eaf7),
+    Color(0xff1e5a83),
+    Color(0xfff3f7fc),
+    Color(0xff192e41)
   );
 
   final String name;
