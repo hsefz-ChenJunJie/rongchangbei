@@ -1,7 +1,7 @@
 name: idialogue
-description: "AI语音助手应用，提供语音识别、语音合成和智能对话功能"
+description: "iDialogue: The solution for language."
 publish_to: 'none'
-version: 0.1.5+2
+version: 1.0.0
 
 
 environment:
@@ -24,6 +24,7 @@ dependencies:
   flutter_tts: ^4.2.3
   flutter_contacts: ^1.1.9+2
   lpinyin: ^2.0.2
+  icons_launcher: ^3.0.2
 
 dev_dependencies:
   flutter_test:
@@ -34,3 +35,16 @@ flutter:
   uses-material-design: true
   assets:
     - defaults/default_dialogue_package.json
+
+icons_launcher:
+  image_path: "icon.jpg"
+  platforms:
+    android:
+      enable: true
+      image_path: "icon_rounded.jpg"
+      notification_image: "icon_foreground.jpg"
+      adaptive_foreground_image: "icon_foreground.jpg"
+      adaptive_round_image: "icon_rounded.jpg"
+      adaptive_background_color: "#ffffff"
+    ios:
+      enable: true

@@ -14,7 +14,8 @@
     <application
         android:label="爱对话"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+		android:roundIcon="@mipmap/ic_launcher_round">
         <activity
             android:name="com.efzzz.idialogue.MainActivity"
             android:exported="true"

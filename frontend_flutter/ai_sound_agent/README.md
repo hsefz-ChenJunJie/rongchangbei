@@ -1,3 +1,3 @@
 # idialogue
 
-A new Flutter project.
+iDialogue: the solution for the language.
