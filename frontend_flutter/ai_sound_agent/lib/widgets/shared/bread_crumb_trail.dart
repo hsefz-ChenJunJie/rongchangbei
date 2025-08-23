@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:ai_sound_agent/app/route.dart';
+import 'package:idialogue/app/route.dart';
 import '../../services/theme_manager.dart';
 
 

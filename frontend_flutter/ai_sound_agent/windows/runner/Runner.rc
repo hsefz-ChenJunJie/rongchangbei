@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "ai_sound_agent" "\0"
+            VALUE "FileDescription", "idialogue" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "ai_sound_agent" "\0"
+            VALUE "InternalName", "idialogue" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2025 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "ai_sound_agent.exe" "\0"
-            VALUE "ProductName", "ai_sound_agent" "\0"
+            VALUE "OriginalFilename", "idialogue.exe" "\0"
+            VALUE "ProductName", "idialogue" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

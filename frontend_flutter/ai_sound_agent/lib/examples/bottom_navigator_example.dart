@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:ai_sound_agent/widgets/shared/bottom_navigator.dart';
+import 'package:idialogue/widgets/shared/bottom_navigator.dart';
 
 
 class MyHomePage extends StatefulWidget {

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
-import 'package:ai_sound_agent/utils/constants.dart';
-import 'package:ai_sound_agent/services/userdata_services.dart';
+import 'package:idialogue/utils/constants.dart';
+import 'package:idialogue/services/userdata_services.dart';
 
 class ApiService {
   static final Dio _dio = Dio();

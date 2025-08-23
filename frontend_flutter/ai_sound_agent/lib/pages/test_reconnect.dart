@@ -2,7 +2,7 @@
 // 这个文件可以用来测试WebSocket重连功能
 
 import 'package:flutter/material.dart';
-import 'package:ai_sound_agent/pages/main_processing.dart';
+import 'package:idialogue/pages/main_processing.dart';
 
 class ReconnectTestWidget extends StatelessWidget {
   const ReconnectTestWidget({super.key});

@@ -16,7 +16,7 @@ PLB Manager是一个用于管理plb包的类，它提供了完整的plb文件管
 ### 1. 基本初始化
 
 ```dart
-import 'package:ai_sound_agent/services/plb_manager.dart';
+import 'package:idialogue/services/plb_manager.dart';
 
 final plbManager = PlbManager();
 

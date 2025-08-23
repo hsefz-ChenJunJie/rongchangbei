@@ -1,6 +1,6 @@
 {
-    "name": "ai_sound_agent",
-    "short_name": "ai_sound_agent",
+    "name": "idialogue",
+    "short_name": "idialogue",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:ai_sound_agent/widgets/shared/base.dart';
-import 'package:ai_sound_agent/widgets/shared/base_line_input.dart';
-import 'package:ai_sound_agent/widgets/shared/base_text_area.dart';
-import 'package:ai_sound_agent/widgets/shared/base_elevated_button.dart';  // 新增导入
-import 'package:ai_sound_agent/widgets/chat_recording/chat_dialogue.dart';
-import 'package:ai_sound_agent/widgets/chat_recording/chat_input.dart';
-import 'package:ai_sound_agent/widgets/chat_recording/role_selector.dart';
-import 'package:ai_sound_agent/widgets/chat_recording/role_manager.dart';
-import 'package:ai_sound_agent/services/dp_manager.dart';
-import 'package:ai_sound_agent/services/theme_manager.dart';
-import 'package:ai_sound_agent/services/userdata_services.dart';
+import 'package:idialogue/widgets/shared/base.dart';
+import 'package:idialogue/widgets/shared/base_line_input.dart';
+import 'package:idialogue/widgets/shared/base_text_area.dart';
+import 'package:idialogue/widgets/shared/base_elevated_button.dart';  // 新增导入
+import 'package:idialogue/widgets/chat_recording/chat_dialogue.dart';
+import 'package:idialogue/widgets/chat_recording/chat_input.dart';
+import 'package:idialogue/widgets/chat_recording/role_selector.dart';
+import 'package:idialogue/widgets/chat_recording/role_manager.dart';
+import 'package:idialogue/services/dp_manager.dart';
+import 'package:idialogue/services/theme_manager.dart';
+import 'package:idialogue/services/userdata_services.dart';
 import 'dart:convert';
 import 'dart:async';  // 新增：导入Timer
 import 'dart:typed_data';
@@ -17,8 +17,8 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:loading_indicator/loading_indicator.dart';
 import 'package:record/record.dart';
 import 'package:flutter_tts/flutter_tts.dart';
-import 'package:ai_sound_agent/widgets/shared/save_dialogue_popup.dart';
-import 'package:ai_sound_agent/widgets/shared/edit_dialogue_info_popup.dart';
+import 'package:idialogue/widgets/shared/save_dialogue_popup.dart';
+import 'package:idialogue/widgets/shared/edit_dialogue_info_popup.dart';
 
 class MainProcessingPage extends BasePage {
   final String? dpfile;

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:ai_sound_agent/widgets/shared/base.dart';
-import 'package:ai_sound_agent/widgets/home_page/animation.dart';
-import 'package:ai_sound_agent/widgets/shared/base_elevated_button.dart';
-import 'package:ai_sound_agent/widgets/shared/base_text_area.dart';
-import 'package:ai_sound_agent/services/dp_manager.dart';
+import 'package:idialogue/widgets/shared/base.dart';
+import 'package:idialogue/widgets/home_page/animation.dart';
+import 'package:idialogue/widgets/shared/base_elevated_button.dart';
+import 'package:idialogue/widgets/shared/base_text_area.dart';
+import 'package:idialogue/services/dp_manager.dart';
 
 class HomePage extends BasePage {
   const HomePage({super.key})

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:ai_sound_agent/pages/home_page.dart';
-import 'package:ai_sound_agent/pages/discover_page.dart';
-import 'package:ai_sound_agent/pages/settings.dart';
-import 'package:ai_sound_agent/pages/advanced_settings.dart';
-import 'package:ai_sound_agent/pages/device_test_page.dart';
-import 'package:ai_sound_agent/pages/main_processing.dart';
-import 'package:ai_sound_agent/pages/manage_local_dp_file.dart';
-import 'package:ai_sound_agent/pages/chat_partners_page.dart';
+import 'package:idialogue/pages/home_page.dart';
+import 'package:idialogue/pages/discover_page.dart';
+import 'package:idialogue/pages/settings.dart';
+import 'package:idialogue/pages/advanced_settings.dart';
+import 'package:idialogue/pages/device_test_page.dart';
+import 'package:idialogue/pages/main_processing.dart';
+import 'package:idialogue/pages/manage_local_dp_file.dart';
+import 'package:idialogue/pages/chat_partners_page.dart';
 
 // 定义路由名称常量
 class Routes {

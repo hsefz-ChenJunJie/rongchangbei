@@ -9,7 +9,7 @@ plugins {
 }
 
 android {
-    namespace = "com.efzzz.ai_sound_agent"
+    namespace = "com.efzzz.idialogue"
     compileSdk = 36
     ndkVersion = "27.0.12077973"
 
@@ -38,11 +38,11 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.efzzz.ai_sound_agent"
+        applicationId = "com.efzzz.idialogue"
         minSdk = 23
         targetSdk = 36
-        versionCode = 10
-        versionName = "0.1.5"
+        versionCode = 11
+        versionName = "0.1.6"
     }
 
     buildTypes {

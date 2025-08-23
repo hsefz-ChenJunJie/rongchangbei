@@ -1,7 +1,7 @@
 // 引入必要的库
 import 'package:flutter/material.dart';
-import 'package:ai_sound_agent/widgets/shared/base_line_input.dart';
-import 'package:ai_sound_agent/widgets/shared/base_elevated_button.dart';
+import 'package:idialogue/widgets/shared/base_line_input.dart';
+import 'package:idialogue/widgets/shared/base_elevated_button.dart';
 
 // 使用示例
 class BaseLineInputExamples extends StatefulWidget {

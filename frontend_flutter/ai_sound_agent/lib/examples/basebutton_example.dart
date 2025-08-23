@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:ai_sound_agent/widgets/shared/basebutton.dart';
+import 'package:idialogue/widgets/shared/basebutton.dart';
 
 // 使用示例
 class BaseButtonExamples extends StatelessWidget {

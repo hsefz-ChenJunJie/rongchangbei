@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:ai_sound_agent/widgets/shared/base.dart';
-import 'package:ai_sound_agent/widgets/shared/tabs.dart';
+import 'package:idialogue/widgets/shared/base.dart';
+import 'package:idialogue/widgets/shared/tabs.dart';
 
 /// 简化的Tab组件演示页面
 class TabsDemoSimple extends BasePage {

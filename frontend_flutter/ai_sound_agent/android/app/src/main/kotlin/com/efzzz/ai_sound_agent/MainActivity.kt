@@ -1,4 +1,4 @@
-package com.efzzz.ai_sound_agent
+package com.efzzz.idialogue
 
 import io.flutter.embedding.android.FlutterActivity
 

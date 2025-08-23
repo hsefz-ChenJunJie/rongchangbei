@@ -7,11 +7,11 @@
 -keep class io.flutter.plugins.** { *; }
 
 # 保持主 Activity 不被混淆
--keep class com.efzzz.ai_sound_agent.MainActivity { *; }
+-keep class com.efzzz.idialogue.MainActivity { *; }
 -keep class ** extends io.flutter.embedding.android.FlutterActivity { *; }
 
 # 保持自定义类不被混淆
--keep class com.efzzz.ai_sound_agent.** { *; }
+-keep class com.efzzz.idialogue.** { *; }
 
 # Play Core Library
 -dontwarn com.google.android.play.core.**

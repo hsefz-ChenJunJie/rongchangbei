@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:ai_sound_agent/app/route.dart';
-import 'package:ai_sound_agent/services/theme_manager.dart';
+import 'package:idialogue/app/route.dart';
+import 'package:idialogue/services/theme_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,7 +35,7 @@ class _MainAppState extends State<MainApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'AI Sound Agent',
+      title: 'iDialogue',
       theme: ThemeManager().themeData,
       initialRoute: Routes.home,
       routes: appRoutes,

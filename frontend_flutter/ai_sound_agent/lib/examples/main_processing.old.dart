@@ -3,12 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:record/record.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:ai_sound_agent/services/api_service.dart';
+import 'package:idialogue/services/api_service.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:ai_sound_agent/widgets/shared/base.dart';
-import 'package:ai_sound_agent/widgets/shared/base_line_input.dart';
-import 'package:ai_sound_agent/widgets/shared/base_text_area.dart';
-import 'package:ai_sound_agent/widgets/shared/base_elevated_button.dart';
+import 'package:idialogue/widgets/shared/base.dart';
+import 'package:idialogue/widgets/shared/base_line_input.dart';
+import 'package:idialogue/widgets/shared/base_text_area.dart';
+import 'package:idialogue/widgets/shared/base_elevated_button.dart';
 
 class MainProcessingPage extends BasePage {
   const MainProcessingPage({super.key}) : super(

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:ai_sound_agent/widgets/shared/base.dart';
-import 'package:ai_sound_agent/services/theme_manager.dart';
-import 'package:ai_sound_agent/services/dp_download_manager.dart';
-import 'package:ai_sound_agent/services/dp_manager.dart';
-import 'package:ai_sound_agent/app/route.dart';
+import 'package:idialogue/widgets/shared/base.dart';
+import 'package:idialogue/services/theme_manager.dart';
+import 'package:idialogue/services/dp_download_manager.dart';
+import 'package:idialogue/services/dp_manager.dart';
+import 'package:idialogue/app/route.dart';
 
 class DiscoverPage extends BasePage {
   const DiscoverPage({super.key})

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../shared/popup.dart';
 import 'role_manager.dart';
-import 'package:ai_sound_agent/services/theme_manager.dart';
+import 'package:idialogue/services/theme_manager.dart';
 
 class ChatRole {
   final String id;

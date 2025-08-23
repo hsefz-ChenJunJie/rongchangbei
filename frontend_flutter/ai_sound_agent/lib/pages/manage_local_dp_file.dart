@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:ai_sound_agent/widgets/shared/base.dart';
-import 'package:ai_sound_agent/services/dp_manager.dart';
-import 'package:ai_sound_agent/services/theme_manager.dart';
+import 'package:idialogue/widgets/shared/base.dart';
+import 'package:idialogue/services/dp_manager.dart';
+import 'package:idialogue/services/theme_manager.dart';
 
 class ManageLocalDpFilePage extends BasePage {
   const ManageLocalDpFilePage({super.key})
