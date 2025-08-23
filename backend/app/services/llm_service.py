@@ -225,29 +225,29 @@ class LLMService:
         
         # 添加消息历史
         if session.messages:
-            parts.append("\n## 消息历史")
+            parts.append("\n## 对话内容")
             for message in session.messages:
-                parts.append(f"消息{message.id} - {message.sender}: {message.content}")
+                parts.append(f"{message.sender}: {message.content}")
         
         # 添加聚焦消息
         focused_messages = session.get_focused_messages()
         if focused_messages:
-            parts.append("\n## 聚焦消息\n用户特别关注以下消息：")
+            parts.append("\n## 重点关注内容")
             for message in focused_messages:
-                parts.append(f"消息{message.id} - {message.sender}: {message.content}")
+                parts.append(f"{message.sender}: {message.content}")
         
         # 添加用户意见倾向
         if session.user_opinion:
-            parts.append(f"\n## 用户意见倾向\n{session.user_opinion}")
+            parts.append(f"\n## 用户倾向\n{session.user_opinion}")
         
         # 添加修改建议
         if session.modifications:
-            parts.append("\n## 修改建议")
-            for i, modification in enumerate(session.modifications, 1):
-                parts.append(f"{i}. {modification}")
+            parts.append("\n## 调整要求")
+            for modification in session.modifications:
+                parts.append(f"- {modification}")
         
         # 添加生成要求
-        parts.append(f"\n## 任务指令\n请激活你的“沟通辅助能力”，综合以上所有信息，为用户生成 {count} 个高质量、多样化的建议回答。")
+        parts.append(f"\n## 任务要求\n请基于以上对话内容，生成{count}个自然、直接、适合真实对话场景的回复建议。\n\n重要：每个回复都应该是完整的、可以直接使用的对话内容，不要添加任何编号、标签或前缀（如"建议一"、"回复："等）。回复应该就像是真人在对话中会说的话。")
         
         return "\n".join(parts)
     
