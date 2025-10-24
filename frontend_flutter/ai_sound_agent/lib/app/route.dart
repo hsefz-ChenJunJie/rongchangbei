@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:idialogue/models/partner_profile.dart';
 import 'package:idialogue/pages/home_page.dart';
 import 'package:idialogue/pages/discover_page.dart';
 import 'package:idialogue/pages/settings.dart';
@@ -7,6 +8,9 @@ import 'package:idialogue/pages/device_test_page.dart';
 import 'package:idialogue/pages/main_processing.dart';
 import 'package:idialogue/pages/manage_local_dp_file.dart';
 import 'package:idialogue/pages/chat_partners_page.dart';
+import 'package:idialogue/pages/partner_profile_list_page.dart';
+import 'package:idialogue/pages/partner_profile_detail_page.dart';
+import 'package:idialogue/pages/partner_profile_edit_page.dart';
 
 // 定义路由名称常量
 class Routes {
@@ -18,6 +22,9 @@ class Routes {
   static const String mainProcessing = '/main-processing';
   static const String manageLocalDpFile = '/manage-local-dp-file';
   static const String chatPartners = '/chat-partners';
+  static const String partnerProfileList = '/partner-profiles';
+  static const String partnerProfileDetail = '/partner-profile-detail';
+  static const String partnerProfileEdit = '/partner-profile-edit';
 }
 
 // 路由映射配置
@@ -30,6 +37,21 @@ final Map<String, WidgetBuilder> appRoutes = {
   Routes.mainProcessing: (context) => const MainProcessingPage(),
   Routes.manageLocalDpFile: (context) => const ManageLocalDpFilePage(),
   Routes.chatPartners: (context) => const ChatPartnersPage(),
+  Routes.partnerProfileList: (context) => const PartnerProfileListPage(),
+  Routes.partnerProfileDetail: (context) {
+    final profile = ModalRoute.of(context)!.settings.arguments as PartnerProfile;
+    return PartnerProfileDetailPage(profile: profile);
+  },
+  Routes.partnerProfileEdit: (context) {
+    final args = ModalRoute.of(context)!.settings.arguments;
+    if (args is PartnerProfile) {
+      return PartnerProfileEditPage(existingProfile: args);
+    } else if (args is String) {
+      return PartnerProfileEditPage(partnerId: args);
+    } else {
+      return const PartnerProfileEditPage();
+    }
+  },
 };
 
 // 路由状态类 (存储当前路由状态)

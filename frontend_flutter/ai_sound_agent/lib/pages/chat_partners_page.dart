@@ -8,6 +8,7 @@ import '../widgets/shared/base_line_input.dart';
 import '../widgets/shared/add_partner_dialog.dart';
 import '../services/theme_manager.dart';
 import '../pages/main_processing.dart'; // 添加MainProcessingPage的导入
+import '../app/route.dart'; // 添加路由导入
 
 class ChatPartnersPage extends BasePage {
   const ChatPartnersPage({super.key})
@@ -581,5 +582,21 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
         ),
       ),
     );
+  }
+
+  void _navigateToProfileManagement() {
+    Navigator.pushNamed(context, Routes.partnerProfileList);
+  }
+
+  @override
+  List<Widget> buildAppBarActions(BuildContext context) {
+    return [
+      IconButton(
+        icon: const Icon(Icons.folder_shared),
+        onPressed: _navigateToProfileManagement,
+        tooltip: '档案管理',
+      ),
+      ...super.buildAppBarActions(context),
+    ];
   }
 }

@@ -120,6 +120,7 @@ abstract class BasePageState<T extends BasePage> extends State<T> {
               backgroundColor: themeManager.lighterColor,
               elevation: 0,
               iconTheme: IconThemeData(color: themeManager.darkTextColor),
+              actions: buildAppBarActions(context),
             )
           : null,
       
@@ -253,6 +254,11 @@ abstract class BasePageState<T extends BasePage> extends State<T> {
 
   // 子类可以重写此方法添加额外的悬浮按钮
   List<Widget> buildAdditionalFloatingActionButtons() {
+    return [];
+  }
+
+  // 子类可以重写此方法添加应用栏操作按钮
+  List<Widget> buildAppBarActions(BuildContext context) {
     return [];
   }
 }
