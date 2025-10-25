@@ -10,7 +10,6 @@
 - **空闲状态**：等待用户开始新消息或手动触发生成回答
 - **录制消息中**：显示录音动画和结束消息按钮
 - **处理语音转文字中**：显示处理状态，禁用交互
-- **生成意见建议中**：自动生成意见关键词，可以手动触发打断
 - **生成回答建议中**：手动触发的回答生成，显示加载状态
 - 任何时候都可以修改对话情景和建议回答数量。
 
@@ -20,8 +19,7 @@
 
 #### 阶段 1：对话初始化
 1. 前端发送对话开始事件到后端（如果是延续之前的情景，需包含历史消息）
-2. 后端记录历史消息并自动触发意见生成（如果有历史消息或情景描述）
-3. 界面切换到录音状态
+2. 界面切换到录音状态
 
 #### 阶段 2：消息录制和处理
 1. 用户点击"开始新消息"按钮，输入发送者标识（如自己的姓名）
@@ -31,14 +29,9 @@
 5. 前端发送消息结束事件
 6. 后端完成语音转文字，返回消息记录确认（包含消息ID和内容）
 
-#### 阶段 3：自动意见生成
-1. 消息记录后，后端自动生成意见倾向关键词
-2. 前端接收并显示意见建议
-3. 用户可以在此期间手动触发回答生成（会中断意见生成）
-
-#### 阶段 4：手动回答生成和处理
+#### 阶段 3：手动回答生成和处理
 1. 用户选择要关注的消息（可选）
-2. 用户输入意见倾向（可选）
+2. 用户提供额外的参考语料（可选）
 3. 用户点击"生成回答"按钮
 4. 前端发送手动触发生成事件
 5. 接收后端返回的多个AI回答建议
@@ -55,10 +48,9 @@
 
 - **会话ID管理**：每个对话都有唯一ID，前端需要在所有事件中携带此ID
 - **消息ID管理**：每条消息都有唯一ID，用于引用和聚焦消息
-- **状态管理**：对话状态包括："idle"、"recording_message"、"processing_stt"、"generating_opinions"、"generating_response"
+- **状态管理**：对话状态包括："idle"、"recording_message"、"processing_stt"、"generating_response"
 - **音频处理**：音频数据需要 base64 编码后发送
 - **消息流程**：必须先发送消息开始事件再发送音频流
-- **优先级处理**：手动触发的回答生成会中断自动的意见生成
 - **修改建议即时处理**：用户发送修改建议后立即触发新的回答生成
 - **选择回答记录**：用户选择的LLM回答必须发送给后端记录
 
@@ -133,7 +125,7 @@
   "data": {
     "session_id": "会话ID", // [必需]
     "focused_message_ids": ["msg_001", "msg_003"], // [可选] 用户选择聚焦的消息ID数组
-    "user_opinion": "用户意见倾向文本" // [可选] 用户的意见倾向
+    "user_corpus": "用户提供的语料库文本" // [可选] 用户提供的用于增强回复的语料
   }
 }
 ```
@@ -237,20 +229,7 @@
     "scenario_description": "对话情景描述", // [可选] 对话情景
     "response_count": 3, // [必需] 回答生成数量
     "has_modifications": false, // [必需] 是否有修改建议
-    "has_user_opinion": true, // [必需] 是否有用户意见
     "restored_at": "2025-08-18T10:30:45.123Z" // [必需] 恢复时间
-  }
-}
-```
-
-#### 意见建议
-```json
-{
-  "type": "opinion_suggestions", // [必需]
-  "data": {
-    "session_id": "会话ID", // [必需]
-    "suggestions": ["意见关键词1", "意见关键词2", "意见关键词3"], // [必需] 生成的意见倾向关键词
-    "request_id": "请求唯一标识" // [可选] 用于请求追踪
   }
 }
 ```
@@ -273,7 +252,7 @@
   "type": "status_update", // [必需]
   "data": {
     "session_id": "会话ID", // [必需]
-    "status": "idle|recording_message|processing_stt|generating_opinions|generating_response", // [必需] 会话状态
+    "status": "idle|recording_message|processing_stt|generating_response", // [必需] 会话状态
     "message": "状态描述" // [可选] 状态的文字描述
   }
 }
@@ -282,7 +261,6 @@
 - `idle`：空闲状态，等待新消息或手动触发
 - `recording_message`：正在录制消息中
 - `processing_stt`：处理语音转文字中
-- `generating_opinions`：自动生成意见建议中
 - `generating_response`：手动触发的回答生成中
 
 #### 错误信息
@@ -490,10 +468,6 @@ ws.onmessage = function(event) {
       
     case 'message_recorded':
       console.log('消息记录成功，ID:', response.data.message_id);
-      break;
-      
-    case 'opinion_suggestions':
-      console.log('意见建议:', response.data.suggestions);
       break;
       
     case 'llm_response':

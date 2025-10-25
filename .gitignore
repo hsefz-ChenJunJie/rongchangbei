@@ -106,6 +106,7 @@ temp/
 
 # 排除大型模型文件但保留目录结构
 backend/model/vosk-model/*
+backend/model/whisper-models/*
 !backend/model/vosk-model/.gitkeep
 !backend/model/vosk-model/README.md
 
