@@ -45,7 +45,7 @@ class ManualGenerateData(BaseModel):
     """手动触发生成回答事件数据"""
     session_id: str = Field(description="目标会话标识")
     focused_message_ids: Optional[List[str]] = Field(default=None, description="用户选择聚焦的消息ID数组")
-    user_opinion: Optional[str] = Field(default=None, description="用户意见倾向文本")
+    user_corpus: Optional[str] = Field(default=None, description="用户提供的语料库")
 
 
 class UserModificationData(BaseModel):
@@ -137,24 +137,12 @@ class SessionRestoredData(BaseModel):
     restored_at: str = Field(description="恢复时间")
 
 
-class OpinionSuggestionsData(BaseModel):
-    """意见建议响应事件数据"""
-    session_id: str = Field(description="目标会话标识")
-    suggestions: List[str] = Field(description="生成的意见倾向关键词")
-    request_id: Optional[str] = Field(default=None, description="用于请求追踪")
-
-
-class LLMResponseData(BaseModel):
-    """LLM回答响应事件数据"""
-    session_id: str = Field(description="目标会话标识")
-    suggestions: List[str] = Field(description="回答建议数组")
-    request_id: Optional[str] = Field(default=None, description="用于请求追踪")
 
 
 class StatusUpdateData(BaseModel):
     """状态更新事件数据"""
     session_id: str = Field(description="目标会话标识")
-    status: Literal["idle", "recording_message", "processing_stt", "generating_opinions", "generating_response"] = Field(
+    status: Literal["idle", "recording_message", "processing_stt", "generating_response"] = Field(
         description="会话状态"
     )
     message: Optional[str] = Field(default=None, description="状态描述")
@@ -252,11 +240,6 @@ class MessageRecordedEvent(BaseModel):
     data: MessageRecordedData
 
 
-class OpinionSuggestionsEvent(BaseModel):
-    type: Literal["opinion_suggestions"] = "opinion_suggestions"
-    data: OpinionSuggestionsData
-
-
 class LLMResponseEvent(BaseModel):
     type: Literal["llm_response"] = "llm_response"
     data: LLMResponseData
@@ -301,7 +284,6 @@ IncomingEvent = Union[
 OutgoingEvent = Union[
     SessionCreatedEvent,
     MessageRecordedEvent,
-    OpinionSuggestionsEvent,
     LLMResponseEvent,
     StatusUpdateEvent,
     ErrorEvent,
@@ -336,7 +318,6 @@ class EventTypes:
     # 后端 → 前端事件
     SESSION_CREATED = "session_created"
     MESSAGE_RECORDED = "message_recorded"
-    OPINION_SUGGESTIONS = "opinion_suggestions"
     LLM_RESPONSE = "llm_response"
     STATUS_UPDATE = "status_update"
     ERROR = "error"

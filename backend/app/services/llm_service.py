@@ -20,7 +20,6 @@ class LLMService:
     def __init__(self):
         self.is_initialized = False
         self.client = None
-        self.opinion_system_prompt = ""
         self.response_system_prompt = ""
         
     async def initialize(self) -> bool:
@@ -55,18 +54,7 @@ class LLMService:
     async def _load_system_prompts(self):
         """加载系统提示词"""
         try:
-            # 1. 为“意见生成”任务创建独立的、专注分析的系统提示词
-            self.opinion_system_prompt = """## Persona: 客观中立的对话分析师
-
-你的唯一任务是精准、客观地分析给定的对话内容，并提炼出核心的意见倾向或情感主题。
-
-### 你的行为准则
-- **绝对中立**: 你不表达任何观点，只作为镜子反映对话内容。
-- **高度概括**: 你的输出必须是精炼的关键词或短语。
-- **聚焦核心**: 你的分析应直指对话的要点、争议点或情感核心。
-- **严格遵循格式**: 你必须严格按照指定的JSON格式返回结果。"""
-
-            # 2. 为“回答生成”任务加载并配置主系统提示词
+            # 为“回答生成”任务加载并配置主系统提示词
             import os
             llm_prompt_path = os.path.join(os.getcwd(), "llm.md")
             
@@ -89,8 +77,6 @@ class LLMService:
     
     def _set_default_prompts(self):
         """设置默认系统提示词"""
-        self.opinion_system_prompt = """你是一个专业的对话分析助手。请根据对话内容生成3-5个意见倾向关键词，帮助用户理解对话中的不同观点。关键词应该简洁明了，反映情感和态度倾向。返回JSON格式。"""
-        
         self.response_system_prompt = """你是一个专业的沟通助手。请根据对话内容生成多个不同风格的回答建议，包括简洁直接、礼貌委婉、幽默友好等不同风格。每个建议都应该完整、自然、适合对话语境。返回JSON格式。"""
     
     async def shutdown(self):
@@ -104,50 +90,23 @@ class LLMService:
         except Exception as e:
             logger.error(f"LLM服务关闭时发生错误: {e}")
     
-    async def generate_opinions(self, session: Session) -> List[str]:
-        """
-        生成意见倾向关键词
-        
-        Args:
-            session: 会话对象
-            
-        Returns:
-            List[str]: 意见倾向关键词列表
-        """
-        if not self.is_initialized:
-            logger.error("LLM服务未初始化")
-            return []
-        
-        try:
-            # 构建提示词
-            prompt = self._format_opinion_prompt(session)
-            
-            # 调用LLM
-            response = await self._call_llm(
-                prompt, 
-                response_format="opinion",
-                max_tokens=200
-            )
-            
-            if response and "suggestions" in response:
-                suggestions = response["suggestions"]
-                logger.info(f"意见生成完成: {len(suggestions)} 个建议")
-                return suggestions[:5]  # 最多返回5个
-            else:
-                logger.warning("LLM返回格式异常")
-                return self._get_mock_opinions()
-                
-        except Exception as e:
-            logger.error(f"生成意见建议失败: {e}")
-            return self._get_mock_opinions()
-    
-    async def generate_responses(self, session: Session, count: int = 3) -> List[str]:
+    async def generate_responses(
+        self, 
+        session: Session, 
+        count: int = 3,
+        focused_message_ids: Optional[List[str]] = None,
+        user_opinion: Optional[str] = None,
+        user_corpus: Optional[str] = None
+    ) -> List[str]:
         """
         生成回答建议
         
         Args:
             session: 会话对象
             count: 生成数量
+            focused_message_ids: 聚焦消息ID列表
+            user_opinion: 用户意见
+            user_corpus: 用户语料库
             
         Returns:
             List[str]: 回答建议列表
@@ -158,7 +117,9 @@ class LLMService:
         
         try:
             # 构建提示词
-            prompt = self._format_response_prompt(session, count)
+            prompt = self._format_response_prompt(
+                session, count, focused_message_ids, user_opinion, user_corpus
+            )
             
             # 调用LLM
             response = await self._call_llm(
@@ -180,39 +141,23 @@ class LLMService:
             logger.error(f"生成回答建议失败: {e}")
             return self._get_mock_responses(count)
     
-    def _format_opinion_prompt(self, session: Session) -> str:
-        """
-        格式化意见生成提示词
-        
-        Args:
-            session: 会话对象
-            
-        Returns:
-            str: 格式化的提示词
-        """
-        parts = [self.opinion_system_prompt]
-        
-        # 添加对话情景
-        if session.scenario_description:
-            parts.append(f"\n## 对话情景\n{session.scenario_description}")
-        
-        # 添加消息历史
-        if session.messages:
-            parts.append("\n## 待分析的消息历史")
-            for message in session.messages:
-                parts.append(f"消息{message.id} - {message.sender}: {message.content}")
-        
-        parts.append("\n## 分析要求\n请基于以上对话，生成3-5个精准概括核心观点的意见关键词。")
-        
-        return "\n".join(parts)
-    
-    def _format_response_prompt(self, session: Session, count: int) -> str:
+    def _format_response_prompt(
+        self, 
+        session: Session, 
+        count: int,
+        focused_message_ids: Optional[List[str]] = None,
+        user_opinion: Optional[str] = None,
+        user_corpus: Optional[str] = None
+    ) -> str:
         """
         格式化回答生成提示词
         
         Args:
             session: 会话对象
             count: 生成数量
+            focused_message_ids: 聚焦消息ID列表
+            user_opinion: 用户意见
+            user_corpus: 用户语料库
             
         Returns:
             str: 格式化的提示词
@@ -223,6 +168,10 @@ class LLMService:
         if session.scenario_description:
             parts.append(f"\n## 对话情景\n{session.scenario_description}")
         
+        # 添加用户语料库
+        if user_corpus:
+            parts.append(f"\n## 用户参考语料\n{user_corpus}")
+        
         # 添加消息历史
         if session.messages:
             parts.append("\n## 对话内容")
@@ -230,15 +179,16 @@ class LLMService:
                 parts.append(f"{message.sender}: {message.content}")
         
         # 添加聚焦消息
-        focused_messages = session.get_focused_messages()
-        if focused_messages:
-            parts.append("\n## 重点关注内容")
-            for message in focused_messages:
-                parts.append(f"{message.sender}: {message.content}")
+        if focused_message_ids:
+            focused_messages = session.get_focused_messages(focused_message_ids)
+            if focused_messages:
+                parts.append("\n## 重点关注内容")
+                for message in focused_messages:
+                    parts.append(f"{message.sender}: {message.content}")
         
         # 添加用户意见倾向
-        if session.user_opinion:
-            parts.append(f"\n## 用户倾向\n{session.user_opinion}")
+        if user_opinion:
+            parts.append(f"\n## 用户倾向\n{user_opinion}")
         
         # 添加修改建议
         if session.modifications:
@@ -251,65 +201,95 @@ class LLMService:
         
         return "\n".join(parts)
     
-    async def _call_llm(self, prompt: str, response_format: str = "auto", max_tokens: int = None, count: int = 3) -> Optional[Dict[str, Any]]:
-        """
-        调用LLM API
-        
-        Args:
-            prompt: 提示词
-            response_format: 响应格式类型
-            max_tokens: 最大token数
-            count: 生成数量（用于response格式）
+        async def _call_llm(self, prompt: str, response_format: str = "auto", max_tokens: int = None, count: int = 3) -> Optional[Dict[str, Any]]:
+    
+            """
+    
+            调用LLM API
+    
             
-        Returns:
-            Optional[Dict[str, Any]]: LLM响应
-        """
-        try:
-            if not settings.openrouter_api_key:
-                # Mock模式
-                await asyncio.sleep(0.5)  # 模拟API延迟
+    
+            Args:
+    
+                prompt: 提示词
+    
+                response_format: 响应格式类型
+    
+                max_tokens: 最大token数
+    
+                count: 生成数量（用于response格式）
+    
                 
-                if response_format == "opinion":
-                    return {"suggestions": self._get_mock_opinions()}
-                else:
+    
+            Returns:
+    
+                Optional[Dict[str, Any]]: LLM响应
+    
+            """
+    
+            try:
+    
+                if not settings.openrouter_api_key:
+    
+                    # Mock模式
+    
+                    await asyncio.sleep(0.5)  # 模拟API延迟
+    
+                    
+    
                     return {"suggestions": self._get_mock_responses(count)}
-            
-            # TODO: 实际的OpenRouter API调用
-            # 这里应该实现真实的API调用逻辑
-            
-            # 临时返回Mock数据
-            await asyncio.sleep(0.5)
-            
-            if response_format == "opinion":
-                return {"suggestions": self._get_mock_opinions()}
-            else:
-                return {"suggestions": self._get_mock_responses(count)}
+    
                 
-        except Exception as e:
-            logger.error(f"LLM API调用失败: {e}")
-            return None
     
-    def _get_mock_opinions(self) -> List[str]:
-        """获取Mock意见建议"""
-        return [
-            "积极乐观",
-            "谨慎保守", 
-            "理性分析",
-            "情感共鸣",
-            "实用主义"
-        ]
+                # TODO: 实际的OpenRouter API调用
     
-    def _get_mock_responses(self, count: int) -> List[str]:
-        """获取Mock回答建议"""
-        responses = [
-            "我理解您的观点，这确实是一个值得深入思考的问题。",
-            "您说得很有道理，不过我觉得可能还有另一个角度可以考虑。",
-            "哈哈，这个想法很有趣！我也有类似的经历。",
-            "能具体说说您是怎么想的吗？我很好奇您的具体考虑。",
-            "谢谢您的分享，这让我学到了很多新的东西。"
-        ]
+                # 这里应该实现真实的API调用逻辑
+    
+                
+    
+                # 临时返回Mock数据
+    
+                await asyncio.sleep(0.5)
+    
+                
+    
+                return {"suggestions": self._get_mock_responses(count)}
+    
+                    
+    
+            except Exception as e:
+    
+                logger.error(f"LLM API调用失败: {e}")
+    
+                return None
+    
         
-        return responses[:count]
+    
+        def _get_mock_responses(self, count: int) -> List[str]:
+    
+            """
+    
+            获取Mock回答建议
+    
+            """
+    
+            responses = [
+    
+                "我理解您的观点，这确实是一个值得深入思考的问题。",
+    
+                "您说得很有道理，不过我觉得可能还有另一个角度可以考虑。",
+    
+                "哈哈，这个想法很有趣！我也有类似的经历。",
+    
+                "能具体说说您是怎么想的吗？我很好奇您的具体考虑。",
+    
+                "谢谢您的分享，这让我学到了很多新的东西。"
+    
+            ]
+    
+            
+    
+            return responses[:count]
     
     async def health_check(self) -> Dict[str, Any]:
         """
@@ -386,25 +366,7 @@ class OpenRouterLLMService(LLMService):
             
             # 构建响应格式
             format_schema = None
-            if response_format == "opinion":
-                format_schema = {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "opinion_suggestions",
-                        "schema": {
-                            "type": "object",
-                            "properties": {
-                                "suggestions": {
-                                    "type": "array",
-                                    "items": {"type": "string"},
-                                    "description": "意见倾向关键词数组"
-                                }
-                            },
-                            "required": ["suggestions"]
-                        }
-                    }
-                }
-            elif response_format == "response":
+            if response_format == "response":
                 format_schema = {
                     "type": "json_schema",
                     "json_schema": {

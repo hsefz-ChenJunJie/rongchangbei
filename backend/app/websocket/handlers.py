@@ -18,10 +18,10 @@ from app.models.events import (
     ManualGenerateEvent, UserModificationEvent, UserSelectedResponseEvent,
     ScenarioSupplementEvent, ResponseCountUpdateEvent, ConversationEndEvent,
     SessionResumeEvent, GetMessageHistoryEvent,
-    SessionCreatedEvent, MessageRecordedEvent, OpinionSuggestionsEvent,
+    SessionCreatedEvent, MessageRecordedEvent,
     LLMResponseEvent, StatusUpdateEvent, ErrorEvent, SessionRestoredEvent,
     MessageHistoryResponseEvent,
-    SessionCreatedData, MessageRecordedData, OpinionSuggestionsData,
+    SessionCreatedData, MessageRecordedData,
     LLMResponseData, StatusUpdateData, ErrorData, SessionRestoredData,
     MessageHistoryResponseData, MessageHistoryItem
 )
@@ -277,13 +277,6 @@ class WebSocketHandler:
         # 发送会话创建确认
         await self.send_session_created(client_id, session_id)
         
-        # 如果有历史消息或情景描述，触发意见生成
-        if event.data.history_messages or event.data.scenario_description:
-            if self.request_manager:
-                request_id = await self.request_manager.generate_opinion_suggestions(session_id)
-                if request_id:
-                    logger.info(f"对话开始后自动触发意见生成: {session_id}, 请求ID: {request_id}")
-        
         logger.info(f"会话创建: {session_id}")
     
     async def handle_message_start(self, client_id: str, event_data: Dict[str, Any]):
@@ -404,13 +397,6 @@ class WebSocketHandler:
             except Exception as e:
                 logger.error(f"保存会话失败 {session_id}: {e}")
         
-        # 自动触发意见生成
-        await self.send_status_update(session_id, "generating_opinions", "生成意见建议")
-        
-        # TODO: 触发意见生成请求
-        if self.request_manager:
-            await self.request_manager.generate_opinion_suggestions(session_id)
-        
         logger.info(f"消息结束: {session_id}, 正式ID: {message_id}")
     
     async def handle_manual_generate(self, client_id: str, event_data: Dict[str, Any]):
@@ -428,20 +414,21 @@ class WebSocketHandler:
                 session_id=session_id
             )
             return
-        
+
         # 更新会话数据
         if event.data.focused_message_ids:
             self.session_manager.set_focused_messages(session_id, event.data.focused_message_ids)
         
-        if event.data.user_opinion:
-            self.session_manager.set_user_opinion(session_id, event.data.user_opinion)
-        
         # 更新状态
         await self.send_status_update(session_id, "generating_response", "生成回答建议")
         
-        # TODO: 触发回答生成请求
+        # 触发回答生成请求
         if self.request_manager:
-            await self.request_manager.generate_response_suggestions(session_id)
+            await self.request_manager.generate_response_suggestions(
+                session_id=session_id,
+                focused_message_ids=event.data.focused_message_ids,
+                user_corpus=event.data.user_corpus
+            )
         
         logger.info(f"手动触发生成: {session_id}")
     
@@ -871,7 +858,6 @@ class WebSocketHandler:
                 scenario_description=session.scenario_description,
                 response_count=session.response_count,
                 has_modifications=len(session.modifications) > 0,
-                has_user_opinion=session.user_opinion is not None,
                 restored_at=datetime.utcnow().isoformat()
             )
         )
@@ -891,18 +877,7 @@ class WebSocketHandler:
             )
             await self.send_event(client_id, event)
     
-    async def send_opinion_suggestions(self, session_id: str, suggestions: list, request_id: str = None):
-        """发送意见建议响应事件"""
-        for client_id in self.active_connections:
-            event = OpinionSuggestionsEvent(
-                type="opinion_suggestions",
-                data=OpinionSuggestionsData(
-                    session_id=session_id,
-                    suggestions=suggestions,
-                    request_id=request_id
-                )
-            )
-            await self.send_event(client_id, event)
+
     
     async def send_llm_response(self, session_id: str, suggestions: list, request_id: str = None):
         """发送LLM回答响应事件"""

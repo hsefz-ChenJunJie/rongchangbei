@@ -40,7 +40,6 @@ class LLMRequestManager:
         self.websocket_handler = websocket_handler
         
         # 请求跟踪
-        self.opinion_requests: Dict[str, asyncio.Task] = {}  # session_id -> task
         self.response_requests: Dict[str, asyncio.Task] = {}  # session_id -> task
         self.all_requests: Dict[str, RequestInfo] = {}  # request_id -> request_info
         
@@ -57,136 +56,24 @@ class LLMRequestManager:
         self.websocket_handler = websocket_handler
     
     # ===============================
-    # 意见生成请求管理
-    # ===============================
-    
-    async def generate_opinion_suggestions(self, session_id: str) -> Optional[str]:
-        """
-        生成意见建议（自动触发）
-        
-        Args:
-            session_id: 会话ID
-            
-        Returns:
-            Optional[str]: 请求ID，如果创建失败则返回None
-        """
-        try:
-            # 取消之前的意见生成请求
-            await self.cancel_opinion_requests(session_id)
-            
-            # 创建新的请求
-            request_id = str(uuid.uuid4())
-            request_info = RequestInfo(
-                id=request_id,
-                session_id=session_id,
-                request_type=RequestType.OPINION,
-                status=RequestStatus.PENDING
-            )
-            
-            self.all_requests[request_id] = request_info
-            self.stats["total_requests"] += 1
-            
-            # 创建异步任务
-            task = asyncio.create_task(
-                self._execute_opinion_generation(session_id, request_id)
-            )
-            self.opinion_requests[session_id] = task
-            
-            # 更新会话中的活动请求ID
-            self.session_manager.set_active_opinion_request(session_id, request_id)
-            
-            logger.info(f"创建意见生成请求: {session_id}, 请求ID: {request_id}")
-            
-            return request_id
-            
-        except Exception as e:
-            logger.error(f"创建意见生成请求失败 {session_id}: {e}")
-            return None
-    
-    async def _execute_opinion_generation(self, session_id: str, request_id: str):
-        """执行意见生成"""
-        try:
-            # 更新请求状态
-            self._update_request_status(request_id, RequestStatus.RUNNING)
-            
-            # 获取会话
-            session = self.session_manager.get_session(session_id)
-            if not session:
-                raise ValueError(f"会话不存在: {session_id}")
-            
-            # 调用LLM服务
-            suggestions = await self.llm_service.generate_opinions(session)
-            
-            # 检查是否被取消
-            if request_id not in self.all_requests or \
-               self.all_requests[request_id].status == RequestStatus.CANCELLED:
-                logger.info(f"意见生成请求已取消: {request_id}")
-                return
-            
-            # 发送结果
-            if self.websocket_handler:
-                await self.websocket_handler.send_opinion_suggestions(
-                    session_id, suggestions, request_id
-                )
-            
-            # 更新请求状态
-            self._update_request_status(request_id, RequestStatus.COMPLETED)
-            self.stats["completed_requests"] += 1
-            
-            logger.info(f"意见生成完成: {request_id}, 生成了 {len(suggestions)} 个建议")
-            
-        except asyncio.CancelledError:
-            self._update_request_status(request_id, RequestStatus.CANCELLED)
-            self.stats["cancelled_requests"] += 1
-            logger.info(f"意见生成请求被取消: {request_id}")
-            
-        except Exception as e:
-            self._update_request_status(request_id, RequestStatus.FAILED, str(e))
-            self.stats["failed_requests"] += 1
-            logger.error(f"意见生成失败 {request_id}: {e}")
-            
-        finally:
-            # 清理
-            if session_id in self.opinion_requests:
-                del self.opinion_requests[session_id]
-            self.session_manager.clear_active_opinion_request(session_id)
-    
-    async def cancel_opinion_requests(self, session_id: str) -> int:
-        """
-        取消指定会话的意见生成请求
-        
-        Args:
-            session_id: 会话ID
-            
-        Returns:
-            int: 取消的请求数量
-        """
-        cancelled_count = 0
-        
-        if session_id in self.opinion_requests:
-            task = self.opinion_requests[session_id]
-            if not task.done():
-                task.cancel()
-                cancelled_count += 1
-                logger.info(f"取消意见生成请求: {session_id}")
-            
-            del self.opinion_requests[session_id]
-        
-        # 清理会话中的活动请求ID
-        self.session_manager.clear_active_opinion_request(session_id)
-        
-        return cancelled_count
-    
-    # ===============================
     # 回答生成请求管理
     # ===============================
     
-    async def generate_response_suggestions(self, session_id: str) -> Optional[str]:
+    async def generate_response_suggestions(
+        self, 
+        session_id: str, 
+        focused_message_ids: Optional[List[str]] = None,
+        user_opinion: Optional[str] = None,
+        user_corpus: Optional[str] = None
+    ) -> Optional[str]:
         """
         生成回答建议（手动触发或修改建议触发）
         
         Args:
             session_id: 会话ID
+            focused_message_ids: 聚焦消息ID列表
+            user_opinion: 用户意见
+            user_corpus: 用户语料库
             
         Returns:
             Optional[str]: 请求ID，如果创建失败则返回None
@@ -209,7 +96,9 @@ class LLMRequestManager:
             
             # 创建异步任务
             task = asyncio.create_task(
-                self._execute_response_generation(session_id, request_id)
+                self._execute_response_generation(
+                    session_id, request_id, focused_message_ids, user_opinion, user_corpus
+                )
             )
             self.response_requests[session_id] = task
             
@@ -224,7 +113,14 @@ class LLMRequestManager:
             logger.error(f"创建回答生成请求失败 {session_id}: {e}")
             return None
     
-    async def _execute_response_generation(self, session_id: str, request_id: str):
+    async def _execute_response_generation(
+        self, 
+        session_id: str, 
+        request_id: str,
+        focused_message_ids: Optional[List[str]] = None,
+        user_opinion: Optional[str] = None,
+        user_corpus: Optional[str] = None
+    ):
         """执行回答生成"""
         try:
             # 更新请求状态
@@ -237,7 +133,13 @@ class LLMRequestManager:
             
             # 调用LLM服务
             count = session.response_count
-            suggestions = await self.llm_service.generate_responses(session, count)
+            suggestions = await self.llm_service.generate_responses(
+                session=session, 
+                count=count,
+                focused_message_ids=focused_message_ids,
+                user_opinion=user_opinion,
+                user_corpus=user_corpus
+            )
             
             # 检查是否被取消
             if request_id not in self.all_requests or \
@@ -315,9 +217,6 @@ class LLMRequestManager:
         """
         total_cancelled = 0
         
-        # 取消意见生成请求
-        total_cancelled += await self.cancel_opinion_requests(session_id)
-        
         # 取消回答生成请求
         total_cancelled += await self.cancel_response_requests(session_id)
         
@@ -333,11 +232,6 @@ class LLMRequestManager:
             int: 取消的请求总数
         """
         total_cancelled = 0
-        
-        # 取消所有意见生成请求
-        session_ids = list(self.opinion_requests.keys())
-        for session_id in session_ids:
-            total_cancelled += await self.cancel_opinion_requests(session_id)
         
         # 取消所有回答生成请求
         session_ids = list(self.response_requests.keys())
@@ -408,7 +302,6 @@ class LLMRequestManager:
         Returns:
             Dict[str, Any]: 统计信息
         """
-        active_opinion_count = len(self.opinion_requests)
         active_response_count = len(self.response_requests)
         
         return {
@@ -416,9 +309,8 @@ class LLMRequestManager:
             "completed_requests": self.stats["completed_requests"],
             "cancelled_requests": self.stats["cancelled_requests"],
             "failed_requests": self.stats["failed_requests"],
-            "active_opinion_requests": active_opinion_count,
             "active_response_requests": active_response_count,
-            "total_active_requests": active_opinion_count + active_response_count,
+            "total_active_requests": active_response_count,
             "success_rate": (
                 self.stats["completed_requests"] / self.stats["total_requests"]
                 if self.stats["total_requests"] > 0 else 0
@@ -435,8 +327,7 @@ class LLMRequestManager:
         Returns:
             bool: 是否忙碌
         """
-        return (session_id in self.opinion_requests or 
-                session_id in self.response_requests)
+        return session_id in self.response_requests
     
     def get_session_request_status(self, session_id: str) -> Dict[str, Any]:
         """
@@ -448,24 +339,17 @@ class LLMRequestManager:
         Returns:
             Dict[str, Any]: 会话请求状态
         """
-        has_opinion_request = session_id in self.opinion_requests
         has_response_request = session_id in self.response_requests
         
-        opinion_request_id = None
         response_request_id = None
-        
-        if has_opinion_request:
-            opinion_request_id = self.session_manager.get_active_opinion_request(session_id)
         
         if has_response_request:
             response_request_id = self.session_manager.get_active_response_request(session_id)
         
         return {
             "session_id": session_id,
-            "is_busy": has_opinion_request or has_response_request,
-            "has_opinion_request": has_opinion_request,
+            "is_busy": has_response_request,
             "has_response_request": has_response_request,
-            "opinion_request_id": opinion_request_id,
             "response_request_id": response_request_id
         }
     
@@ -494,7 +378,7 @@ class LLMRequestManager:
                 request_info.status in [
                     RequestStatus.COMPLETED.value,
                     RequestStatus.CANCELLED.value,
-                    RequestStatus.FAILED.value
+                    Request.FAILED.value
                 ]):
                 expired_requests.append(request_id)
         
@@ -535,7 +419,6 @@ class LLMRequestManager:
             "statistics": stats,
             "memory_usage": {
                 "total_requests_in_memory": len(self.all_requests),
-                "active_opinion_tasks": len(self.opinion_requests),
                 "active_response_tasks": len(self.response_requests)
             }
         }
