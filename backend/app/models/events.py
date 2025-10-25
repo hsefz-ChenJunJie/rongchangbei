@@ -133,8 +133,14 @@ class SessionRestoredData(BaseModel):
     scenario_description: Optional[str] = Field(default=None, description="对话情景描述")
     response_count: int = Field(description="回答生成数量")
     has_modifications: bool = Field(description="是否有修改建议")
-    has_user_opinion: bool = Field(description="是否有用户意见")
     restored_at: str = Field(description="恢复时间")
+
+
+class LLMResponseData(BaseModel):
+    """LLM回答响应事件数据"""
+    session_id: str = Field(description="目标会话标识")
+    suggestions: List[str] = Field(description="回答建议数组")
+    request_id: Optional[str] = Field(default=None, description="用于请求追踪")
 
 
 
