@@ -20,10 +20,10 @@ from app.models.events import (
     SessionResumeEvent, GetMessageHistoryEvent,
     SessionCreatedEvent, MessageRecordedEvent,
     LLMResponseEvent, StatusUpdateEvent, ErrorEvent, SessionRestoredEvent,
-    MessageHistoryResponseEvent,
+    MessageHistoryResponseEvent, OpinionPredictionEvent,
     SessionCreatedData, MessageRecordedData,
     LLMResponseData, StatusUpdateData, ErrorData, SessionRestoredData,
-    MessageHistoryResponseData, MessageHistoryItem
+    MessageHistoryResponseData, MessageHistoryItem, OpinionPredictionData
 )
 
 logger = logging.getLogger(__name__)
@@ -491,6 +491,13 @@ class WebSocketHandler:
         # 发送消息记录确认
         await self.send_message_recorded(session_id, message_id)
         
+        # 触发意见预测任务
+        if self.request_manager:
+            await self.request_manager.generate_opinion_prediction(
+                session_id=session_id,
+                last_message_content=selected_content
+            )
+
         logger.info(f"用户选择回答: {session_id}, 消息ID: {message_id}")
     
     async def handle_scenario_supplement(self, client_id: str, event_data: Dict[str, Any]):
@@ -887,6 +894,19 @@ class WebSocketHandler:
                 data=LLMResponseData(
                     session_id=session_id,
                     suggestions=suggestions,
+                    request_id=request_id
+                )
+            )
+            await self.send_event(client_id, event)
+
+    async def send_opinion_prediction(self, session_id: str, prediction: dict, request_id: str = None):
+        """发送意见预测响应事件"""
+        for client_id in self.active_connections:
+            event = OpinionPredictionEvent(
+                type="opinion_prediction_response",
+                data=OpinionPredictionData(
+                    session_id=session_id,
+                    prediction=prediction,
                     request_id=request_id
                 )
             )

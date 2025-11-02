@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 class RequestType(str, Enum):
     """请求类型枚举"""
-    OPINION = "opinion"  # 意见生成请求
+    OPINION_PREDICTION = "opinion_prediction"  # 意见预测请求
     RESPONSE = "response"  # 回答生成请求
 
 
@@ -41,6 +41,7 @@ class LLMRequestManager:
         
         # 请求跟踪
         self.response_requests: Dict[str, asyncio.Task] = {}  # session_id -> task
+        self.opinion_prediction_requests: Dict[str, asyncio.Task] = {}  # session_id -> task
         self.all_requests: Dict[str, RequestInfo] = {}  # request_id -> request_info
         
         # 统计信息
@@ -200,6 +201,113 @@ class LLMRequestManager:
         self.session_manager.clear_active_response_request(session_id)
         
         return cancelled_count
+
+    # ===============================
+    # 意见预测请求管理
+    # ===============================
+
+    async def generate_opinion_prediction(
+        self, 
+        session_id: str,
+        last_message_content: str
+    ) -> Optional[str]:
+        """
+        生成意见预测
+        
+        Args:
+            session_id: 会话ID
+            last_message_content: 用户最后选择的消息内容
+            
+        Returns:
+            Optional[str]: 请求ID，如果创建失败则返回None
+        """
+        try:
+            # 意见预测请求优先级较低，不取消其他请求
+            # 但新的预测请求会取消旧的预测请求
+            await self.cancel_opinion_prediction_requests(session_id)
+
+            request_id = str(uuid.uuid4())
+            request_info = RequestInfo(
+                id=request_id,
+                session_id=session_id,
+                request_type=RequestType.OPINION_PREDICTION,
+                status=RequestStatus.PENDING
+            )
+            self.all_requests[request_id] = request_info
+            self.stats["total_requests"] += 1
+
+            task = asyncio.create_task(
+                self._execute_opinion_prediction(session_id, request_id, last_message_content)
+            )
+            self.opinion_prediction_requests[session_id] = task
+            
+            logger.info(f"创建意见预测请求: {session_id}, 请求ID: {request_id}")
+            return request_id
+
+        except Exception as e:
+            logger.error(f"创建意见预测请求失败 {session_id}: {e}")
+            return None
+
+    async def _execute_opinion_prediction(
+        self, 
+        session_id: str, 
+        request_id: str,
+        last_message_content: str
+    ):
+        """执行意见预测"""
+        try:
+            self._update_request_status(request_id, RequestStatus.RUNNING)
+            
+            session = self.session_manager.get_session(session_id)
+            if not session:
+                raise ValueError(f"会话不存在: {session_id}")
+
+            prediction = await self.llm_service.generate_opinion_prediction(
+                session=session, 
+                last_message_content=last_message_content
+            )
+
+            if request_id not in self.all_requests or \
+               self.all_requests[request_id].status == RequestStatus.CANCELLED:
+                logger.info(f"意见预测请求已取消: {request_id}")
+                return
+
+            if self.websocket_handler and prediction:
+                await self.websocket_handler.send_opinion_prediction(
+                    session_id, prediction, request_id
+                )
+            
+            self._update_request_status(request_id, RequestStatus.COMPLETED)
+            self.stats["completed_requests"] += 1
+            logger.info(f"意见预测完成: {request_id}")
+
+        except asyncio.CancelledError:
+            self._update_request_status(request_id, RequestStatus.CANCELLED)
+            self.stats["cancelled_requests"] += 1
+            logger.info(f"意见预测请求被取消: {request_id}")
+
+        except Exception as e:
+            self._update_request_status(request_id, RequestStatus.FAILED, str(e))
+            self.stats["failed_requests"] += 1
+            logger.error(f"意见预测失败 {request_id}: {e}")
+
+        finally:
+            if session_id in self.opinion_prediction_requests:
+                del self.opinion_prediction_requests[session_id]
+
+    async def cancel_opinion_prediction_requests(self, session_id: str) -> int:
+        """
+        取消指定会话的意见预测请求
+        """
+        cancelled_count = 0
+        if session_id in self.opinion_prediction_requests:
+            task = self.opinion_prediction_requests[session_id]
+            if not task.done():
+                task.cancel()
+                cancelled_count += 1
+                logger.info(f"取消意见预测请求: {session_id}")
+            del self.opinion_prediction_requests[session_id]
+        return cancelled_count
     
     # ===============================
     # 统一请求管理
@@ -219,6 +327,9 @@ class LLMRequestManager:
         
         # 取消回答生成请求
         total_cancelled += await self.cancel_response_requests(session_id)
+        
+        # 取消意见预测请求
+        total_cancelled += await self.cancel_opinion_prediction_requests(session_id)
         
         logger.info(f"取消会话所有请求: {session_id}, 共取消 {total_cancelled} 个请求")
         
@@ -303,6 +414,7 @@ class LLMRequestManager:
             Dict[str, Any]: 统计信息
         """
         active_response_count = len(self.response_requests)
+        active_opinion_prediction_count = len(self.opinion_prediction_requests)
         
         return {
             "total_requests": self.stats["total_requests"],
@@ -310,7 +422,8 @@ class LLMRequestManager:
             "cancelled_requests": self.stats["cancelled_requests"],
             "failed_requests": self.stats["failed_requests"],
             "active_response_requests": active_response_count,
-            "total_active_requests": active_response_count,
+            "active_opinion_prediction_requests": active_opinion_prediction_count,
+            "total_active_requests": active_response_count + active_opinion_prediction_count,
             "success_rate": (
                 self.stats["completed_requests"] / self.stats["total_requests"]
                 if self.stats["total_requests"] > 0 else 0
@@ -327,7 +440,7 @@ class LLMRequestManager:
         Returns:
             bool: 是否忙碌
         """
-        return session_id in self.response_requests
+        return session_id in self.response_requests or session_id in self.opinion_prediction_requests
     
     def get_session_request_status(self, session_id: str) -> Dict[str, Any]:
         """

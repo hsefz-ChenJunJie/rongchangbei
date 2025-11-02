@@ -143,6 +143,18 @@ class LLMResponseData(BaseModel):
     request_id: Optional[str] = Field(default=None, description="用于请求追踪")
 
 
+class OpinionPrediction(BaseModel):
+    """意见预测结果"""
+    tendency: str = Field(description="意见倾向")
+    mood: str = Field(description="心情")
+    tone: str = Field(description="语气")
+
+
+class OpinionPredictionData(BaseModel):
+    """意见预测响应事件数据"""
+    session_id: str = Field(description="目标会话标识")
+    prediction: OpinionPrediction = Field(description="预测结果")
+    request_id: Optional[str] = Field(default=None, description="用于请求追踪")
 
 
 class StatusUpdateData(BaseModel):
@@ -251,6 +263,11 @@ class LLMResponseEvent(BaseModel):
     data: LLMResponseData
 
 
+class OpinionPredictionEvent(BaseModel):
+    type: Literal["opinion_prediction_response"] = "opinion_prediction_response"
+    data: OpinionPredictionData
+
+
 class StatusUpdateEvent(BaseModel):
     type: Literal["status_update"] = "status_update"
     data: StatusUpdateData
@@ -291,6 +308,7 @@ OutgoingEvent = Union[
     SessionCreatedEvent,
     MessageRecordedEvent,
     LLMResponseEvent,
+    OpinionPredictionEvent,
     StatusUpdateEvent,
     ErrorEvent,
     SessionRestoredEvent,
@@ -325,6 +343,7 @@ class EventTypes:
     SESSION_CREATED = "session_created"
     MESSAGE_RECORDED = "message_recorded"
     LLM_RESPONSE = "llm_response"
+    OPINION_PREDICTION_RESPONSE = "opinion_prediction_response"
     STATUS_UPDATE = "status_update"
     ERROR = "error"
     SESSION_RESTORED = "session_restored"

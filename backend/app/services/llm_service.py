@@ -21,6 +21,7 @@ class LLMService:
         self.is_initialized = False
         self.client = None
         self.response_system_prompt = ""
+        self.opinion_system_prompt = ""
         
     async def initialize(self) -> bool:
         """
@@ -68,6 +69,16 @@ class LLMService:
             else:
                 logger.warning(f"主系统提示词文件不存在: {llm_prompt_path}，使用默认回答生成提示词")
                 self.response_system_prompt = """你是一个专业的沟通助手。请根据对话内容生成多个不同风格的回答建议，包括简洁直接、礼貌委婉、幽默友好等不同风格。每个建议都应该完整、自然、适合对话语境。返回JSON格式。"""
+
+            # 为“意见预测”任务加载提示词
+            opinion_prompt_path = os.path.join(os.getcwd(), "backend", "opinion_prediction_prompt.md")
+            if os.path.exists(opinion_prompt_path):
+                with open(opinion_prompt_path, 'r', encoding='utf-8') as f:
+                    self.opinion_system_prompt = f.read().strip()
+                logger.info("意见预测提示词 (opinion_prediction_prompt.md) 加载成功")
+            else:
+                logger.warning(f"意见预测提示词文件不存在: {opinion_prompt_path}，使用默认意见预测提示词")
+                self.opinion_system_prompt = """分析对话内容，预测用户下一步的意见倾向、心情和语气。返回JSON格式。"""
 
             logger.info("系统提示词加载和配置完成")
 
@@ -200,8 +211,77 @@ class LLMService:
         parts.append(f"\n## 任务要求\n请基于以上对话内容，生成{count}个自然、直接、适合真实对话场景的回复建议。\n\n重要: 每个回复都应该是完整的、可以直接使用的对话内容，不要添加任何编号、标签或前缀（如\"建议一\"、\"回复:\"等）。回复应该就像是真人在对话中会说的话。")
         
         return "\n".join(parts)
+
+    async def generate_opinion_prediction(
+        self, 
+        session: Session,
+        last_message_content: str
+    ) -> Optional[Dict[str, str]]:
+        """
+        生成意见预测
+        
+        Args:
+            session: 会话对象
+            last_message_content: 用户最后选择的消息内容
+            
+        Returns:
+            Optional[Dict[str, str]]: 包含tendency, mood, tone的预测字典
+        """
+        if not self.is_initialized:
+            logger.error("LLM服务未初始化")
+            return None
+        
+        try:
+            prompt = self._format_opinion_prediction_prompt(session, last_message_content)
+            
+            response = await self._call_llm(
+                prompt,
+                response_format="opinion_prediction",
+                max_tokens=200
+            )
+            
+            if response and "prediction" in response:
+                prediction = response["prediction"]
+                logger.info(f"意见预测完成: {prediction}")
+                return prediction
+            else:
+                logger.warning("LLM返回格式异常 (意见预测)")
+                return None
+                
+        except Exception as e:
+            logger.error(f"生成意见预测失败: {e}")
+            return None
+
+    def _format_opinion_prediction_prompt(
+        self, 
+        session: Session, 
+        last_message_content: str
+    ) -> str:
+        """
+        格式化意见预测提示词
+        
+        Args:
+            session: 会话对象
+            last_message_content: 用户最后选择的消息内容
+
+        Returns:
+            str: 格式化的提示词
+        """
+        parts = [self.opinion_system_prompt]
+        
+        if session.messages:
+            parts.append("\n## 对话内容")
+            for message in session.messages:
+                parts.append(f"{message.sender}: {message.content}")
+
+        parts.append("\n## 用户最后选择的回答")
+        parts.append(last_message_content)
+        
+        parts.append("\n## 任务要求\n请基于以上信息，分析并预测用户下一次发言可能的心态。")
+        
+        return "\n".join(parts)
     
-        async def _call_llm(self, prompt: str, response_format: str = "auto", max_tokens: int = None, count: int = 3) -> Optional[Dict[str, Any]]:
+    async def _call_llm(self, prompt: str, response_format: str = "auto", max_tokens: int = None, count: int = 3) -> Optional[Dict[str, Any]]:
     
             """
     
@@ -381,6 +461,28 @@ class OpenRouterLLMService(LLMService):
                                 }
                             },
                             "required": ["suggestions"]
+                        }
+                    }
+                }
+            elif response_format == "opinion_prediction":
+                format_schema = {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "opinion_prediction",
+                        "schema": {
+                            "type": "object",
+                            "properties": {
+                                "prediction": {
+                                    "type": "object",
+                                    "properties": {
+                                        "tendency": {"type": "string", "description": "意见倾向"},
+                                        "mood": {"type": "string", "description": "心情"},
+                                        "tone": {"type": "string", "description": "语气"}
+                                    },
+                                    "required": ["tendency", "mood", "tone"]
+                                }
+                            },
+                            "required": ["prediction"]
                         }
                     }
                 }
