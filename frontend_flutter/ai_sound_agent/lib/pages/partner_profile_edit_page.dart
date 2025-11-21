@@ -45,8 +45,165 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
   String? _voiceprintPath;
   bool _isRecordingVoiceprint = false;
 
+  // 界面控制
   bool _isLoading = false;
   bool _isEditing = false;
+  bool _showForm = false; // 控制表格显示/隐藏
+  final _finalTextController = TextEditingController(); // 最终文本显示
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.description, color: Theme.of(context).primaryColor),
+                const SizedBox(width: 8),
+                const Text(
+                  '对话人描述',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Text(
+                  '(最终发送给AI)',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.blue,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Text(
+                _finalTextController.text,
+                style: const TextStyle(
+                  fontSize: 16,
+                  height: 1.5,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '上面的内容将直接发送给AI，帮助生成更贴合的对话建议',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }) : super(
+          title: '档案管理',
+          showBottomNav: false,
+          showBreadcrumb: true,
+          showSettingsFab: false,
+        );
+
+  @override
+  PartnerProfileEditPageState createState() => PartnerProfileEditPageState();
+}
+
+class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> {
+  // 基础信息
+  final _nameController = TextEditingController();
+  final _customRelationshipController = TextEditingController();
+  String? _selectedRelationship;
+  String? _selectedGender;
+  final _ageController = TextEditingController();
+
+  // 扩展信息
+  final _tabooTopicsController = TextEditingController();
+  final _sharedExperiencesController = TextEditingController();
+  Set<String> _selectedPersonalityTags = {};
+
+  // 声纹相关
+  bool _hasVoiceprint = false;
+  String? _voiceprintPath;
+  bool _isRecordingVoiceprint = false;
+
+  // 界面控制
+  bool _isLoading = false;
+  bool _isEditing = false;
+  bool _showForm = false; // 控制表格显示/隐藏
+  final _finalTextController = TextEditingController(); // 最终文本显示
+
+  /// 构建主要的自然语言文本显示
+  Widget _buildMainTextDisplay() {
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.description, color: Theme.of(context).primaryColor),
+                const SizedBox(width: 8),
+                const Text(
+                  '对话人描述',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Text(
+                  '(最终发送给AI)',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.blue,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.grey.shade300),
+              ),
+              child: Text(
+                _finalTextController.text,
+                style: const TextStyle(
+                  fontSize: 16,
+                  height: 1.5,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '上面的内容将直接发送给AI，帮助生成更贴合的对话建议',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade600,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -55,6 +212,17 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
     if (_isEditing) {
       _loadExistingData();
     }
+    
+    // 添加监听器，实时更新最终文本
+    _nameController.addListener(_updateFinalText);
+    _ageController.addListener(_updateFinalText);
+    _selectedRelationship = null;
+    _selectedGender = null;
+    _tabooTopicsController.addListener(_updateFinalText);
+    _sharedExperiencesController.addListener(_updateFinalText);
+    
+    // 初始化最终文本
+    _updateFinalText();
   }
 
   @override
@@ -64,6 +232,7 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
     _ageController.dispose();
     _tabooTopicsController.dispose();
     _sharedExperiencesController.dispose();
+    _finalTextController.dispose();
     super.dispose();
   }
 
@@ -79,6 +248,65 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
     _selectedPersonalityTags = Set.from(profile.personalityTags);
     _hasVoiceprint = profile.voiceprintPath != null;
     _voiceprintPath = profile.voiceprintPath;
+    
+    // 加载现有数据后更新最终文本
+    _updateFinalText();
+  }
+
+  /// 更新最终自然语言文本
+  void _updateFinalText() {
+    final parts = <String>[];
+    
+    // 姓名
+    if (_nameController.text.trim().isNotEmpty) {
+      parts.add('名字叫${_nameController.text.trim()}');
+    }
+    
+    // 年龄
+    if (_ageController.text.trim().isNotEmpty) {
+      parts.add('年龄为${_ageController.text.trim()}岁');
+    }
+    
+    // 关系
+    if (_selectedRelationship != null) {
+      if (_selectedRelationship == '其他' && _customRelationshipController.text.trim().isNotEmpty) {
+        parts.add('是我的${_customRelationshipController.text.trim()}');
+      } else if (_selectedRelationship != '其他') {
+        parts.add('是我的$_selectedRelationship');
+      }
+    }
+    
+    // 性别
+    if (_selectedGender != null) {
+      parts.add('性别为$_selectedGender');
+    }
+    
+    // 性格标签
+    if (_selectedPersonalityTags.isNotEmpty) {
+      parts.add('性格${_selectedPersonalityTags.join('、')}');
+    }
+    
+    // 禁忌话题
+    if (_tabooTopicsController.text.trim().isNotEmpty) {
+      parts.add('不喜欢谈论${_tabooTopicsController.text.trim()}');
+    }
+    
+    // 共同经历
+    if (_sharedExperiencesController.text.trim().isNotEmpty) {
+      parts.add(_sharedExperiencesController.text.trim());
+    }
+    
+    // 组合成自然语言文本
+    String finalText;
+    if (parts.isEmpty) {
+      finalText = '请输入对话人信息...';
+    } else {
+      finalText = parts.join('，') + '。';
+    }
+    
+    setState(() {
+      _finalTextController.text = finalText;
+    });
   }
 
   Future<void> _saveProfile() async {
@@ -110,9 +338,7 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
           tabooTopics: _tabooTopicsController.text.trim().isNotEmpty
               ? _tabooTopicsController.text.trim()
               : null,
-          sharedExperiences: _sharedExperiencesController.text.trim().isNotEmpty
-              ? _sharedExperiencesController.text.trim()
-              : null,
+          sharedExperiences: _finalTextController.text, // 保存整合后的自然语言文本
           voiceprintPath: _voiceprintPath,
         );
         
@@ -150,9 +376,7 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
           tabooTopics: _tabooTopicsController.text.trim().isNotEmpty
               ? _tabooTopicsController.text.trim()
               : null,
-          sharedExperiences: _sharedExperiencesController.text.trim().isNotEmpty
-              ? _sharedExperiencesController.text.trim()
-              : null,
+          sharedExperiences: _finalTextController.text, // 保存整合后的自然语言文本
           voiceprintPath: _voiceprintPath,
         );
       }
@@ -249,11 +473,34 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildBasicInfoSection(),
-              const SizedBox(height: 24),
-              _buildVoiceprintSection(),
-              const SizedBox(height: 24),
-              _buildExtendedInfoSection(),
+              // 主要的自然语言文本框
+              _buildMainTextDisplay(),
+              const SizedBox(height: 16),
+              
+              // 切换表单显示的按钮
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _showForm = !_showForm;
+                    });
+                  },
+                  icon: Icon(_showForm ? Icons.visibility_off : Icons.edit),
+                  label: Text(_showForm ? '隐藏编辑表单' : '显示编辑表单'),
+                ),
+              ),
+              
+              // 表单部分（可折叠）
+              if (_showForm) ...[
+                const SizedBox(height: 24),
+                _buildBasicInfoSection(),
+                const SizedBox(height: 24),
+                _buildVoiceprintSection(),
+                const SizedBox(height: 24),
+                _buildExtendedInfoSection(),
+              ],
+              
               const SizedBox(height: 32),
               _buildActionButtons(),
             ],
@@ -310,6 +557,7 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
                 if (value.isNotEmpty && _nameController.text.isNotEmpty) {
                   // TODO: 实现拼音联想
                 }
+                _updateFinalText(); // 实时更新最终文本
               },
             ),
             const SizedBox(height: 16),
@@ -335,6 +583,7 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
                         _customRelationshipController.clear();
                       }
                     });
+                    _updateFinalText(); // 实时更新最终文本
                   },
                 );
               }).toList(),
@@ -385,6 +634,7 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
                       setState(() {
                         _selectedGender = value;
                       });
+                      _updateFinalText(); // 实时更新最终文本
                     },
                     hint: const Text('选择性别'),
                   ),
@@ -532,6 +782,7 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
                         _selectedPersonalityTags.remove(tag);
                       }
                     });
+                    _updateFinalText(); // 实时更新最终文本
                   },
                 );
               }).toList(),
@@ -636,5 +887,8 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
         duration: Duration(seconds: 1),
       ),
     );
+    
+    // 更新最终文本
+    _updateFinalText();
   }
 }
