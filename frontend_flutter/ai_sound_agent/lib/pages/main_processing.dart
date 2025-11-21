@@ -298,7 +298,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       if (mounted) {
         setState(() {
           _isLoading = true;
-          _currentStep = LoadingStep.loading;
+          _currentStep = LoadingStep.sendingStartRequest;
         });
       }
       
