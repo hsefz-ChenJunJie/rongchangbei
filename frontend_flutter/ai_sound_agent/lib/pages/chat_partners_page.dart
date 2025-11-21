@@ -9,6 +9,8 @@ import '../widgets/shared/add_partner_dialog.dart';
 import '../services/theme_manager.dart';
 import '../pages/main_processing.dart'; // 添加MainProcessingPage的导入
 import '../app/route.dart'; // 添加路由导入
+import '../services/profile_manager.dart';
+import '../pages/partner_profile_edit_page.dart';
 
 class ChatPartnersPage extends BasePage {
   const ChatPartnersPage({super.key})
@@ -532,6 +534,11 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
               onPressed: () => _startChatWithPartner(partner),
               tooltip: '开始对话',
             ),
+            IconButton(
+              icon: const Icon(Icons.edit_note, color: Colors.blue),
+              onPressed: () => _editPartnerProfile(partner),
+              tooltip: '编辑档案',
+            ),
             PopupMenuButton(
               itemBuilder: (context) => [
                 const PopupMenuItem(
@@ -582,6 +589,38 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _editPartnerProfile(ChatPartner partner) async {
+    try {
+      final profileManager = await ProfileManager.getInstance();
+      final existingProfile = profileManager.getProfileByPartnerId(partner.id);
+      
+      // 导航到档案编辑页面
+      final result = await Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PartnerProfileEditPage(
+            existingProfile: existingProfile,
+            partnerId: partner.id,
+          ),
+        ),
+      );
+      
+      // 如果编辑成功，刷新页面
+      if (result != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('档案已更新')),
+        );
+      }
+    } catch (e) {
+      debugPrint('编辑档案失败: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('编辑档案失败: $e')),
+        );
+      }
+    }
   }
 
   void _navigateToProfileManagement() {

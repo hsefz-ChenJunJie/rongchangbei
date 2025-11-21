@@ -556,6 +556,19 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
               placeholder: '例如：一起参加过婚礼、旅行等',
               maxLines: 3,
             ),
+            
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _generateExampleText,
+                icon: const Icon(Icons.auto_awesome, size: 18),
+                label: const Text('生成示例文本'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -585,6 +598,43 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
           ),
         ),
       ],
+    );
+  }
+
+  void _generateExampleText() {
+    // 示例数据集合
+    final names = ['小明', '小红', '小李', '小王', '小张', '小刘', '小陈', '小林'];
+    final cities = ['四川省成都市', '北京市', '上海市', '广东省广州市', '浙江省杭州市', '江苏省南京市', '湖北省武汉市', '陕西省西安市'];
+    const zodiacSigns = ['水瓶座', '双鱼座', '白羊座', '金牛座', '双子座', '巨蟹座', '狮子座', '处女座', '天秤座', '天蝎座', '射手座', '摩羯座'];
+    final hobbies = ['美食', '旅游', '摄影', '音乐', '电影', '阅读', '运动', '绘画', '手工', '园艺'];
+    final personalities = ['开朗', '内向', '幽默', '认真', '温柔', '直率', '细心', '大方'];
+    
+    // 随机选择数据
+    final random = DateTime.now().millisecond;
+    final name = names[random % names.length];
+    final city = cities[random % cities.length];
+    final zodiac = zodiacSigns[random % zodiacSigns.length];
+    final hobbyCount = 2 + (random % 3); // 2-4个爱好
+    final selectedHobbies = <String>[];
+    final hobbyPool = List.from(hobbies)..shuffle();
+    for (int i = 0; i < hobbyCount && i < hobbyPool.length; i++) {
+      selectedHobbies.add(hobbyPool[i]);
+    }
+    
+    // 生成示例文本
+    final exampleText = '名字叫做$name，来自$city，$zodiac。喜欢${selectedHobbies.join('、')}……';
+    
+    // 更新到共同经历输入框
+    setState(() {
+      _sharedExperiencesController.text = exampleText;
+    });
+    
+    // 显示提示
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('已生成示例文本'),
+        duration: Duration(seconds: 1),
+      ),
     );
   }
 }

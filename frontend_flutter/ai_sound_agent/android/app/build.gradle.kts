@@ -39,7 +39,7 @@ android {
 
     defaultConfig {
         applicationId = "com.efzzz.idialogue"
-        minSdk = 23
+        minSdk = flutter.minSdkVersion
         targetSdk = 36
         versionCode = 11
         versionName = "1.0.0"
