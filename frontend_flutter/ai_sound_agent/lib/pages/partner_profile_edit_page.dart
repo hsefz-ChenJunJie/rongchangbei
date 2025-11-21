@@ -50,98 +50,6 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
   bool _isEditing = false;
   bool _showForm = false; // 控制表格显示/隐藏
   final _finalTextController = TextEditingController(); // 最终文本显示
-    return Card(
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.description, color: Theme.of(context).primaryColor),
-                const SizedBox(width: 8),
-                const Text(
-                  '对话人描述',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                const Text(
-                  '(最终发送给AI)',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.blue,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: Text(
-                _finalTextController.text,
-                style: const TextStyle(
-                  fontSize: 16,
-                  height: 1.5,
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              '上面的内容将直接发送给AI，帮助生成更贴合的对话建议',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey,
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }) : super(
-          title: '档案管理',
-          showBottomNav: false,
-          showBreadcrumb: true,
-          showSettingsFab: false,
-        );
-
-  @override
-  PartnerProfileEditPageState createState() => PartnerProfileEditPageState();
-}
-
-class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> {
-  // 基础信息
-  final _nameController = TextEditingController();
-  final _customRelationshipController = TextEditingController();
-  String? _selectedRelationship;
-  String? _selectedGender;
-  final _ageController = TextEditingController();
-
-  // 扩展信息
-  final _tabooTopicsController = TextEditingController();
-  final _sharedExperiencesController = TextEditingController();
-  Set<String> _selectedPersonalityTags = {};
-
-  // 声纹相关
-  bool _hasVoiceprint = false;
-  String? _voiceprintPath;
-  bool _isRecordingVoiceprint = false;
-
-  // 界面控制
-  bool _isLoading = false;
-  bool _isEditing = false;
-  bool _showForm = false; // 控制表格显示/隐藏
-  final _finalTextController = TextEditingController(); // 最终文本显示
 
   /// 构建主要的自然语言文本显示
   Widget _buildMainTextDisplay() {
@@ -309,20 +217,364 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
     });
   }
 
-  Future<void> _saveProfile() async {
-    if (!_validateBasicInfo()) {
+  /// 构建基础信息部分
+  Widget _buildBasicInfoSection() {
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '基础信息',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            // 姓名输入
+            BaseLineInput(
+                controller: _nameController,
+                label: '姓名',
+                placeholder: '请输入对话人姓名',
+                onChanged: (value) {
+                  _updateFinalText(); // 实时更新最终文本
+                },
+              ),
+            const SizedBox(height: 16),
+            
+            // 关系选择
+            const Text('关系', style: TextStyle(fontSize: 16)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: ['家人', '朋友', '同事', '恋人', '其他'].map((relationship) {
+                final isSelected = _selectedRelationship == relationship;
+                return ChoiceChip(
+                  label: Text(relationship),
+                  selected: isSelected,
+                  onSelected: (selected) {
+                    setState(() {
+                      _selectedRelationship = selected ? relationship : null;
+                    });
+                    _updateFinalText(); // 实时更新最终文本
+                  },
+                );
+              }).toList(),
+            ),
+            if (_selectedRelationship == '其他') ...[
+              const SizedBox(height: 8),
+              TextField(
+                controller: _customRelationshipController,
+                decoration: const InputDecoration(
+                  labelText: '自定义关系',
+                  border: OutlineInputBorder(),
+                ),
+                onChanged: (value) {
+                  _updateFinalText(); // 实时更新最终文本
+                },
+              ),
+            ],
+            const SizedBox(height: 16),
+            
+            // 年龄输入
+            BaseLineInput(
+              controller: _ageController,
+              label: '年龄',
+              placeholder: '请输入年龄',
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              onChanged: (value) {
+                _updateFinalText(); // 实时更新最终文本
+              },
+            ),
+            const SizedBox(height: 16),
+            
+            // 性别选择
+            const Text('性别', style: TextStyle(fontSize: 16)),
+            const SizedBox(height: 8),
+            Row(
+              children: ['男', '女', '保密'].map((gender) {
+                final isSelected = _selectedGender == gender;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text(gender),
+                    selected: isSelected,
+                    onSelected: (selected) {
+                      setState(() {
+                        _selectedGender = selected ? gender : null;
+                      });
+                      _updateFinalText(); // 实时更新最终文本
+                    },
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 构建声纹部分
+  Widget _buildVoiceprintSection() {
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '声纹信息',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            if (_hasVoiceprint) ...[
+              Row(
+                children: [
+                  Icon(Icons.check_circle, color: Colors.green[700]),
+                  const SizedBox(width: 8),
+                  const Text('已录制声纹'),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () {
+                      setState(() {
+                        _hasVoiceprint = false;
+                        _voiceprintPath = null;
+                      });
+                    },
+                    child: const Text('删除'),
+                  ),
+                ],
+              ),
+            ] else ...[
+              Row(
+                children: [
+                  Icon(Icons.mic_off, color: Colors.grey[600]),
+                  const SizedBox(width: 8),
+                  const Text('未录制声纹'),
+                  const Spacer(),
+                  ElevatedButton.icon(
+                    onPressed: _isRecordingVoiceprint ? null : _recordVoiceprint,
+                    icon: const Icon(Icons.mic),
+                    label: Text(_isRecordingVoiceprint ? '录制中...' : '录制声纹'),
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 构建扩展信息部分
+  Widget _buildExtendedInfoSection() {
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '扩展信息',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            // 性格标签选择
+            const Text('性格标签', style: TextStyle(fontSize: 16)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: ['开朗', '内向', '幽默', '严肃', '温柔', '直率', '细心', '大方'].map((personality) {
+                final isSelected = _selectedPersonalityTags.contains(personality);
+                return FilterChip(
+                  label: Text(personality),
+                  selected: isSelected,
+                  onSelected: (selected) {
+                    setState(() {
+                      if (selected) {
+                        _selectedPersonalityTags.add(personality);
+                      } else {
+                        _selectedPersonalityTags.remove(personality);
+                      }
+                    });
+                    _updateFinalText(); // 实时更新最终文本
+                  },
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+            
+            // 禁忌话题输入
+            BaseLineInput(
+              controller: _tabooTopicsController,
+              label: '禁忌话题',
+              placeholder: '请输入对话中应避免的话题',
+              maxLines: 2,
+              onChanged: (value) {
+                _updateFinalText(); // 实时更新最终文本
+              },
+            ),
+            const SizedBox(height: 16),
+            
+            // 共同经历输入
+            BaseLineInput(
+              controller: _sharedExperiencesController,
+              label: '共同经历',
+              placeholder: '请输入与对话人的共同经历',
+              maxLines: 3,
+              onChanged: (value) {
+                _updateFinalText(); // 实时更新最终文本
+              },
+            ),
+            const SizedBox(height: 16),
+            
+            // 生成示例文本按钮
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _generateExampleText,
+                icon: const Icon(Icons.auto_awesome),
+                label: const Text('生成示例文本'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 构建操作按钮
+  Widget _buildActionButtons() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('取消'),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: ElevatedButton(
+              onPressed: _isLoading ? null : _saveProfile,
+              child: _isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : Text(_isEditing ? '保存' : '创建'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 录制声纹
+  void _recordVoiceprint() async {
+    setState(() {
+      _isRecordingVoiceprint = true;
+    });
+    
+    try {
+      // 模拟录制过程
+      await Future.delayed(const Duration(seconds: 3));
+      
+      setState(() {
+        _hasVoiceprint = true;
+        _voiceprintPath = 'voiceprint_${DateTime.now().millisecondsSinceEpoch}.wav';
+        _isRecordingVoiceprint = false;
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('声纹录制成功')),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isRecordingVoiceprint = false;
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('录制失败: $e')),
+        );
+      }
+    }
+  }
+
+  /// 生成示例文本
+  void _generateExampleText() {
+    final exampleNames = ['小明', '小红', '小李', '小王', '小张'];
+    final exampleCities = ['北京', '上海', '广州', '深圳', '杭州'];
+    final exampleZodiacs = ['白羊座', '金牛座', '双子座', '巨蟹座', '狮子座'];
+    final exampleHobbies = ['看书', '听音乐', '运动', '旅行', '摄影'];
+    
+    final randomName = exampleNames[DateTime.now().millisecond % exampleNames.length];
+    final randomCity = exampleCities[DateTime.now().millisecond % exampleCities.length];
+    final randomZodiac = exampleZodiacs[DateTime.now().millisecond % exampleZodiacs.length];
+    final randomHobby = exampleHobbies[DateTime.now().millisecond % exampleHobbies.length];
+    
+    final exampleText = '名字叫$randomName，来自$randomCity，是$randomZodiac，喜欢$randomHobby。性格开朗、幽默，不喜欢谈论工作压力，我们曾一起旅行、看电影。';
+    
+    setState(() {
+      _sharedExperiencesController.text = exampleText;
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('已生成示例文本')),
+    );
+    
+    // 更新最终文本
+    _updateFinalText();
+  }
+
+  /// 保存档案
+  void _saveProfile() async {
+    if (_nameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入姓名')),
+      );
       return;
     }
-
-    setState(() => _isLoading = true);
-
+    
+    if (_selectedRelationship == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请选择关系')),
+      );
+      return;
+    }
+    
+    setState(() {
+      _isLoading = true;
+    });
+    
     try {
       final profileManager = await ProfileManager.getInstance();
-      
-      PartnerProfile? profile;
+      PartnerProfile profile;
       
       if (_isEditing) {
-        // 更新现有档案
         final existing = widget.existingProfile!;
         profile = existing.copyWith(
           name: _nameController.text.trim(),
@@ -344,25 +596,14 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
         
         await profileManager.updateProfile(profile);
       } else {
-        // 创建新档案
-        String? targetPartnerId = widget.partnerId;
-        
-        // 如果没有指定partnerId，需要创建对应的ChatPartner
+        final partnerManager = await PartnerManager.getInstance();
+        final targetPartnerId = widget.partnerId ?? partnerManager.getAllPartners().firstOrNull?.id;
         if (targetPartnerId == null) {
-          final partnerManager = await PartnerManager.getInstance();
-          final newPartner = await partnerManager.createPartner(
-            name: _nameController.text.trim(),
-          );
-          
-          if (newPartner == null) {
-            throw Exception('创建对话人失败');
-          }
-          
-          targetPartnerId = newPartner.id;
+          throw Exception('无法获取当前伙伴ID');
         }
         
-        profile = await profileManager.createProfile(
-          partnerId: targetPartnerId!,
+        final newProfile = await profileManager.createProfile(
+          partnerId: targetPartnerId,
           name: _nameController.text.trim(),
           relationship: _selectedRelationship!,
           customRelationship: _selectedRelationship == '其他' 
@@ -379,19 +620,15 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
           sharedExperiences: _finalTextController.text, // 保存整合后的自然语言文本
           voiceprintPath: _voiceprintPath,
         );
-      }
-
-      if (profile != null) {
-        if (mounted) {
-          Navigator.pop(context, profile);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(_isEditing ? '档案已更新' : '档案已创建'),
-            ),
-          );
+        
+        if (newProfile == null) {
+          throw Exception('创建档案失败');
         }
-      } else {
-        throw Exception('保存档案失败');
+        profile = newProfile;
+      }
+      
+      if (mounted) {
+        Navigator.of(context).pop(profile);
       }
     } catch (e) {
       if (mounted) {
@@ -401,71 +638,15 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
       }
     } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }
 
-  bool _validateBasicInfo() {
-    if (_nameController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入姓名')),
-      );
-      return false;
-    }
-
-    if (_selectedRelationship == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请选择关系')),
-      );
-      return false;
-    }
-
-    if (_selectedRelationship == '其他' && 
-        _customRelationshipController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入自定义关系')),
-      );
-      return false;
-    }
-
-    return true;
-  }
-
-  Future<void> _recordVoiceprint() async {
-    // TODO: 实现声纹录制功能
-    setState(() => _isRecordingVoiceprint = true);
-    
-    // 模拟录制过程
-    await Future.delayed(const Duration(seconds: 3));
-    
-    if (mounted) {
-      setState(() {
-        _isRecordingVoiceprint = false;
-        _hasVoiceprint = true;
-        _voiceprintPath = 'voiceprint_${DateTime.now().millisecondsSinceEpoch}.pcm';
-      });
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('声纹录制完成')),
-      );
-    }
-  }
-
-  void _removeVoiceprint() {
-    setState(() {
-      _hasVoiceprint = false;
-      _voiceprintPath = null;
-    });
-  }
-
   @override
   Widget buildContent(BuildContext context) {
-    return buildBody(context);
-  }
-
-  @override
-  Widget buildBody(BuildContext context) {
     return Stack(
       children: [
         SingleChildScrollView(
@@ -473,11 +654,11 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 主要的自然语言文本框
+              // 主要的自然语言文本显示
               _buildMainTextDisplay(),
               const SizedBox(height: 16),
               
-              // 切换表单显示的按钮
+              // 切换按钮
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
@@ -486,22 +667,23 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
                       _showForm = !_showForm;
                     });
                   },
-                  icon: Icon(_showForm ? Icons.visibility_off : Icons.edit),
+                  icon: Icon(_showForm ? Icons.visibility_off : Icons.visibility),
                   label: Text(_showForm ? '隐藏编辑表单' : '显示编辑表单'),
                 ),
               ),
               
+              const SizedBox(height: 16),
+              
               // 表单部分（可折叠）
               if (_showForm) ...[
-                const SizedBox(height: 24),
                 _buildBasicInfoSection(),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 _buildVoiceprintSection(),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 _buildExtendedInfoSection(),
+                const SizedBox(height: 16),
               ],
               
-              const SizedBox(height: 32),
               _buildActionButtons(),
             ],
           ),
@@ -515,380 +697,5 @@ class PartnerProfileEditPageState extends BasePageState<PartnerProfileEditPage> 
           ),
       ],
     );
-  }
-
-  Widget _buildBasicInfoSection() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.person, color: Theme.of(context).primaryColor),
-                const SizedBox(width: 8),
-                const Text(
-                  '基础信息',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                const Text(
-                  '(必填)',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.red,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            
-            // 姓名输入
-            BaseLineInput(
-              controller: _nameController,
-              label: '姓名',
-              placeholder: '请输入对话人姓名',
-              onChanged: (value) {
-                // 拼音联想功能
-                if (value.isNotEmpty && _nameController.text.isNotEmpty) {
-                  // TODO: 实现拼音联想
-                }
-                _updateFinalText(); // 实时更新最终文本
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // 关系选择
-            const Text(
-              '关系',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: RelationshipTypes.options.map((relationship) {
-                final isSelected = _selectedRelationship == relationship;
-                return ChoiceChip(
-                  label: Text(relationship),
-                  selected: isSelected,
-                  onSelected: (selected) {
-                    setState(() {
-                      _selectedRelationship = selected ? relationship : null;
-                      if (relationship != '其他') {
-                        _customRelationshipController.clear();
-                      }
-                    });
-                    _updateFinalText(); // 实时更新最终文本
-                  },
-                );
-              }).toList(),
-            ),
-            
-            // 自定义关系输入
-            if (_selectedRelationship == '其他') ...[
-              const SizedBox(height: 16),
-              BaseLineInput(
-                controller: _customRelationshipController,
-                label: '自定义关系',
-                placeholder: '请输入具体关系',
-              ),
-            ],
-            
-            const SizedBox(height: 16),
-            
-            // 年龄和性别
-            Row(
-              children: [
-                Expanded(
-                  child: BaseLineInput(
-                    controller: _ageController,
-                    label: '年龄',
-                    placeholder: '选填',
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [
-                      FilteringTextInputFormatter.digitsOnly,
-                      LengthLimitingTextInputFormatter(3),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: DropdownButtonFormField<String>(
-                    value: _selectedGender,
-                    decoration: const InputDecoration(
-                      labelText: '性别',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: GenderOptions.options.map((gender) {
-                      return DropdownMenuItem(
-                        value: gender,
-                        child: Text(gender),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        _selectedGender = value;
-                      });
-                      _updateFinalText(); // 实时更新最终文本
-                    },
-                    hint: const Text('选择性别'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVoiceprintSection() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.mic, color: Theme.of(context).primaryColor),
-                const SizedBox(width: 8),
-                const Text(
-                  '声纹绑定',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                const Text(
-                  '(可选)',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              '录制对话人语音片段，用于后续声纹识别自动关联档案',
-              style: TextStyle(fontSize: 14, color: Colors.grey),
-            ),
-            const SizedBox(height: 16),
-            
-            if (!_hasVoiceprint) ...[
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _isRecordingVoiceprint ? null : _recordVoiceprint,
-                  icon: _isRecordingVoiceprint
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.mic),
-                  label: Text(_isRecordingVoiceprint ? '录制中...' : '录制声纹'),
-                ),
-              ),
-            ] else ...[
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.green.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.green.shade200),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.check_circle, color: Colors.green.shade600),
-                    const SizedBox(width: 8),
-                    const Text('声纹已录制'),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: _removeVoiceprint,
-                      child: const Text('删除'),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildExtendedInfoSection() {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.info_outline, color: Theme.of(context).primaryColor),
-                const SizedBox(width: 8),
-                const Text(
-                  '扩展信息',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                const Text(
-                  '(选填)',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            
-            // 性格标签
-            const Text(
-              '性格标签',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              '选择对话人的性格特征，有助于生成更合适的建议',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: PersonalityTags.options.map((tag) {
-                final isSelected = _selectedPersonalityTags.contains(tag);
-                return FilterChip(
-                  label: Text(tag),
-                  selected: isSelected,
-                  onSelected: (selected) {
-                    setState(() {
-                      if (selected) {
-                        _selectedPersonalityTags.add(tag);
-                      } else {
-                        _selectedPersonalityTags.remove(tag);
-                      }
-                    });
-                    _updateFinalText(); // 实时更新最终文本
-                  },
-                );
-              }).toList(),
-            ),
-            
-            const SizedBox(height: 16),
-            
-            // 禁忌话题
-            BaseLineInput(
-              controller: _tabooTopicsController,
-              label: '禁忌话题',
-              placeholder: '例如：不喜欢聊病情、工作等',
-              maxLines: 2,
-            ),
-            
-            const SizedBox(height: 16),
-            
-            // 共同经历
-            BaseLineInput(
-              controller: _sharedExperiencesController,
-              label: '共同经历',
-              placeholder: '例如：一起参加过婚礼、旅行等',
-              maxLines: 3,
-            ),
-            
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _generateExampleText,
-                icon: const Icon(Icons.auto_awesome, size: 18),
-                label: const Text('生成示例文本'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionButtons() {
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton(
-            onPressed: _isLoading ? null : () => Navigator.pop(context),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-            ),
-            child: const Text('取消'),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: ElevatedButton(
-            onPressed: _isLoading ? null : _saveProfile,
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-            ),
-            child: Text(_isEditing ? '更新' : '保存'),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void _generateExampleText() {
-    // 示例数据集合
-    final names = ['小明', '小红', '小李', '小王', '小张', '小刘', '小陈', '小林'];
-    final cities = ['四川省成都市', '北京市', '上海市', '广东省广州市', '浙江省杭州市', '江苏省南京市', '湖北省武汉市', '陕西省西安市'];
-    const zodiacSigns = ['水瓶座', '双鱼座', '白羊座', '金牛座', '双子座', '巨蟹座', '狮子座', '处女座', '天秤座', '天蝎座', '射手座', '摩羯座'];
-    final hobbies = ['美食', '旅游', '摄影', '音乐', '电影', '阅读', '运动', '绘画', '手工', '园艺'];
-    final personalities = ['开朗', '内向', '幽默', '认真', '温柔', '直率', '细心', '大方'];
-    
-    // 随机选择数据
-    final random = DateTime.now().millisecond;
-    final name = names[random % names.length];
-    final city = cities[random % cities.length];
-    final zodiac = zodiacSigns[random % zodiacSigns.length];
-    final hobbyCount = 2 + (random % 3); // 2-4个爱好
-    final selectedHobbies = <String>[];
-    final hobbyPool = List.from(hobbies)..shuffle();
-    for (int i = 0; i < hobbyCount && i < hobbyPool.length; i++) {
-      selectedHobbies.add(hobbyPool[i]);
-    }
-    
-    // 生成示例文本
-    final exampleText = '名字叫做$name，来自$city，$zodiac。喜欢${selectedHobbies.join('、')}……';
-    
-    // 更新到共同经历输入框
-    setState(() {
-      _sharedExperiencesController.text = exampleText;
-    });
-    
-    // 显示提示
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('已生成示例文本'),
-        duration: Duration(seconds: 1),
-      ),
-    );
-    
-    // 更新最终文本
-    _updateFinalText();
   }
 }
