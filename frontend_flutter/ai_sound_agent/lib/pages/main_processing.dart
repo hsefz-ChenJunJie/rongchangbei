@@ -294,6 +294,14 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       _webSocketChannel!.sink.add(json.encode(resumeMessage));
       debugPrint('已发送会话恢复消息: ${json.encode(resumeMessage)}');
       
+      // 显示恢复中状态
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+          _currentStep = LoadingStep.loading;
+        });
+      }
+      
     } catch (e) {
       debugPrint('WebSocket会话恢复失败: $e');
       rethrow;
@@ -491,10 +499,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         };
       }).toList();
 
-      // 生成基于档案的提示
-      final profilePrompt = _generateProfileBasedPrompt(dialoguePackage.scenarioDescription);
-      
-      // 构建并发送对话启动数据包（包含历史消息和档案信息）
+      // 构建并发送对话启动数据包（包含历史消息）
       final startMessage = {
         'type': 'conversation_start',
         'data': {
@@ -502,7 +507,6 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
           'scenario_description': dialoguePackage.scenarioDescription,
           'response_count': dialoguePackage.responseCount.clamp(1, 5), // 确保在1-5之间
           'history_messages': formattedHistoryMessages,
-          'profile_prompt': profilePrompt, // 新增：档案提示信息
         }
       };
 
@@ -613,6 +617,53 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
             debugPrint('对话组件状态为null，无法添加消息');
           }
         }
+      } else if (data['type'] == 'session_restored') {
+        // 处理会话恢复消息
+        final receivedSessionId = data['data']['session_id'] as String;
+        final status = data['data']['status'] as String;
+        final messageCount = data['data']['message_count'] as int;
+        final responseCount = data['data']['response_count'] as int;
+        final hasModifications = data['data']['has_modifications'] as bool;
+        final restoredAt = data['data']['restored_at'] as String;
+        final scenarioDescription = data['data']['scenario_description'] as String?;
+        
+        if (_sessionId == receivedSessionId && mounted) {
+          setState(() {
+            _responseCount = responseCount;
+            _isLoading = false;
+            _currentStep = LoadingStep.completed;
+          });
+          
+          debugPrint('会话恢复成功: $status, 消息数: $messageCount, 恢复时间: $restoredAt');
+          
+          // 显示恢复成功的提示
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('会话恢复成功，共 $messageCount 条消息'),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else if (data['type'] == 'error') {
+        // 处理错误消息
+        final errorCode = data['data']['error_code'] as String;
+        final errorMessage = data['data']['message'] as String;
+        final details = data['data']['details'] as String?;
+        final sessionId = data['data']['session_id'] as String?;
+        
+        debugPrint('收到错误消息: $errorCode - $errorMessage');
+        if (details != null) {
+          debugPrint('错误详情: $details');
+        }
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('错误: $errorMessage'),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
       }
       // 这里可以处理其他类型的WebSocket消息
     } catch (e) {
@@ -705,7 +756,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
       // 开始录音并获取音频流
       final stream = await _audioRecorder.startStream(const RecordConfig(
-        encoder: AudioEncoder.pcm16bits,
+        encoder: AudioEncoder.opus,
         sampleRate: 16000,
         numChannels: 1,
       ));
@@ -786,15 +837,11 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   }
 
   void _sendMessageStart(String sender) {
-    // 生成基于档案的提示
-    final profilePrompt = _generateProfileBasedPrompt('开始对话');
-    
     final message = {
       'type': 'message_start',
       'data': {
         'session_id': _sessionId,
         'sender': sender,
-        'profile_prompt': profilePrompt, // 新增：档案提示信息
       }
     };
     
@@ -1747,15 +1794,13 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     }
 
     try {
-      // 生成基于档案的提示
-      final profilePrompt = _generateProfileBasedPrompt(userOpinion);
-      
       final message = {
         'type': 'manual_generate',
         'data': {
           'session_id': _sessionId,
           'user_opinion': userOpinion,
-          'profile_prompt': profilePrompt, // 新增：档案提示信息
+          'focused_message_ids': [], // 可选：用户选择聚焦的消息ID数组
+          'user_corpus': '', // 可选：用户提供的语料库文本
         }
       };
 
@@ -1802,15 +1847,11 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     }
 
     try {
-      // 生成基于档案的提示
-      final profilePrompt = _generateProfileBasedPrompt(modificationText);
-      
       final message = {
         'type': 'user_modification',
         'data': {
           'session_id': _sessionId,
           'modification': modificationText,
-          'profile_prompt': profilePrompt, // 新增：档案提示信息
         }
       };
 
