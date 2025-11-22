@@ -499,12 +499,19 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         };
       }).toList();
 
+      // 构建场景描述，如果存在当前聊天对象则附加其信息
+      String enhancedScenarioDescription = dialoguePackage.scenarioDescription;
+      if (_currentPartnerProfile != null) {
+        final partnerInfo = _buildPartnerInfoString();
+        enhancedScenarioDescription = '${dialoguePackage.scenarioDescription}\n\n你现在的聊天对象：$partnerInfo';
+      }
+
       // 构建并发送对话启动数据包（包含历史消息）
       final startMessage = {
         'type': 'conversation_start',
         'data': {
           'username': username,
-          'scenario_description': dialoguePackage.scenarioDescription,
+          'scenario_description': enhancedScenarioDescription,
           'response_count': dialoguePackage.responseCount.clamp(1, 5), // 确保在1-5之间
           'history_messages': formattedHistoryMessages,
         }
@@ -669,6 +676,40 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     } catch (e) {
       debugPrint('处理WebSocket消息时出错: $e');
     }
+  }
+
+  /// 构建聊天对象的详细信息字符串
+  String _buildPartnerInfoString() {
+    if (_currentPartnerProfile == null) return '';
+    
+    final profile = _currentPartnerProfile!;
+    final parts = <String>[];
+    
+    // 基本信息
+    parts.add('姓名：${profile.name}');
+    parts.add('关系：${profile.fullRelationship}');
+    
+    // 年龄性别信息
+    if (profile.ageGenderDisplay.isNotEmpty) {
+      parts.add(profile.ageGenderDisplay);
+    }
+    
+    // 性格标签
+    if (profile.personalityTags.isNotEmpty) {
+      parts.add('性格特点：${profile.personalityTags.join('、')}');
+    }
+    
+    // 禁忌话题
+    if (profile.tabooTopics != null && profile.tabooTopics!.isNotEmpty) {
+      parts.add('禁忌话题：${profile.tabooTopics}');
+    }
+    
+    // 共同经历
+    if (profile.sharedExperiences != null && profile.sharedExperiences!.isNotEmpty) {
+      parts.add('共同经历：${profile.sharedExperiences}');
+    }
+    
+    return parts.join('\n');
   }
 
   void _initializeDefaultRoles() {
