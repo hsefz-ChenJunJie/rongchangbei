@@ -27,7 +27,6 @@
     - 最终文本直接展示给用户，并标注"最终发送给AI"
 
 # Date: 2025-11-21 , patch=5
-我在 main_processing.dart 文件中实现了场景描述增强功能，具体包括：
 
 1. 修改对话启动逻辑
     在 _establishWebSocketConnection 方法中，我修改了场景描述的构建逻辑：
