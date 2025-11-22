@@ -743,6 +743,37 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   void _handleSendMessage() {
     // 消息发送后的回调，可以在这里添加额外逻辑
     // 例如：滚动到底部、触发AI响应等
+    
+    // 有一定概率添加"我想想……"填充消息
+    _maybeAddThinkingMessage();
+  }
+  
+  // 随机添加"我想想……"填充消息
+  void _maybeAddThinkingMessage() {
+    // 30%的概率触发
+    if (_shouldShowThinkingMessage()) {
+      // 延迟1-3秒后添加填充消息，模拟思考时间
+      final delay = Duration(milliseconds: 1000 + (DateTime.now().millisecond % 2000));
+      
+      Future.delayed(delay, () {
+        if (mounted && _sessionId != null) {
+          // 添加"我想想……"消息到对话中
+          if (_dialogueKey.currentState != null) {
+            _dialogueKey.currentState!.addMessage(
+              name: 'system',
+              content: '我想想……',
+              isMe: false,
+            );
+            debugPrint('已添加"我想想……"填充消息');
+          }
+        }
+      });
+    }
+  }
+  
+  // 决定是否显示思考消息（30%概率）
+  bool _shouldShowThinkingMessage() {
+    return DateTime.now().millisecond % 100 < 30; // 30%概率
   }
 
   void _clearChat() {
@@ -1143,7 +1174,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         // 顶部操作栏
         Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
             border: Border(
@@ -1224,7 +1255,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         if (_availableProfiles.isNotEmpty) ...[
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surface,
               border: Border(

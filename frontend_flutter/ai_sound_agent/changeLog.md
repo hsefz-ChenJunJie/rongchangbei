@@ -26,7 +26,7 @@
     - 发送到后端的信息为自然语言文本，非JSON格式
     - 最终文本直接展示给用户，并标注"最终发送给AI"
 
-# Date: 2025-11-21 , patch=5
+# Date: 2025-11-22 , patch=1
 
 1. 修改对话启动逻辑
     在 _establishWebSocketConnection 方法中，我修改了场景描述的构建逻辑：
@@ -42,8 +42,14 @@
     - 禁忌话题 ：如果有设置则显示
     - 共同经历 ：如果有设置则显示
 
-# Date: 2025-11-21 , patch=6
-添加“我想想”
+# Date: 2025-11-22 , patch=2
+添加"我想想……"填充消息功能：
+- 在用户发送消息到LLM后，有30%概率触发"我想想……"填充消息
+- 填充消息会在1-3秒延迟后显示，模拟AI思考时间
+- 消息以系统身份显示，使用灰色样式区分于正常对话
+- 仅在会话连接正常时才会显示填充消息
 
-# Date: 2025-11-21 , patch=7
-添加常用语料库
+# Date: 2025-11-22 , patch=3
+- Fixed RenderFlex overflow issue in main_processing.dart by reducing vertical padding from 8px to 6px in top action bar and profile selector containers
+
+# Date: 2025-11-22 , patch=4
