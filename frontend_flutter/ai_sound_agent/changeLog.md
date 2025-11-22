@@ -53,3 +53,15 @@
 - Fixed RenderFlex overflow issue in main_processing.dart by reducing vertical padding from 8px to 6px in top action bar and profile selector containers
 
 # Date: 2025-11-22 , patch=4
+- 优化聊天界面进入逻辑：
+    - 从主页进入聊天界面时，不再强制选择对话人profile
+    - 从对话人管理页面进入时，自动使用对应对话人的profile
+    - 避免因用户再次选择导致无法及时发送并开启对话
+    - 当存在当前聊天对象时，会在原场景描述后附加其详细信息
+
+# Date: 2025-11-22 , patch=5
+- 删除主聊天界面顶部的对话人档案选择器：
+    - 移除main_processing.dart中的档案选择下拉框
+    - 保持对话人档案功能在后台正常工作
+    - 简化界面，避免用户重复选择档案
+    - 从对话人管理页面进入时仍自动使用对应档案

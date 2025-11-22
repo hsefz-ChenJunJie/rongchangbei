@@ -11,6 +11,7 @@ import '../pages/main_processing.dart'; // 添加MainProcessingPage的导入
 import '../app/route.dart'; // 添加路由导入
 import '../services/profile_manager.dart';
 import '../pages/partner_profile_edit_page.dart';
+import '../models/partner_profile.dart'; // 添加PartnerProfile模型导入
 
 class ChatPartnersPage extends BasePage {
   const ChatPartnersPage({super.key})
@@ -579,13 +580,26 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
 
 
 
-  void _startChatWithPartner(ChatPartner partner) {
-    // 导航到main_processing页面，传入对话包名称
+  void _startChatWithPartner(ChatPartner partner) async {
+    // 获取对话人档案
+    PartnerProfile? partnerProfile;
+    try {
+      final profileManager = await ProfileManager.getInstance();
+      partnerProfile = profileManager.getProfileByPartnerId(partner.id);
+    } catch (e) {
+      debugPrint('获取对话人档案失败: $e');
+    }
+    
+    // 检查组件是否仍然挂载
+    if (!mounted) return;
+    
+    // 导航到main_processing页面，传入对话包名称和对话人档案
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => MainProcessingPage(
           dpfile: partner.dialoguePackageName,
+          partnerProfile: partnerProfile,
         ),
       ),
     );
@@ -607,8 +621,11 @@ class ChatPartnersPageState extends BasePageState<ChatPartnersPage> {
         ),
       );
       
+      // 检查组件是否仍然挂载
+      if (!mounted) return;
+      
       // 如果编辑成功，刷新页面
-      if (result != null && mounted) {
+      if (result != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('档案已更新')),
         );

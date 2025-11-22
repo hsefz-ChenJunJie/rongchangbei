@@ -104,10 +104,8 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   static const int maxReconnectAttempts = 5;
   static const Duration baseReconnectDelay = Duration(seconds: 1);
 
-  // 新增：对话人档案相关状态
+  // 对话人档案相关状态
   PartnerProfile? _currentPartnerProfile;
-  bool _showProfileSelector = false;
-  List<PartnerProfile> _availableProfiles = [];
 
   final Map<LoadingStep, String> _stepDescriptions = {
     LoadingStep.readingFile: '正在读取对话文件...',
@@ -131,7 +129,6 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeDefaultRoles();
       _loadCurrentDialogue();
-      _loadAvailableProfiles();
     });
   }
 
@@ -1251,83 +1248,6 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
           ),
         ),
         
-        // 对话人档案选择器
-        if (_availableProfiles.isNotEmpty) ...[
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              border: Border(
-                bottom: BorderSide(
-                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.1),
-                ),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.person,
-                  size: 20,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '对话人档案:',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: DropdownButton<PartnerProfile>(
-                    value: _currentPartnerProfile,
-                    hint: const Text('选择对话人档案'),
-                    isExpanded: true,
-                    underline: Container(),
-                    items: _availableProfiles.map((profile) {
-                      return DropdownMenuItem<PartnerProfile>(
-                        value: profile,
-                        child: Text(
-                          '${profile.name} (${profile.relationship})',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (profile) {
-                      if (profile != null) {
-                        _selectPartnerProfile(profile);
-                      }
-                    },
-                  ),
-                ),
-                if (_currentPartnerProfile != null) ...[
-                  const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.info_outline, size: 18),
-                    tooltip: '查看档案详情',
-                    onPressed: () {
-                      if (_currentPartnerProfile != null) {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => PartnerProfileDetailPage(
-                              profile: _currentPartnerProfile!,
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
-        
         // 聊天对话区域
         Expanded(
           child: ChatDialogue(
@@ -2039,64 +1959,6 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         },
       );
     }
-  }
-
-  // 加载可用的对话人档案
-  Future<void> _loadAvailableProfiles() async {
-    try {
-      final profileManager = await ProfileManager.getInstance();
-      final profiles = profileManager.getAllProfiles();
-      if (mounted) {
-        setState(() {
-          _availableProfiles = profiles;
-        });
-      }
-    } catch (e) {
-      debugPrint('加载对话人档案失败: $e');
-    }
-  }
-
-  // 选择对话人档案
-  void _selectPartnerProfile(PartnerProfile? profile) {
-    setState(() {
-      _currentPartnerProfile = profile;
-      _showProfileSelector = false;
-    });
-  }
-
-  // 生成基于档案的建议提示
-  String _generateProfileBasedPrompt(String originalPrompt) {
-    if (_currentPartnerProfile == null) return originalPrompt;
-    
-    final profile = _currentPartnerProfile!;
-    StringBuffer profileContext = StringBuffer();
-    
-    profileContext.write('当前对话人是：${profile.name}（${profile.relationship}）');
-    
-    if (profile.age != null) {
-      profileContext.write('，年龄：${profile.age}岁');
-    }
-    
-    if (profile.gender != null) {
-      profileContext.write('，性别：${profile.gender}');
-    }
-    
-    if (profile.personalityTags.isNotEmpty) {
-      profileContext.write('，性格特点：${profile.personalityTags.join('、')}');
-    }
-    
-    if (profile.tabooTopics != null && profile.tabooTopics!.isNotEmpty) {
-      profileContext.write('，需要避免的话题：${profile.tabooTopics}');
-    }
-    
-    if (profile.sharedExperiences != null && profile.sharedExperiences!.isNotEmpty) {
-      profileContext.write('，共同经历：${profile.sharedExperiences}');
-    }
-    
-    profileContext.write('。\n\n原始请求：$originalPrompt\n\n');
-    profileContext.write('请根据以上对话人信息，提供更加个性化和合适的建议。');
-    
-    return profileContext.toString();
   }
 
   Future<void> _saveToFile(String fileName) async {
