@@ -49,7 +49,7 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
   Timer? _speechTimer;
   
   // VAD相关
-  final _vadHandler = VadHandler.create(isDebug: true);
+  VadHandler? _vadHandler;
   bool _isVadListening = false;
   bool _isSomeoneSpeaking = false;
   double _currentVolume = 0.0;
@@ -80,7 +80,7 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
   void initState() {
     super.initState();
     _checkPermissions();
-    _setupVadHandler();
+    _initVadHandler(); // 初始化VAD处理器
     _initSpeech();
     _initTts();
   }
@@ -88,7 +88,14 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
   @override
   void dispose() {
     _audioPlayer.dispose();
-    _vadHandler.dispose();
+    // 安全地处理VAD处理器，避免在已处置状态下调用
+    try {
+      if (_vadHandler != null) {
+        _vadHandler!.dispose();
+      }
+    } catch (e) {
+      debugPrint('Error disposing VAD handler: $e');
+    }
     _speechTimer?.cancel();
     _flutterTts.stop();
     super.dispose();
@@ -144,31 +151,60 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
     }
   }
 
+  // 初始化VAD处理器
+  Future<void> _initVadHandler() async {
+    try {
+      _vadHandler = VadHandler.create(isDebug: true);
+      if (_vadHandler != null) {
+        _setupVadHandler();
+      }
+    } catch (e) {
+      debugPrint('VAD handler initialization failed: $e');
+      if (mounted) {
+        setState(() {
+          _vadEvents.insert(0, 'VAD初始化失败: $e');
+        });
+      }
+    }
+  }
+
   void _setupVadHandler() {
-    _vadHandler.onSpeechStart.listen((_) {
+    // 检查VAD处理器是否已初始化
+    if (_vadHandler == null) {
+      debugPrint('VAD handler not initialized, skipping setup');
+      return;
+    }
+
+    _vadHandler!.onSpeechStart.listen((_) {
       debugPrint('Speech detected.');
-      setState(() {
-        _isSomeoneSpeaking = true;
-        _vadEvents.insert(0, 'Speech detected');
-      });
+      if (mounted) {
+        setState(() {
+          _isSomeoneSpeaking = true;
+          _vadEvents.insert(0, 'Speech detected');
+        });
+      }
     });
 
-    _vadHandler.onRealSpeechStart.listen((_) {
+    _vadHandler!.onRealSpeechStart.listen((_) {
       debugPrint('Real speech start detected (not a misfire).');
-      setState(() {
-        _vadEvents.insert(0, 'Real speech start detected');
-      });
+      if (mounted) {
+        setState(() {
+          _vadEvents.insert(0, 'Real speech start detected');
+        });
+      }
     });
 
-    _vadHandler.onSpeechEnd.listen((List<double> samples) {
+    _vadHandler!.onSpeechEnd.listen((List<double> samples) {
       debugPrint('Speech ended, first 10 samples: ${samples.take(10).toList()}');
-      setState(() {
-        _isSomeoneSpeaking = false;
-        _vadEvents.insert(0, 'Speech ended');
-      });
+      if (mounted) {
+        setState(() {
+          _isSomeoneSpeaking = false;
+          _vadEvents.insert(0, 'Speech ended');
+        });
+      }
     });
 
-    _vadHandler.onFrameProcessed.listen((frameData) {
+    _vadHandler!.onFrameProcessed.listen((frameData) {
       final isSpeech = frameData.isSpeech;
       final notSpeech = frameData.notSpeech;
       
@@ -183,25 +219,31 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
         }
         final rms = _calculateRms(sum, frame.length);
         
+        if (mounted) {
+          setState(() {
+            _currentVolume = rms * 100;
+            _isSomeoneSpeaking = isSpeech > notSpeech;
+          });
+        }
+      }
+    });
+
+    _vadHandler!.onVADMisfire.listen((_) {
+      debugPrint('VAD misfire detected.');
+      if (mounted) {
         setState(() {
-          _currentVolume = rms * 100;
-          _isSomeoneSpeaking = isSpeech > notSpeech;
+          _vadEvents.insert(0, 'VAD misfire detected');
         });
       }
     });
 
-    _vadHandler.onVADMisfire.listen((_) {
-      debugPrint('VAD misfire detected.');
-      setState(() {
-        _vadEvents.insert(0, 'VAD misfire detected');
-      });
-    });
-
-    _vadHandler.onError.listen((String message) {
+    _vadHandler!.onError.listen((String message) {
       debugPrint('VAD Error: $message');
-      setState(() {
-        _vadEvents.insert(0, 'Error: $message');
-      });
+      if (mounted) {
+        setState(() {
+          _vadEvents.insert(0, 'Error: $message');
+        });
+      }
     });
   }
 
@@ -1349,7 +1391,7 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
   Future<void> _toggleVadListening() async {
     try {
       if (_isVadListening) {
-        await _vadHandler.stopListening();
+        await _vadHandler?.stopListening();
         if (mounted) {
           setState(() {
             _isVadListening = false;
@@ -1362,7 +1404,7 @@ class _DeviceTestPageState extends BasePageState<DeviceTestPage> {
         final status = await Permission.microphone.request();
         if (mounted) {
           if (status.isGranted) {
-            await _vadHandler.startListening();
+            await _vadHandler?.startListening();
             if (mounted) {
               setState(() {
                 _isVadListening = true;

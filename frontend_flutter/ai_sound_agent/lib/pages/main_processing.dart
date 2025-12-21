@@ -1537,9 +1537,24 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _buildSuggestionButton(_suggestionKeywords.isNotEmpty ? _suggestionKeywords[0] : '建议1'),
-                    _buildSuggestionButton(_suggestionKeywords.length > 1 ? _suggestionKeywords[1] : '建议2'),
-                    _buildSuggestionButton(_suggestionKeywords.length > 2 ? _suggestionKeywords[2] : '建议3'),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: _buildSuggestionButton(_suggestionKeywords.isNotEmpty ? _suggestionKeywords[0] : '建议1'),
+                      ),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: _buildSuggestionButton(_suggestionKeywords.length > 1 ? _suggestionKeywords[1] : '建议2'),
+                      ),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: _buildSuggestionButton(_suggestionKeywords.length > 2 ? _suggestionKeywords[2] : '建议3'),
+                      ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -1714,11 +1729,11 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
           _userOpinionController.text = '${_userOpinionController.text} $suggestionText';
         }
       },
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      width: 60,
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
       height: 28,
       borderRadius: 4,
       label: suggestionText,
+      expanded: true, // 让按钮自动扩展填充可用空间
     );
   }
 

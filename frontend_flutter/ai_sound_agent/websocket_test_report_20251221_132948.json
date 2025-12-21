@@ -1,0 +1,48 @@
+{
+  "test_config": {
+    "server_url": "http://lsj.2.frp.one:48788:48788",
+    "websocket_url": "ws://lsj.2.frp.one:48788:48788/conversation",
+    "test_settings": {
+      "connection_timeout": 15,
+      "response_timeout": 45,
+      "max_retries": 3,
+      "enable_detailed_logging": true,
+      "enable_file_logging": false,
+      "log_level": "INFO",
+      "show_list_items": false,
+      "test_audio_chunks": 5,
+      "mock_audio_duration": 2.0,
+      "websocket_timeout": 90
+    }
+  },
+  "test_summary": {
+    "total_tests": 3,
+    "passed_tests": 0,
+    "failed_tests": 3,
+    "success_rate": 0.0,
+    "results": [
+      {
+        "test_name": "WebSocket连接测试",
+        "success": false,
+        "timestamp": "2025-12-21T13:29:45.819999",
+        "details": "连接失败",
+        "data": null
+      },
+      {
+        "test_name": "对话流程测试",
+        "success": false,
+        "timestamp": "2025-12-21T13:29:46.820583",
+        "details": "WebSocket未连接",
+        "data": null
+      },
+      {
+        "test_name": "回答数量测试",
+        "success": false,
+        "timestamp": "2025-12-21T13:29:47.822849",
+        "details": "无法建立WebSocket连接",
+        "data": null
+      }
+    ]
+  },
+  "generated_at": "2025-12-21T13:29:48.823680"
+}

@@ -1,0 +1,76 @@
+{
+  "backend_server": {
+    "base_url": "http://lsj.2.frp.one:48788",
+    "port": 48788,
+    "health_endpoint": "/",
+    "conversation_health_endpoint": "/conversation/health",
+    "websocket_endpoint": "/conversation"
+  },
+  "test_settings": {
+    "connection_timeout": 15,
+    "response_timeout": 45,
+    "max_retries": 3,
+    "enable_detailed_logging": true,
+    "enable_file_logging": false,
+    "log_level": "INFO",
+    "show_list_items": false,
+    "test_audio_chunks": 5,
+    "mock_audio_duration": 2.0,
+    "websocket_timeout": 90
+  },
+  "test_scenarios": {
+    "scenario_description": "项目管理讨论会议",
+    "response_count": 3,
+    "test_users": ["张三", "李四", "王五"],
+    "test_messages": [
+      "大家好，我想讨论一下项目管理的最佳实践",
+      "我觉得敏捷开发方法比较适合我们的团队",
+      "但是我们需要考虑客户的具体需求和时间限制"
+    ]
+  },
+  "session_recovery_test": {
+    "enable_session_recovery_test": true,
+    "disconnect_duration": 5,
+    "max_persistence_test_hours": 1
+  },
+  "disconnect_test": {
+    "enable_disconnect_test": true,
+    "test_rounds": 2,
+    "round_interval": 3,
+    "reconnection_timeout": 15,
+    "recovery_timeout": 10,
+    "disconnect_scenarios": [
+      {
+        "name": "短暂断连",
+        "disconnect_duration": 3,
+        "expected_result": "session_restored"
+      },
+      {
+        "name": "录音中断连保护测试",
+        "disconnect_during": "recording",
+        "disconnect_duration": 5,
+        "expected_result": "recording_protected",
+        "test_audio_recovery": true
+      },
+      {
+        "name": "长时间断连",
+        "disconnect_duration": 10,
+        "expected_result": "session_restored"
+      }
+    ]
+  },
+  "microphone_test": {
+    "channels": 1,
+    "sample_rate": 16000,
+    "chunk_size": 1024,
+    "record_seconds": 10,
+    "silence_threshold": 500,
+    "silence_duration": 2.0,
+    "audio_format": 8,
+    "transcription_timeout": 15.0,
+    "opinion_timeout": 10.0,
+    "transcription_max_attempts": 20,
+    "opinion_max_attempts": 15,
+    "progress_display_interval": 10
+  }
+}
