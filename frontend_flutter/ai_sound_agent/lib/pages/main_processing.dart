@@ -824,8 +824,9 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       _sendMessageStart(sender);
 
       // 开始录音并获取音频流
+      // 注意：流模式不支持opus编码，使用pcm编码
       final stream = await _audioRecorder.startStream(const RecordConfig(
-        encoder: AudioEncoder.opus,
+        encoder: AudioEncoder.pcm16bits,
         sampleRate: 16000,
         numChannels: 1,
       ));
@@ -932,30 +933,41 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
   void _startAudioStreamListener(Stream<List<int>> stream) {
     List<int> audioBuffer = [];
-    const int chunkSize = 16000; // 大约1秒的16kHz单声道PCM数据
+    const int chunkSize = 32000; // PCM16编码数据，16000Hz采样率，单声道，大约1秒的音频（32000字节/秒）
+    int totalBytes = 0;
+    int chunkCount = 0;
     
     // 取消之前的订阅
     _audioStreamSubscription?.cancel();
+    
+    debugPrint('开始音频流监听，分块大小: $chunkSize bytes');
     
     _audioStreamSubscription = stream.listen((chunk) {
       if (!_isRecording) return;
       
       audioBuffer.addAll(chunk);
+      totalBytes += chunk.length;
+      
+      debugPrint('接收到音频数据块，大小: ${chunk.length} bytes，缓冲区: ${audioBuffer.length} bytes');
       
       // 当缓冲区达到指定大小时，发送音频chunk
       if (audioBuffer.length >= chunkSize) {
+        chunkCount++;
+        debugPrint('发送第$chunkCount个音频分块，大小: ${audioBuffer.length} bytes');
         _sendBufferedAudioChunk(audioBuffer);
         audioBuffer.clear();
       }
     }, onError: (error) {
-      debugPrint('音频流错误: $error');
+      debugPrint('音频流错误: $error，总接收字节: $totalBytes');
       if (_isRecording) {
         _stopRecording(); // 出错时自动停止录音
       }
     }, onDone: () {
-      debugPrint('音频流结束');
+      debugPrint('音频流结束，总接收字节: $totalBytes');
       // 音频流结束，发送剩余的音频数据
       if (audioBuffer.isNotEmpty && _isRecording) {
+        chunkCount++;
+        debugPrint('发送最后音频分块，大小: ${audioBuffer.length} bytes');
         _sendBufferedAudioChunk(audioBuffer);
       }
       
@@ -975,16 +987,25 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       // 将音频数据编码为base64
       final base64Audio = base64.encode(Uint8List.fromList(audioData));
       
+      // 计算音频时长（基于16kHz采样率，单声道，PCM16编码）
+      // PCM16: 16位 = 2字节，16000Hz采样率，单声道
+      // 时长 = 字节数 / (2字节/样本 * 16000样本/秒 * 1声道)
+      double duration = audioData.length / 32000.0; // 估算时长
+      
       final message = {
         'type': 'audio_stream',
         'data': {
           'session_id': _sessionId,
           'audio_chunk': base64Audio,
+          'duration': duration, // 添加音频时长信息
+          'format': 'pcm16', // 音频格式改为pcm16
+          'sample_rate': 16000, // 添加采样率信息
+          'channels': 1, // 添加声道信息
         }
       };
       
       _webSocketChannel?.sink.add(json.encode(message));
-      debugPrint('已发送audio_stream chunk，大小: ${audioData.length} bytes');
+      debugPrint('已发送audio_stream chunk，大小: ${audioData.length} bytes，时长: ${duration.toStringAsFixed(2)}秒');
     } catch (e) {
       debugPrint('发送音频chunk时出错: $e');
     }
