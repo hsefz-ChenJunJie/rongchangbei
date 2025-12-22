@@ -561,6 +561,35 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
           });
           debugPrint('已更新建议关键词: $suggestions');
         }
+      } else if (data['type'] == 'opinion_prediction_response') {
+        // 处理意见预测响应消息
+        final receivedSessionId = data['data']['session_id'] as String;
+        final prediction = data['data']['prediction'] as Map<String, dynamic>;
+        final requestId = data['data']['request_id'] as String?;
+        
+        // 检查session_id是否匹配
+        if (_sessionId == receivedSessionId && mounted) {
+          // 从预测数据中提取建议关键词
+          final tendency = prediction['tendency'] as String? ?? '';
+          final mood = prediction['mood'] as String? ?? '';
+          final tone = prediction['tone'] as String? ?? '';
+          
+          // 构建建议列表（基于预测结果）
+          final List<String> suggestions = [];
+          if (tendency.isNotEmpty) suggestions.add('倾向:$tendency');
+          if (mood.isNotEmpty) suggestions.add('心情:$mood');
+          if (tone.isNotEmpty) suggestions.add('语气:$tone');
+          
+          // 如果没有有效的预测数据，使用默认建议
+          if (suggestions.isEmpty) {
+            suggestions.addAll(['建议1', '建议2', '建议3']);
+          }
+          
+          setState(() {
+            _suggestionKeywords = suggestions;
+          });
+          debugPrint('已根据意见预测更新建议关键词: $suggestions (request_id: $requestId)');
+        }
       } else if (data['type'] == 'status_update') {
         // 处理状态更新消息
         final receivedSessionId = data['data']['session_id'] as String;

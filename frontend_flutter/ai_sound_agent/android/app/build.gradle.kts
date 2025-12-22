@@ -41,8 +41,8 @@ android {
         applicationId = "com.efzzz.idialogue"
         minSdk = flutter.minSdkVersion
         targetSdk = 36
-        versionCode = 12
-        versionName = "1.1.0"
+        versionCode = 14
+        versionName = "1.1.1"
     }
 
     buildTypes {

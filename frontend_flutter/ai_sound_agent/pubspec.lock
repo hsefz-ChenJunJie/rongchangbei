@@ -701,14 +701,6 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "4.5.1"
-  vad:
-    dependency: "direct main"
-    description:
-      name: vad
-      sha256: ef6c8b12c5af7a6a519ff5684f074b8a2ac00c434705f544af379ea77bccd258
-      url: "https://pub.flutter-io.cn"
-    source: hosted
-    version: "0.0.7+1"
   vector_math:
     dependency: transitive
     description:

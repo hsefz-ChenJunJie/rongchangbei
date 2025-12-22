@@ -1,7 +1,7 @@
 name: idialogue
 description: "iDialogue: The solution for language."
 publish_to: 'none'
-version: 1.1.0
+version: 1.1.1
 
 
 environment:
@@ -17,7 +17,6 @@ dependencies:
   record: ^6.0.0
   audioplayers: ^6.1.0
   permission_handler: ^11.3.1
-  vad: ^0.0.7+1
   speech_to_text: 7.1.0
   web_socket_channel: ^3.0.3
   loading_indicator: ^3.1.1
