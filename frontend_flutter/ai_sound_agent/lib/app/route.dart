@@ -4,6 +4,7 @@ import 'package:idialogue/pages/home_page.dart';
 import 'package:idialogue/pages/discover_page.dart';
 import 'package:idialogue/pages/settings.dart';
 import 'package:idialogue/pages/advanced_settings.dart';
+import 'package:idialogue/pages/default_suggestion_and_opinion.dart';
 import 'package:idialogue/pages/device_test_page.dart';
 import 'package:idialogue/pages/main_processing.dart';
 import 'package:idialogue/pages/manage_local_dp_file.dart';
@@ -18,6 +19,7 @@ class Routes {
   static const String discover = '/discover';
   static const String settings = '/settings';
   static const String advancedSettings = '/settings/advanced';
+  static const String defaultSuggestions = '/settings/default-suggestions';
   static const String deviceTest = '/device-test';
   static const String mainProcessing = '/main-processing';
   static const String manageLocalDpFile = '/manage-local-dp-file';
@@ -33,6 +35,7 @@ final Map<String, WidgetBuilder> appRoutes = {
   Routes.discover: (context) => const DiscoverPage(),
   Routes.settings: (context) => const Settings(),
   Routes.advancedSettings: (context) => const AdvancedSettingsPage(),
+  Routes.defaultSuggestions: (context) => const DefaultSuggestionAndOpinion(),
   Routes.deviceTest: (context) => const DeviceTestPage(),
   Routes.mainProcessing: (context) => const MainProcessingPage(),
   Routes.manageLocalDpFile: (context) => const ManageLocalDpFilePage(),

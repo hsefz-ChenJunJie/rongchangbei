@@ -2,20 +2,20 @@ import 'package:flutter/material.dart';
 import '../widgets/shared/base.dart';
 import '../services/suggestion_settings_service.dart';
 
-class AdvancedSettingsPage extends BasePage {
-  const AdvancedSettingsPage({super.key})
+class DefaultSuggestionAndOpinion extends BasePage {
+  const DefaultSuggestionAndOpinion({super.key})
       : super(
-          title: '高级设置',
+          title: '默认建议意见',
           showBottomNav: true,
           showBreadcrumb: true,
           showSettingsFab: false,
         );
 
   @override
-  State<AdvancedSettingsPage> createState() => _AdvancedSettingsPageState();
+  State<DefaultSuggestionAndOpinion> createState() => _DefaultSuggestionAndOpinionState();
 }
 
-class _AdvancedSettingsPageState extends BasePageState<AdvancedSettingsPage> {
+class _DefaultSuggestionAndOpinionState extends BasePageState<DefaultSuggestionAndOpinion> {
   List<String> _defaultSuggestions = [];
   final Map<int, TextEditingController> _controllers = {};
   bool _isLoading = true;

@@ -5,6 +5,7 @@ import '../shared/base_line_input.dart';
 import 'chat_dialogue.dart';
 import 'role_selector.dart';
 import 'role_manager.dart';
+import 'package:idialogue/services/userdata_services.dart';
 
 class ChatInput extends StatefulWidget {
   final ChatDialogueState dialogueState;
@@ -31,6 +32,8 @@ class ChatInputState extends State<ChatInput> {
   String _suggestion = '';
   bool _isShowingSuggestion = false;
   bool _isShowingAIPanel = false;
+  bool _alwaysSendAsMyself = false;
+  final Userdata _userData = Userdata();
 
   @override
   void initState() {
@@ -39,6 +42,14 @@ class ChatInputState extends State<ChatInput> {
     _focusNode = FocusNode();
     _focusNode.addListener(_handleFocusChange);
     _controller.addListener(_handleTextChange);
+    _loadUserData();
+  }
+
+  Future<void> _loadUserData() async {
+    await _userData.loadUserData();
+    setState(() {
+      _alwaysSendAsMyself = _userData.preferences['always_send_as_myself'] ?? false;
+    });
   }
 
   @override
@@ -132,10 +143,28 @@ class ChatInputState extends State<ChatInput> {
 
     final currentRole = getCurrentRole();
     
+    // 如果设置了恒为自己发送，则使用"我自己"身份
+    String senderName = currentRole.name;
+    String senderId = currentRole.id;
+    bool isMe = currentRole.id == 'me';
+    
+    if (_alwaysSendAsMyself) {
+      // 查找"我自己"角色
+      final roleManager = RoleManager.instance;
+      final myselfRole = roleManager.allRoles.firstWhere(
+        (role) => role.name == '我自己',
+        orElse: () => currentRole,
+      );
+      
+      senderName = myselfRole.name;
+      senderId = myselfRole.id;
+      isMe = myselfRole.id == 'me';
+    }
+    
     widget.dialogueState.addMessage(
-      name: currentRole.name,
+      name: senderName,
       content: text,
-      isMe: currentRole.id == 'me',
+      isMe: isMe,
     );
     
     widget.onSend?.call();

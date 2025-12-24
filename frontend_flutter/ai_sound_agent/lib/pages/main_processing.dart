@@ -321,10 +321,30 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   // 初始化TTS
   Future<void> _initializeTts() async {
     try {
+      // 设置TTS事件处理
+      _flutterTts.setStartHandler(() {
+        debugPrint('TTS开始播放');
+      });
+
+      _flutterTts.setCompletionHandler(() {
+        debugPrint('TTS播放完成');
+      });
+
+      _flutterTts.setCancelHandler(() {
+        debugPrint('TTS播放已取消');
+      });
+
+      _flutterTts.setErrorHandler((msg) {
+        debugPrint('TTS播放错误: $msg');
+      });
+
+      // 设置TTS参数
       await _flutterTts.setLanguage("zh-CN");
       await _flutterTts.setSpeechRate(0.5);
       await _flutterTts.setVolume(1.0);
       await _flutterTts.setPitch(1.0);
+      
+      debugPrint('TTS初始化完成');
     } catch (e) {
       debugPrint('初始化TTS失败: $e');
     }
@@ -813,6 +833,49 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     
     // 有一定概率添加"我想想……"填充消息
     _maybeAddThinkingMessage();
+    
+    // 文字转语音：朗读刚发送的消息
+    _speakLastSentMessage();
+  }
+  
+  // 文字转语音：朗读最后发送的消息
+  Future<void> _speakLastSentMessage() async {
+    try {
+      debugPrint('开始执行TTS朗读检查...');
+      
+      // 获取最后一条消息
+      final messages = _dialogueKey.currentState?.getAllMessages() ?? [];
+      debugPrint('获取到消息数量: ${messages.length}');
+      
+      if (messages.isEmpty) {
+        debugPrint('没有消息需要朗读');
+        return;
+      }
+      
+      final lastMessage = messages.last;
+      debugPrint('最后一条消息详情: $lastMessage');
+      
+      final content = lastMessage['content']?.toString() ?? '';
+      final isMe = lastMessage['is_me'] ?? false;
+      
+      debugPrint('消息内容: "$content", 是否用户消息: $isMe');
+      
+      // 只朗读自己发送的消息
+      if (content.isNotEmpty && isMe) {
+        debugPrint('准备TTS朗读用户消息: $content');
+        debugPrint('TTS朗读调用中...');
+        
+        // 添加延迟确保TTS准备就绪
+        await Future.delayed(const Duration(milliseconds: 100));
+        
+        await _flutterTts.speak(content);
+        debugPrint('TTS朗读调用成功');
+      } else {
+        debugPrint('跳过朗读 - 内容为空或不是用户消息');
+      }
+    } catch (e) {
+      debugPrint('语音合成发送消息时出错: $e');
+    }
   }
   
   // 随机添加"我想想……"填充消息
