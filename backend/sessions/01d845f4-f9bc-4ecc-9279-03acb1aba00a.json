@@ -1,0 +1,24 @@
+{
+  "id": "01d845f4-f9bc-4ecc-9279-03acb1aba00a",
+  "scenario_description": "项目管理讨论会议",
+  "response_count": 3,
+  "status": "idle",
+  "messages": [
+    {
+      "id": "msg_001",
+      "sender": "测试用户",
+      "content": "",
+      "timestamp": "2025-12-21T05:06:52.358012",
+      "is_user_selected": false
+    }
+  ],
+  "modifications": [],
+  "focused_message_ids": [],
+  "user_opinion": null,
+  "current_message_sender": null,
+  "active_opinion_request_id": null,
+  "active_response_request_id": null,
+  "created_at": "2025-12-21T05:06:50.825945",
+  "updated_at": "2025-12-21T05:07:18.826659",
+  "persisted_at": "2025-12-21T05:07:18.826906"
+}

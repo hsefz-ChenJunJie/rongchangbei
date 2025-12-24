@@ -1,0 +1,24 @@
+{
+  "id": "efbb30a9-fd3d-4ecc-bd07-8fa87b385fe9",
+  "scenario_description": "与王芃雨的聊天对话\n\n你现在的聊天对象：姓名：王芃雨\n关系：同事\n114岁\n性格特点：温柔、直率、细心、大方\n共同经历：名字叫王芃雨，年龄为114岁，是我的同事，性格温柔、直率、细心、大方。",
+  "response_count": 1,
+  "status": "idle",
+  "messages": [
+    {
+      "id": "usr_001",
+      "sender": "anonymous",
+      "content": "王芃雨，认识你这么久，每次聊天都觉得很舒服，你总是能把事情考虑得那么周全。",
+      "timestamp": "2025-12-21T05:59:42.431208",
+      "is_user_selected": true
+    }
+  ],
+  "modifications": [],
+  "focused_message_ids": [],
+  "user_opinion": null,
+  "current_message_sender": null,
+  "active_opinion_request_id": null,
+  "active_response_request_id": null,
+  "created_at": "2025-12-21T05:58:44.709251",
+  "updated_at": "2025-12-21T06:08:18.057638",
+  "persisted_at": "2025-12-21T06:08:18.058169"
+}

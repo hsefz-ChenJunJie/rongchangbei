@@ -1,0 +1,45 @@
+{
+  "id": "b46f9aa8-0f66-4fc9-8aed-022a1daee2e5",
+  "scenario_description": "与王芃雨的聊天对话\n\n你现在的聊天对象：姓名：王芃雨\n关系：\n保密\n禁忌话题：唐氏\n共同经历：名字叫王芃雨，性别为保密，不喜欢谈论唐氏。",
+  "response_count": 1,
+  "status": "idle",
+  "messages": [
+    {
+      "id": "msg_001",
+      "sender": "王芃雨",
+      "content": "今天中午吃什么",
+      "timestamp": "2025-12-23T04:50:27.965239",
+      "is_user_selected": false
+    },
+    {
+      "id": "usr_002",
+      "sender": "anonymous",
+      "content": "还没想好，你有啥想吃的？",
+      "timestamp": "2025-12-23T04:51:05.284217",
+      "is_user_selected": true
+    },
+    {
+      "id": "usr_003",
+      "sender": "anonymous",
+      "content": "还没想好，你有啥想吃的？",
+      "timestamp": "2025-12-23T04:53:02.632189",
+      "is_user_selected": true
+    },
+    {
+      "id": "usr_004",
+      "sender": "anonymous",
+      "content": "想吃火锅吗？最近降温了挺适合的。",
+      "timestamp": "2025-12-23T04:53:20.398678",
+      "is_user_selected": true
+    }
+  ],
+  "modifications": [],
+  "focused_message_ids": [],
+  "user_opinion": null,
+  "current_message_sender": null,
+  "active_opinion_request_id": null,
+  "active_response_request_id": null,
+  "created_at": "2025-12-23T04:50:18.023430",
+  "updated_at": "2025-12-23T04:57:48.103574",
+  "persisted_at": "2025-12-23T04:57:48.104047"
+}

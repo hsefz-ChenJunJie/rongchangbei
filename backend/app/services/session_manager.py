@@ -394,6 +394,44 @@ class SessionManager:
         session.set_user_opinion(opinion)
         
         logger.info(f"用户意见设置: {session_id}, 意见: {opinion}")
+
+    def update_user_context(
+        self,
+        session_id: str,
+        user_corpus: Optional[str] = None,
+        user_background: Optional[str] = None,
+        user_preferences: Optional[str] = None,
+        user_recent_experiences: Optional[str] = None,
+    ):
+        """
+        更新用户相关上下文信息
+        
+        Args:
+            session_id: 会话ID
+            user_corpus: 用户语料
+            user_background: 用户背景信息
+            user_preferences: 用户偏好
+            user_recent_experiences: 用户最近经历
+        """
+        session = self.get_session(session_id)
+        if not session:
+            raise ValueError(f"会话不存在: {session_id}")
+
+        session.update_user_context(
+            user_corpus=user_corpus,
+            user_background=user_background,
+            user_preferences=user_preferences,
+            user_recent_experiences=user_recent_experiences,
+        )
+
+        logger.info(
+            "更新用户上下文: %s (background=%s, preferences=%s, recent=%s, corpus=%s)",
+            session_id,
+            bool(user_background),
+            bool(user_preferences),
+            bool(user_recent_experiences),
+            bool(user_corpus),
+        )
     
     def get_user_opinion(self, session_id: str) -> Optional[str]:
         """

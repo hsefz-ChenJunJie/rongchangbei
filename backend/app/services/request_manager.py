@@ -65,7 +65,10 @@ class LLMRequestManager:
         session_id: str, 
         focused_message_ids: Optional[List[str]] = None,
         user_opinion: Optional[str] = None,
-        user_corpus: Optional[str] = None
+        user_corpus: Optional[str] = None,
+        user_background: Optional[str] = None,
+        user_preferences: Optional[str] = None,
+        user_recent_experiences: Optional[str] = None,
     ) -> Optional[str]:
         """
         生成回答建议（手动触发或修改建议触发）
@@ -75,11 +78,26 @@ class LLMRequestManager:
             focused_message_ids: 聚焦消息ID列表
             user_opinion: 用户意见
             user_corpus: 用户语料库
+            user_background: 用户背景信息
+            user_preferences: 用户偏好
+            user_recent_experiences: 用户最近经历
             
         Returns:
             Optional[str]: 请求ID，如果创建失败则返回None
         """
         try:
+            # 如果传入了用户上下文，先记录在会话中，确保后续请求也能复用
+            if any([user_corpus, user_background, user_preferences, user_recent_experiences]):
+                self.session_manager.update_user_context(
+                    session_id=session_id,
+                    user_corpus=user_corpus,
+                    user_background=user_background,
+                    user_preferences=user_preferences,
+                    user_recent_experiences=user_recent_experiences,
+                )
+            if user_opinion:
+                self.session_manager.set_user_opinion(session_id, user_opinion)
+
             # 手动触发优先级最高，取消所有进行中的请求
             await self.cancel_all_requests(session_id)
             
@@ -98,7 +116,9 @@ class LLMRequestManager:
             # 创建异步任务
             task = asyncio.create_task(
                 self._execute_response_generation(
-                    session_id, request_id, focused_message_ids, user_opinion, user_corpus
+                    session_id=session_id,
+                    request_id=request_id,
+                    focused_message_ids=focused_message_ids,
                 )
             )
             self.response_requests[session_id] = task
@@ -119,8 +139,6 @@ class LLMRequestManager:
         session_id: str, 
         request_id: str,
         focused_message_ids: Optional[List[str]] = None,
-        user_opinion: Optional[str] = None,
-        user_corpus: Optional[str] = None
     ):
         """执行回答生成"""
         try:
@@ -134,12 +152,18 @@ class LLMRequestManager:
             
             # 调用LLM服务
             count = session.response_count
+            user_context = {
+                "corpus": session.user_corpus,
+                "background": session.user_background,
+                "preferences": session.user_preferences,
+                "recent_experiences": session.user_recent_experiences,
+            }
             suggestions = await self.llm_service.generate_responses(
                 session=session, 
                 count=count,
                 focused_message_ids=focused_message_ids,
-                user_opinion=user_opinion,
-                user_corpus=user_corpus
+                user_opinion=session.user_opinion,
+                user_context=user_context,
             )
             
             # 检查是否被取消

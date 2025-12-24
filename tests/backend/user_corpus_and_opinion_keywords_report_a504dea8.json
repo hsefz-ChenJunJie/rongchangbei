@@ -1,0 +1,41 @@
+{
+  "test_config": {
+    "server_url": "http://lsj.2.frp.one:48788",
+    "websocket_url": "ws://lsj.2.frp.one:48788/conversation",
+    "test_settings": {
+      "connection_timeout": 10,
+      "response_timeout": 30,
+      "max_retries": 3,
+      "enable_detailed_logging": true,
+      "enable_file_logging": true,
+      "log_level": "DEBUG",
+      "show_list_items": true,
+      "test_audio_chunks": 5,
+      "mock_audio_duration": 2.0,
+      "websocket_timeout": 90
+    }
+  },
+  "test_summary": {
+    "total_tests": 2,
+    "passed_tests": 1,
+    "failed_tests": 1,
+    "success_rate": 50.0,
+    "results": [
+      {
+        "test_name": "user_corpus 接口",
+        "success": true,
+        "timestamp": "2025-12-21T13:42:05.889699",
+        "details": "收到 3 条回答，已携带 user_corpus 触发生成",
+        "data": null
+      },
+      {
+        "test_name": "意见预测",
+        "success": false,
+        "timestamp": "2025-12-21T13:42:45.893150",
+        "details": "未收到 opinion_prediction_response 事件",
+        "data": null
+      }
+    ]
+  },
+  "generated_at": "2025-12-21T13:42:46.260137"
+}

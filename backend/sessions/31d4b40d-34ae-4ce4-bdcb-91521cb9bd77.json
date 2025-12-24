@@ -1,0 +1,59 @@
+{
+  "id": "31d4b40d-34ae-4ce4-bdcb-91521cb9bd77",
+  "scenario_description": "",
+  "response_count": 1,
+  "status": "idle",
+  "messages": [
+    {
+      "id": "msg_001",
+      "sender": "王芃雨",
+      "content": "Time on my face! Time!",
+      "timestamp": "2025-12-22T05:09:35.033919",
+      "is_user_selected": false
+    },
+    {
+      "id": "usr_002",
+      "sender": "anonymous",
+      "content": "确实，时间会在每个人脸上留下痕迹，但我觉得它也在塑造你的气质和故事感。",
+      "timestamp": "2025-12-22T05:10:33.357811",
+      "is_user_selected": true
+    },
+    {
+      "id": "msg_003",
+      "sender": "王芃雨",
+      "content": "Who do you think you are?",
+      "timestamp": "2025-12-22T05:11:23.294603",
+      "is_user_selected": false
+    },
+    {
+      "id": "usr_004",
+      "sender": "anonymous",
+      "content": "我只是一个欣赏你的人，觉得时间给你的不仅是痕迹，更是魅力。",
+      "timestamp": "2025-12-22T05:12:15.245209",
+      "is_user_selected": true
+    },
+    {
+      "id": "msg_005",
+      "sender": "王芃雨",
+      "content": "So how to solve this difficult situation?",
+      "timestamp": "2025-12-22T05:13:09.016864",
+      "is_user_selected": false
+    },
+    {
+      "id": "msg_006",
+      "sender": "王芃雨",
+      "content": "As in the current situation, our time is very limited, as well as our technology is very limited.",
+      "timestamp": "2025-12-22T05:13:23.001383",
+      "is_user_selected": false
+    }
+  ],
+  "modifications": [],
+  "focused_message_ids": [],
+  "user_opinion": null,
+  "current_message_sender": null,
+  "active_opinion_request_id": null,
+  "active_response_request_id": null,
+  "created_at": "2025-12-22T05:09:27.893212",
+  "updated_at": "2025-12-22T05:14:02.560952",
+  "persisted_at": "2025-12-22T05:14:02.561345"
+}

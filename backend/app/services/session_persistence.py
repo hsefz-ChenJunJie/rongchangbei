@@ -58,6 +58,10 @@ class SessionPersistenceManager:
             "modifications": session.modifications,
             "focused_message_ids": session.focused_message_ids,
             "user_opinion": session.user_opinion,
+            "user_corpus": session.user_corpus,
+            "user_background": session.user_background,
+            "user_preferences": session.user_preferences,
+            "user_recent_experiences": session.user_recent_experiences,
             "current_message_sender": session.current_message_sender,
             "active_opinion_request_id": session.active_opinion_request_id,
             "active_response_request_id": session.active_response_request_id,
@@ -82,6 +86,10 @@ class SessionPersistenceManager:
         session.modifications = data.get("modifications", [])
         session.focused_message_ids = data.get("focused_message_ids", [])
         session.user_opinion = data.get("user_opinion")
+        session.user_corpus = data.get("user_corpus")
+        session.user_background = data.get("user_background")
+        session.user_preferences = data.get("user_preferences")
+        session.user_recent_experiences = data.get("user_recent_experiences")
         session.current_message_sender = data.get("current_message_sender")
         session.active_opinion_request_id = data.get("active_opinion_request_id")
         session.active_response_request_id = data.get("active_response_request_id")

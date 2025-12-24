@@ -5,6 +5,8 @@ LLM (Large Language Model) 服务
 import asyncio
 import logging
 import json
+import os
+from pathlib import Path
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
@@ -22,6 +24,10 @@ class LLMService:
         self.client = None
         self.response_system_prompt = ""
         self.opinion_system_prompt = ""
+        self.response_generation_requirements = ""
+        self.prompt_log_file = getattr(settings, "llm_prompt_log_file", "logs/llm_prompts.log")
+        # 固定提示词目录为 backend/prompts（与 app 同级），避免依赖运行目录
+        self.prompts_dir = Path(__file__).resolve().parents[2] / "prompts"
         
     async def initialize(self) -> bool:
         """
@@ -56,29 +62,25 @@ class LLMService:
         """加载系统提示词"""
         try:
             # 为“回答生成”任务加载并配置主系统提示词
-            import os
-            llm_prompt_path = os.path.join(os.getcwd(), "llm.md")
-            
-            if os.path.exists(llm_prompt_path):
-                with open(llm_prompt_path, 'r', encoding='utf-8') as f:
-                    base_prompt = f.read().strip()
-                
-                # 将加载的主提示词用于回答生成
-                self.response_system_prompt = base_prompt
-                logger.info("主系统提示词 (llm.md) 加载成功")
-            else:
-                logger.warning(f"主系统提示词文件不存在: {llm_prompt_path}，使用默认回答生成提示词")
-                self.response_system_prompt = """你是一个专业的沟通助手。请根据对话内容生成多个不同风格的回答建议，包括简洁直接、礼貌委婉、幽默友好等不同风格。每个建议都应该完整、自然、适合对话语境。返回JSON格式。"""
+            base_dir = str(self.prompts_dir)
+            llm_prompt_paths = [
+                os.path.join(base_dir, "llm.md"),
+                os.path.join(os.getcwd(), "backend", "llm.md"),  # 兼容旧路径
+            ]
+            opinion_prompt_paths = [
+                os.path.join(base_dir, "opinion_prediction_prompt.md"),
+                os.path.join(os.getcwd(), "backend", "opinion_prediction_prompt.md"),  # 兼容旧路径
+            ]
+            response_requirements_paths = [
+                os.path.join(base_dir, "response_generation_requirements.md"),
+            ]
+            default_response_path = os.path.join(base_dir, "default_response_system.md")
+            default_opinion_path = os.path.join(base_dir, "default_opinion_system.md")
+            default_requirements_path = os.path.join(base_dir, "default_response_generation_requirements.md")
 
-            # 为“意见预测”任务加载提示词
-            opinion_prompt_path = os.path.join(os.getcwd(), "backend", "opinion_prediction_prompt.md")
-            if os.path.exists(opinion_prompt_path):
-                with open(opinion_prompt_path, 'r', encoding='utf-8') as f:
-                    self.opinion_system_prompt = f.read().strip()
-                logger.info("意见预测提示词 (opinion_prediction_prompt.md) 加载成功")
-            else:
-                logger.warning(f"意见预测提示词文件不存在: {opinion_prompt_path}，使用默认意见预测提示词")
-                self.opinion_system_prompt = """分析对话内容，预测用户下一步的意见倾向、心情和语气。返回JSON格式。"""
+            self.response_system_prompt = self._load_first_existing(llm_prompt_paths, default_response_path)
+            self.opinion_system_prompt = self._load_first_existing(opinion_prompt_paths, default_opinion_path)
+            self.response_generation_requirements = self._load_first_existing(response_requirements_paths, default_requirements_path)
 
             logger.info("系统提示词加载和配置完成")
 
@@ -88,7 +90,13 @@ class LLMService:
     
     def _set_default_prompts(self):
         """设置默认系统提示词"""
-        self.response_system_prompt = """你是一个专业的沟通助手。请根据对话内容生成多个不同风格的回答建议，包括简洁直接、礼貌委婉、幽默友好等不同风格。每个建议都应该完整、自然、适合对话语境。返回JSON格式。"""
+        base_dir = str(self.prompts_dir)
+        default_response_path = os.path.join(base_dir, "default_response_system.md")
+        default_opinion_path = os.path.join(base_dir, "default_opinion_system.md")
+        default_requirements_path = os.path.join(base_dir, "default_response_generation_requirements.md")
+        self.response_system_prompt = self._read_prompt_file(default_response_path)
+        self.opinion_system_prompt = self._read_prompt_file(default_opinion_path)
+        self.response_generation_requirements = self._read_prompt_file(default_requirements_path)
     
     async def shutdown(self):
         """关闭LLM服务"""
@@ -107,7 +115,7 @@ class LLMService:
         count: int = 3,
         focused_message_ids: Optional[List[str]] = None,
         user_opinion: Optional[str] = None,
-        user_corpus: Optional[str] = None
+        user_context: Optional[Dict[str, Optional[str]]] = None
     ) -> List[str]:
         """
         生成回答建议
@@ -117,7 +125,7 @@ class LLMService:
             count: 生成数量
             focused_message_ids: 聚焦消息ID列表
             user_opinion: 用户意见
-            user_corpus: 用户语料库
+            user_context: 用户上下文信息，包含语料库、背景、偏好、近期经历等
             
         Returns:
             List[str]: 回答建议列表
@@ -127,14 +135,41 @@ class LLMService:
             return []
         
         try:
+            user_context = user_context or {}
             # 构建提示词
-            prompt = self._format_response_prompt(
-                session, count, focused_message_ids, user_opinion, user_corpus
+            user_prompt = self._format_response_prompt(
+                session=session,
+                count=count,
+                focused_message_ids=focused_message_ids,
+                user_opinion=user_opinion,
+                user_context=user_context,
+            )
+            system_prompt = self._build_response_system_prompt(count)
+            messages = self._build_messages(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt
+            )
+            self._log_prompt(
+                session_id=session.id,
+                request_type="response",
+                prompt=user_prompt,
+                system_prompt=system_prompt,
+                extra={
+                    "response_count": count,
+                    "focused_message_ids": focused_message_ids or [],
+                    "user_opinion": user_opinion,
+                    "has_user_corpus": bool(user_context.get("corpus") or session.user_corpus),
+                    "has_user_background": bool(user_context.get("background") or session.user_background),
+                    "has_user_preferences": bool(user_context.get("preferences") or session.user_preferences),
+                    "has_user_recent_experiences": bool(
+                        user_context.get("recent_experiences") or session.user_recent_experiences
+                    ),
+                },
             )
             
             # 调用LLM
             response = await self._call_llm(
-                prompt,
+                messages,
                 response_format="response",
                 max_tokens=800,
                 count=count
@@ -158,7 +193,7 @@ class LLMService:
         count: int,
         focused_message_ids: Optional[List[str]] = None,
         user_opinion: Optional[str] = None,
-        user_corpus: Optional[str] = None
+        user_context: Optional[Dict[str, Optional[str]]] = None
     ) -> str:
         """
         格式化回答生成提示词
@@ -168,24 +203,39 @@ class LLMService:
             count: 生成数量
             focused_message_ids: 聚焦消息ID列表
             user_opinion: 用户意见
-            user_corpus: 用户语料库
+            user_context: 用户上下文信息
             
         Returns:
             str: 格式化的提示词
         """
-        parts = [self.response_system_prompt]
+        parts: List[str] = []
+        ctx = user_context or {}
+        user_corpus = ctx.get("corpus") or session.user_corpus
+        user_background = ctx.get("background") or session.user_background
+        user_preferences = ctx.get("preferences") or session.user_preferences
+        user_recent_experiences = ctx.get("recent_experiences") or session.user_recent_experiences
         
         # 添加对话情景
         if session.scenario_description:
-            parts.append(f"\n## 对话情景\n{session.scenario_description}")
+            parts.append(f"## 对话情景\n{session.scenario_description}")
         
-        # 添加用户语料库
+        # 用户背景、偏好、经历与语料
+        if user_background:
+            parts.append(f"## 用户背景\n{user_background}")
+        if user_preferences:
+            parts.append(f"## 用户偏好\n{user_preferences}")
+        if user_recent_experiences:
+            parts.append(f"## 用户近期经历\n{user_recent_experiences}")
         if user_corpus:
-            parts.append(f"\n## 用户参考语料\n{user_corpus}")
+            parts.append(f"## 用户参考语料\n{user_corpus}")
+        
+        # 用户倾向
+        if user_opinion:
+            parts.append(f"## 用户倾向\n{user_opinion}")
         
         # 添加消息历史
         if session.messages:
-            parts.append("\n## 对话内容")
+            parts.append("## 对话内容")
             for message in session.messages:
                 parts.append(f"{message.sender}: {message.content}")
         
@@ -193,24 +243,17 @@ class LLMService:
         if focused_message_ids:
             focused_messages = session.get_focused_messages(focused_message_ids)
             if focused_messages:
-                parts.append("\n## 重点关注内容")
+                parts.append("## 重点关注内容")
                 for message in focused_messages:
                     parts.append(f"{message.sender}: {message.content}")
-        
-        # 添加用户意见倾向
-        if user_opinion:
-            parts.append(f"\n## 用户倾向\n{user_opinion}")
-        
+
         # 添加修改建议
         if session.modifications:
-            parts.append("\n## 调整要求")
+            parts.append("## 调整要求")
             for modification in session.modifications:
                 parts.append(f"- {modification}")
         
-        # 添加生成要求
-        parts.append(f"\n## 任务要求\n请基于以上对话内容，生成{count}个自然、直接、适合真实对话场景的回复建议。\n\n重要: 每个回复都应该是完整的、可以直接使用的对话内容，不要添加任何编号、标签或前缀（如\"建议一\"、\"回复:\"等）。回复应该就像是真人在对话中会说的话。")
-        
-        return "\n".join(parts)
+        return "\n\n".join(parts)
 
     async def generate_opinion_prediction(
         self, 
@@ -232,10 +275,24 @@ class LLMService:
             return None
         
         try:
-            prompt = self._format_opinion_prediction_prompt(session, last_message_content)
+            user_prompt = self._format_opinion_prediction_prompt(session, last_message_content)
+            messages = self._build_messages(
+                system_prompt=self.opinion_system_prompt,
+                user_prompt=user_prompt
+            )
+            self._log_prompt(
+                session_id=session.id,
+                request_type="opinion_prediction",
+                prompt=user_prompt,
+                system_prompt=self.opinion_system_prompt,
+                extra={
+                    "last_selected_response": last_message_content,
+                    "message_count": len(session.messages),
+                },
+            )
             
             response = await self._call_llm(
-                prompt,
+                messages,
                 response_format="opinion_prediction",
                 max_tokens=200
             )
@@ -267,109 +324,118 @@ class LLMService:
         Returns:
             str: 格式化的提示词
         """
-        parts = [self.opinion_system_prompt]
+        parts: List[str] = []
         
         if session.messages:
-            parts.append("\n## 对话内容")
+            parts.append("## 对话内容")
             for message in session.messages:
                 parts.append(f"{message.sender}: {message.content}")
 
-        parts.append("\n## 用户最后选择的回答")
+        parts.append("## 用户最后选择的回答")
         parts.append(last_message_content)
         
-        parts.append("\n## 任务要求\n请基于以上信息，分析并预测用户下一次发言可能的心态。")
+        parts.append("## 任务要求\n请基于以上信息，分析并预测用户下一次发言可能的心态。")
         
-        return "\n".join(parts)
+        return "\n\n".join(parts)
     
-    async def _call_llm(self, prompt: str, response_format: str = "auto", max_tokens: int = None, count: int = 3) -> Optional[Dict[str, Any]]:
-    
-            """
-    
-            调用LLM API
-    
-            
-    
-            Args:
-    
-                prompt: 提示词
-    
-                response_format: 响应格式类型
-    
-                max_tokens: 最大token数
-    
-                count: 生成数量（用于response格式）
-    
-                
-    
-            Returns:
-    
-                Optional[Dict[str, Any]]: LLM响应
-    
-            """
-    
-            try:
-    
-                if not settings.openrouter_api_key:
-    
-                    # Mock模式
-    
-                    await asyncio.sleep(0.5)  # 模拟API延迟
-    
-                    
-    
-                    return {"suggestions": self._get_mock_responses(count)}
-    
-                
-    
-                # TODO: 实际的OpenRouter API调用
-    
-                # 这里应该实现真实的API调用逻辑
-    
-                
-    
-                # 临时返回Mock数据
-    
-                await asyncio.sleep(0.5)
-    
-                
-    
+    async def _call_llm(
+        self,
+        messages: List[Dict[str, str]],
+        response_format: str = "auto",
+        max_tokens: int = None,
+        count: int = 3
+    ) -> Optional[Dict[str, Any]]:
+        """
+        调用LLM API（当前为Mock实现）
+
+        Args:
+            prompt: 提示词
+            response_format: 响应格式类型
+            max_tokens: 最大token数
+            count: 生成数量（用于response格式）
+
+        Returns:
+            Optional[Dict[str, Any]]: LLM响应
+        """
+        try:
+            if not settings.openrouter_api_key:
+                # Mock模式
+                await asyncio.sleep(0.5)  # 模拟API延迟
                 return {"suggestions": self._get_mock_responses(count)}
-    
-                    
-    
-            except Exception as e:
-    
-                logger.error(f"LLM API调用失败: {e}")
-    
-                return None
-    
-        
-    
-        def _get_mock_responses(self, count: int) -> List[str]:
-    
-            """
-    
-            获取Mock回答建议
-    
-            """
-    
-            responses = [
-    
-                "我理解您的观点，这确实是一个值得深入思考的问题。",
-    
-                "您说得很有道理，不过我觉得可能还有另一个角度可以考虑。",
-    
-                "哈哈，这个想法很有趣！我也有类似的经历。",
-    
-                "能具体说说您是怎么想的吗？我很好奇您的具体考虑。",
-    
-                "谢谢您的分享，这让我学到了很多新的东西。"
-    
-            ]
-    
-            
-    
-            return responses[:count]
+
+            # TODO: 实际的OpenRouter API调用
+            # 这里应该实现真实的API调用逻辑
+            await asyncio.sleep(0.5)
+            return {"suggestions": self._get_mock_responses(count)}
+
+        except Exception as e:
+            logger.error(f"LLM API调用失败: {e}")
+            return None
+
+    def _get_mock_responses(self, count: int) -> List[str]:
+        """获取Mock回答建议"""
+        responses = [
+            "我理解您的观点，这确实是一个值得深入思考的问题。",
+            "您说得很有道理，不过我觉得可能还有另一个角度可以考虑。",
+            "哈哈，这个想法很有趣！我也有类似的经历。",
+            "能具体说说您是怎么想的吗？我很好奇您的具体考虑。",
+            "谢谢您的分享，这让我学到了很多新的东西。"
+        ]
+        return responses[:count]
+
+    def _read_prompt_file(self, path: str) -> str:
+        """读取提示词文件内容"""
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return f.read().strip()
+        except Exception as e:
+            logger.error(f"读取提示词文件失败: {path}, {e}")
+            return ""
+
+    def _load_first_existing(self, paths: List[str], default_path: str) -> str:
+        """按顺序加载第一个存在的提示词文件，否则回退到默认文件"""
+        for path in paths:
+            if os.path.exists(path):
+                return self._read_prompt_file(path)
+        return self._read_prompt_file(default_path)
+
+    def _log_prompt(self, session_id: str, request_type: str, prompt: str, system_prompt: Optional[str] = None, extra: Optional[Dict[str, Any]] = None):
+        """将提示词和上下文写入独立日志文件，便于调试"""
+        try:
+            if not self.prompt_log_file:
+                return
+            log_dir = os.path.dirname(self.prompt_log_file) or "."
+            os.makedirs(log_dir, exist_ok=True)
+
+            record = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "session_id": session_id,
+                "request_type": request_type,
+                "prompt": prompt,
+            }
+            if system_prompt:
+                record["system_prompt"] = system_prompt
+            if extra:
+                record.update(extra)
+
+            with open(self.prompt_log_file, "a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        except Exception as e:
+            logger.error(f"写入LLM提示词日志失败: {e}")
+
+    def _build_messages(self, system_prompt: str, user_prompt: str) -> List[Dict[str, str]]:
+        """构建 chat messages，确保 persona 放入 system，上下文放入 user"""
+        return [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+    def _build_response_system_prompt(self, count: int) -> str:
+        """拼装回答生成的 system prompt，包含角色与生成规范"""
+        requirements = (self.response_generation_requirements or "").replace("{count}", str(count))
+        if requirements:
+            return f"{self.response_system_prompt}\n\n{requirements}"
+        return self.response_system_prompt
     
     async def health_check(self) -> Dict[str, Any]:
         """
@@ -434,7 +500,7 @@ class OpenRouterLLMService(LLMService):
             logger.error(f"OpenRouter LLM服务初始化失败: {e}")
             return False
     
-    async def _call_llm(self, prompt: str, response_format: str = "auto", max_tokens: int = None, count: int = 3) -> Optional[Dict[str, Any]]:
+    async def _call_llm(self, messages: List[Dict[str, str]], response_format: str = "auto", max_tokens: int = None, count: int = 3) -> Optional[Dict[str, Any]]:
         """真实的OpenRouter API调用"""
         if not self.api_client:
             return None
@@ -490,17 +556,35 @@ class OpenRouterLLMService(LLMService):
             # 调用API - 使用配置中的模型和参数
             response = await self.api_client.chat.completions.create(
                 model=settings.openrouter_model,
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
+                messages=messages,
                 max_tokens=max_tokens,
                 temperature=settings.openrouter_temperature,
                 response_format=format_schema
             )
             
-            # 解析响应
-            content = response.choices[0].message.content
-            return json.loads(content)
+            # 解析响应，兼容 response_format=json_schema 时的 message.parsed
+            choice_msg = response.choices[0].message
+            parsed = getattr(choice_msg, "parsed", None)
+            if parsed:
+                return parsed
+
+            content = choice_msg.content
+            if not content:
+                logger.error(
+                    "OpenRouter 返回空内容，无法解析；response_id=%s, model=%s",
+                    getattr(response, "id", None),
+                    getattr(response, "model", None),
+                )
+                return None
+
+            try:
+                return json.loads(content)
+            except json.JSONDecodeError as decode_err:
+                logger.error(
+                    "OpenRouter 返回内容非JSON，可疑响应，截断日志: %s",
+                    content[:500]
+                )
+                raise decode_err
             
         except Exception as e:
             logger.error(f"OpenRouter API调用失败: {e}")

@@ -1,0 +1,16 @@
+{
+  "id": "27165748-cc32-4d2c-8173-6b943546f220",
+  "scenario_description": "项目管理讨论会议",
+  "response_count": 3,
+  "status": "recording_message",
+  "messages": [],
+  "modifications": [],
+  "focused_message_ids": [],
+  "user_opinion": null,
+  "current_message_sender": "测试用户",
+  "active_opinion_request_id": null,
+  "active_response_request_id": null,
+  "created_at": "2025-12-21T05:22:15.485537",
+  "updated_at": "2025-12-21T05:22:15.907546",
+  "persisted_at": "2025-12-21T05:22:15.907804"
+}

@@ -46,6 +46,9 @@ class ManualGenerateData(BaseModel):
     session_id: str = Field(description="目标会话标识")
     focused_message_ids: Optional[List[str]] = Field(default=None, description="用户选择聚焦的消息ID数组")
     user_corpus: Optional[str] = Field(default=None, description="用户提供的语料库")
+    user_background: Optional[str] = Field(default=None, description="用户背景信息，例如身份、角色")
+    user_preferences: Optional[str] = Field(default=None, description="用户的喜好与偏好")
+    user_recent_experiences: Optional[str] = Field(default=None, description="用户最近的经历或事件")
 
 
 class UserModificationData(BaseModel):

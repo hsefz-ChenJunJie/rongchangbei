@@ -1,0 +1,31 @@
+{
+  "id": "1fb2ca2f-a852-4560-a845-6f165062c61a",
+  "scenario_description": "与王芃雨的聊天对话\n\n你现在的聊天对象：姓名：王芃雨\n关系：朋友\n99岁 · 男\n性格特点：开朗、内向、幽默、严肃、温柔、直率、细心、大方\n禁忌话题：榴莲\n共同经历：名字叫王芃雨，年龄为99岁，是我的朋友，性别为男，性格开朗、内向、幽默、严肃、温柔、直率、细心、大方，不喜欢谈论榴莲。",
+  "response_count": 1,
+  "status": "idle",
+  "messages": [
+    {
+      "id": "msg_001",
+      "sender": "王芃雨",
+      "content": "未检测到音频内容",
+      "timestamp": "2025-12-22T04:53:49.663873",
+      "is_user_selected": false
+    },
+    {
+      "id": "msg_002",
+      "sender": "王芃雨",
+      "content": "未检测到音频内容",
+      "timestamp": "2025-12-22T04:54:00.648399",
+      "is_user_selected": false
+    }
+  ],
+  "modifications": [],
+  "focused_message_ids": [],
+  "user_opinion": null,
+  "current_message_sender": null,
+  "active_opinion_request_id": null,
+  "active_response_request_id": null,
+  "created_at": "2025-12-22T04:53:45.236427",
+  "updated_at": "2025-12-22T04:54:04.510985",
+  "persisted_at": "2025-12-22T04:54:04.511088"
+}

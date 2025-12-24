@@ -276,6 +276,7 @@ class RemoteTestRunner:
         test_suites = [
             ("test_websocket_features.py", "WebSocket功能测试"),
             ("test_conversation_features.py", "完整对话功能测试"),
+            ("test_user_corpus_and_opinion_keywords.py", "用户语料与意见关键词测试"),
         ]
         
         print(f"\n📋 计划执行 {len(test_suites)} 个测试套件:")

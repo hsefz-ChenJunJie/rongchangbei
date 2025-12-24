@@ -1,0 +1,24 @@
+{
+  "id": "20611364-f523-40e2-ac30-2422e51a07f4",
+  "scenario_description": "",
+  "response_count": 1,
+  "status": "idle",
+  "messages": [
+    {
+      "id": "msg_001",
+      "sender": "王芃雨",
+      "content": "未检测到音频内容",
+      "timestamp": "2025-12-22T05:03:09.761123",
+      "is_user_selected": false
+    }
+  ],
+  "modifications": [],
+  "focused_message_ids": [],
+  "user_opinion": null,
+  "current_message_sender": null,
+  "active_opinion_request_id": null,
+  "active_response_request_id": null,
+  "created_at": "2025-12-22T05:03:03.986432",
+  "updated_at": "2025-12-22T05:06:29.133699",
+  "persisted_at": "2025-12-22T05:06:29.134005"
+}

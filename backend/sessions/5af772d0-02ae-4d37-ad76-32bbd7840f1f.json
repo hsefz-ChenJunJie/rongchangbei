@@ -1,0 +1,73 @@
+{
+  "id": "5af772d0-02ae-4d37-ad76-32bbd7840f1f",
+  "scenario_description": "与test的聊天对话\n\n你现在的聊天对象：姓名：test\n关系：家人\n女\n共同经历：名字叫做小林，来自陕西省西安市，处女座。喜欢摄影、音乐、手工……",
+  "response_count": 1,
+  "status": "idle",
+  "messages": [
+    {
+      "id": "msg_001",
+      "sender": "test",
+      "content": "Yeah",
+      "timestamp": "2025-12-22T05:22:32.184292",
+      "is_user_selected": false
+    },
+    {
+      "id": "usr_002",
+      "sender": "anonymous",
+      "content": "嗯嗯，小林最近在忙啥呢？",
+      "timestamp": "2025-12-22T05:23:00.627149",
+      "is_user_selected": true
+    },
+    {
+      "id": "usr_003",
+      "sender": "anonymous",
+      "content": "最近在西安拍了些秋天的照片，手工也做了个小挂饰。",
+      "timestamp": "2025-12-22T05:23:17.522991",
+      "is_user_selected": true
+    },
+    {
+      "id": "msg_004",
+      "sender": "test",
+      "content": "那很不...",
+      "timestamp": "2025-12-22T05:23:34.859513",
+      "is_user_selected": false
+    },
+    {
+      "id": "usr_005",
+      "sender": "anonymous",
+      "content": "挺有意思的，秋天的西安挺出片的。",
+      "timestamp": "2025-12-22T05:23:53.384439",
+      "is_user_selected": true
+    },
+    {
+      "id": "msg_006",
+      "sender": "test",
+      "content": "录音",
+      "timestamp": "2025-12-22T05:26:04.911063",
+      "is_user_selected": false
+    },
+    {
+      "id": "usr_007",
+      "sender": "anonymous",
+      "content": "听起来你最近挺有灵感的啊",
+      "timestamp": "2025-12-22T05:26:20.616099",
+      "is_user_selected": true
+    },
+    {
+      "id": "usr_008",
+      "sender": "anonymous",
+      "content": "听起来你最近挺有灵感的啊",
+      "timestamp": "2025-12-22T05:26:29.097815",
+      "is_user_selected": true
+    }
+  ],
+  "modifications": [],
+  "focused_message_ids": [],
+  "user_opinion": null,
+  "current_message_sender": null,
+  "active_opinion_request_id": null,
+  "active_response_request_id": null,
+  "created_at": "2025-12-22T05:22:23.271048",
+  "updated_at": "2025-12-22T05:27:46.157377",
+  "persisted_at": "2025-12-22T05:27:46.157848"
+}

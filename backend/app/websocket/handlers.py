@@ -418,6 +418,14 @@ class WebSocketHandler:
         # 更新会话数据
         if event.data.focused_message_ids:
             self.session_manager.set_focused_messages(session_id, event.data.focused_message_ids)
+        # 记录用户上下文信息，便于后续生成复用
+        self.session_manager.update_user_context(
+            session_id=session_id,
+            user_corpus=event.data.user_corpus,
+            user_background=event.data.user_background,
+            user_preferences=event.data.user_preferences,
+            user_recent_experiences=event.data.user_recent_experiences,
+        )
         
         # 更新状态
         await self.send_status_update(session_id, "generating_response", "生成回答建议")
@@ -427,7 +435,10 @@ class WebSocketHandler:
             await self.request_manager.generate_response_suggestions(
                 session_id=session_id,
                 focused_message_ids=event.data.focused_message_ids,
-                user_corpus=event.data.user_corpus
+                user_corpus=event.data.user_corpus,
+                user_background=event.data.user_background,
+                user_preferences=event.data.user_preferences,
+                user_recent_experiences=event.data.user_recent_experiences,
             )
         
         logger.info(f"手动触发生成: {session_id}")

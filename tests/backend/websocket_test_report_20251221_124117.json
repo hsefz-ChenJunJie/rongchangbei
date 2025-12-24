@@ -1,0 +1,48 @@
+{
+  "test_config": {
+    "server_url": "http://ld.frp.one:40271",
+    "websocket_url": "ws://ld.frp.one:40271/conversation",
+    "test_settings": {
+      "connection_timeout": 10,
+      "response_timeout": 30,
+      "max_retries": 3,
+      "enable_detailed_logging": true,
+      "enable_file_logging": true,
+      "log_level": "DEBUG",
+      "show_list_items": true,
+      "test_audio_chunks": 5,
+      "mock_audio_duration": 2.0,
+      "websocket_timeout": 90
+    }
+  },
+  "test_summary": {
+    "total_tests": 3,
+    "passed_tests": 0,
+    "failed_tests": 3,
+    "success_rate": 0.0,
+    "results": [
+      {
+        "test_name": "WebSocket连接测试",
+        "success": false,
+        "timestamp": "2025-12-21T12:41:14.217454",
+        "details": "连接失败",
+        "data": null
+      },
+      {
+        "test_name": "对话流程测试",
+        "success": false,
+        "timestamp": "2025-12-21T12:41:15.219278",
+        "details": "WebSocket未连接",
+        "data": null
+      },
+      {
+        "test_name": "回答数量测试",
+        "success": false,
+        "timestamp": "2025-12-21T12:41:16.319715",
+        "details": "无法建立WebSocket连接",
+        "data": null
+      }
+    ]
+  },
+  "generated_at": "2025-12-21T12:41:17.321419"
+}

@@ -1,7 +1,7 @@
 {
   "backend_server": {
-    "base_url": "http://xg.3.frp.one",
-    "port": 40271,
+    "base_url": "http://lsj.2.frp.one",
+    "port": 48788,
     "health_endpoint": "/",
     "conversation_health_endpoint": "/conversation/health",
     "websocket_endpoint": "/conversation"

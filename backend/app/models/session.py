@@ -54,6 +54,10 @@ class Session(BaseModel):
     modifications: List[str] = Field(default_factory=list, description="修改建议列表")
     focused_message_ids: List[str] = Field(default_factory=list, description="聚焦消息ID列表")
     user_opinion: Optional[str] = Field(default=None, description="用户意见倾向")
+    user_corpus: Optional[str] = Field(default=None, description="用户提供的语料库")
+    user_background: Optional[str] = Field(default=None, description="用户背景信息（身份/角色等）")
+    user_preferences: Optional[str] = Field(default=None, description="用户的偏好与喜好")
+    user_recent_experiences: Optional[str] = Field(default=None, description="用户最近的经历或事件")
     
     # 请求管理
     active_opinion_request_id: Optional[str] = Field(default=None, description="进行中的意见生成请求ID")
@@ -93,13 +97,14 @@ class Session(BaseModel):
                 return message
         return None
 
-    def get_focused_messages(self) -> List[Message]:
-        """获取聚焦的消息列表"""
-        if not self.focused_message_ids:
+    def get_focused_messages(self, message_ids: Optional[List[str]] = None) -> List[Message]:
+        """获取聚焦的消息列表；可传入自定义ID列表，默认使用会话内记录的聚焦ID"""
+        ids = message_ids if message_ids is not None else self.focused_message_ids
+        if not ids:
             return []
         
-        focused_messages = []
-        for message_id in self.focused_message_ids:
+        focused_messages: List[Message] = []
+        for message_id in ids:
             message = self.get_message(message_id)
             if message:
                 focused_messages.append(message)
@@ -134,6 +139,24 @@ class Session(BaseModel):
     def set_user_opinion(self, opinion: str):
         """设置用户意见倾向"""
         self.user_opinion = opinion
+        self.updated_at = datetime.utcnow()
+
+    def update_user_context(
+        self,
+        user_corpus: Optional[str] = None,
+        user_background: Optional[str] = None,
+        user_preferences: Optional[str] = None,
+        user_recent_experiences: Optional[str] = None,
+    ):
+        """更新用户相关上下文信息"""
+        if user_corpus is not None:
+            self.user_corpus = user_corpus
+        if user_background is not None:
+            self.user_background = user_background
+        if user_preferences is not None:
+            self.user_preferences = user_preferences
+        if user_recent_experiences is not None:
+            self.user_recent_experiences = user_recent_experiences
         self.updated_at = datetime.utcnow()
     
     def set_history_messages(self, history_messages: List[Dict[str, str]]):
@@ -225,6 +248,10 @@ class Session(BaseModel):
             "modifications": self.modifications,
             "focused_message_ids": self.focused_message_ids,
             "user_opinion": self.user_opinion,
+            "user_corpus": self.user_corpus,
+            "user_background": self.user_background,
+            "user_preferences": self.user_preferences,
+            "user_recent_experiences": self.user_recent_experiences,
             "active_opinion_request_id": self.active_opinion_request_id,
             "active_response_request_id": self.active_response_request_id,
             "partial_transcription": self.partial_transcription,

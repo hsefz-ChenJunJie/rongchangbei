@@ -1,0 +1,38 @@
+{
+  "id": "190709dd-5bf7-4e6a-92ae-568060381cfd",
+  "scenario_description": "与合唱课的聊天对话",
+  "response_count": 1,
+  "status": "idle",
+  "messages": [
+    {
+      "id": "msg_001",
+      "sender": "合唱课",
+      "content": "Welcome to this place",
+      "timestamp": "2025-12-22T05:30:07.279369",
+      "is_user_selected": false
+    },
+    {
+      "id": "msg_002",
+      "sender": "合唱课",
+      "content": "In the coming, I will show you around this wonderful place.",
+      "timestamp": "2025-12-22T05:30:17.302570",
+      "is_user_selected": false
+    },
+    {
+      "id": "usr_003",
+      "sender": "anonymous",
+      "content": "谢谢，很期待你带我参观这个地方。",
+      "timestamp": "2025-12-22T05:30:32.979253",
+      "is_user_selected": true
+    }
+  ],
+  "modifications": [],
+  "focused_message_ids": [],
+  "user_opinion": null,
+  "current_message_sender": null,
+  "active_opinion_request_id": null,
+  "active_response_request_id": null,
+  "created_at": "2025-12-22T05:29:58.687545",
+  "updated_at": "2025-12-22T05:33:56.128987",
+  "persisted_at": "2025-12-22T05:33:56.129296"
+}

@@ -126,7 +126,10 @@
   "data": {
     "session_id": "会话ID", // [必需]
     "focused_message_ids": ["msg_001", "msg_003"], // [可选] 用户选择聚焦的消息ID数组
-    "user_corpus": "用户提供的语料库文本" // [可选] 用户提供的用于增强回复的语料
+    "user_corpus": "用户提供的语料库文本", // [可选] 用户提供的用于增强回复的语料
+    "user_background": "用户背景信息，如身份/角色", // [可选] 用户身份与背景
+    "user_preferences": "用户的喜好与偏好", // [可选] 用户偏好提示
+    "user_recent_experiences": "用户最近的经历或事件" // [可选] 用户近期经历
   }
 }
 ```
