@@ -170,7 +170,7 @@
   "type": "user_modification", // [必需]
   "data": {
     "session_id": "会话ID", // [必需]
-    "modification": "修改建议文本" // [必需] 对AI回复的修改意见
+    "modification": "修改建议文本|用户意见及情感" // [必需] 对AI回复的修改意见
   }
 }
 ```

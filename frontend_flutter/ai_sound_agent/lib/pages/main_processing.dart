@@ -580,6 +580,16 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
             _isLoading = false;
           });
         }
+        
+        // 会话建立后，如果没有LLM响应建议，自动发送手动生成请求
+        if (_responseSuggestions.isEmpty) {
+          // 延迟1秒后发送初始手动生成请求，给界面一些时间初始化
+          Future.delayed(const Duration(seconds: 1), () {
+            if (mounted && _sessionId != null) {
+              _sendManualGenerate(''); // 发送空意见触发初始生成
+            }
+          });
+        }
       } else if (data['type'] == 'opinion_suggestions') {
         // 处理意见建议消息
         final receivedSessionId = data['data']['session_id'] as String;
@@ -1367,12 +1377,16 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
             height: 300, // Limit the height of the AI panel
             child: AIGenerationPanel(
               isVisible: _isAIPanelVisible,
+              suggestionKeywords: _suggestionKeywords, // 来自后端的建议关键词
+              responseSuggestions: _responseSuggestions, // 来自后端的LLM响应建议
               onSuggestionSelected: (text) {
                 // 将AI生成的文本追加到输入框
                 if (_inputKey.currentState != null) {
                   _inputKey.currentState!.addText(text);
                 }
               },
+              onUserModification: _sendUserModification, // 发送用户修改意见
+              onScenarioSupplement: _sendScenarioSupplement, // 发送情景补充
               onClose: () {
                 // 关闭AI生成面板
                 setState(() {
@@ -1476,9 +1490,8 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         'type': 'manual_generate',
         'data': {
           'session_id': _sessionId,
-          'user_opinion': userOpinion,
           'focused_message_ids': [], // 可选：用户选择聚焦的消息ID数组
-          'user_corpus': '', // 可选：用户提供的语料库文本
+          'user_corpus': userOpinion.isNotEmpty ? userOpinion : '', // 可选：用户提供的语料库文本
         }
       };
 
@@ -1486,6 +1499,29 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       debugPrint('已发送手动生成消息: ${json.encode(message)}');
     } catch (e) {
       debugPrint('发送手动生成消息时出错: $e');
+    }
+  }
+
+  // 发送用户修改意见消息
+  void _sendUserModification(String modification) {
+    if (_webSocketChannel == null || _sessionId == null) {
+      debugPrint('WebSocket连接或session_id为空，无法发送用户修改意见');
+      return;
+    }
+
+    try {
+      final message = {
+        'type': 'user_modification',
+        'data': {
+          'session_id': _sessionId,
+          'modification': modification,
+        }
+      };
+
+      _webSocketChannel!.sink.add(json.encode(message));
+      debugPrint('已发送用户修改意见: ${json.encode(message)}');
+    } catch (e) {
+      debugPrint('发送用户修改意见时出错: $e');
     }
   }
 
@@ -1519,31 +1555,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     }
   }
 
-  // 发送用户修改建议消息
-  void _sendUserModification(String modificationText) {
-    if (_webSocketChannel == null || _sessionId == null) {
-      debugPrint('WebSocket连接或session_id为空，无法发送用户修改建议');
-      return;
-    }
 
-    try {
-      final message = {
-        'type': 'user_modification',
-        'data': {
-          'session_id': _sessionId,
-          'modification': modificationText,
-        }
-      };
-
-      _webSocketChannel!.sink.add(json.encode(message));
-      debugPrint('已发送用户修改建议: ${json.encode(message)}');
-      
-      // 可选：发送后清空输入框
-      _modificationController.clear();
-    } catch (e) {
-      debugPrint('发送用户修改建议时出错: $e');
-    }
-  }
 
   // 发送用户选择的响应消息
   Future<void> _sendUserSelectedResponse(String selectedContent) async {
