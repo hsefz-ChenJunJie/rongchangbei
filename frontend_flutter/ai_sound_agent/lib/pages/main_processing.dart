@@ -7,6 +7,7 @@ import 'package:idialogue/widgets/chat_recording/chat_dialogue.dart';
 import 'package:idialogue/widgets/chat_recording/chat_input.dart';
 import 'package:idialogue/widgets/chat_recording/role_selector.dart';
 import 'package:idialogue/widgets/chat_recording/role_manager.dart';
+import 'package:idialogue/widgets/chat_recording/ai_generation_panel.dart';  // 新增导入AI生成面板
 import 'package:idialogue/services/dp_manager.dart';
 import 'package:idialogue/services/theme_manager.dart';
 import 'package:idialogue/services/userdata_services.dart';
@@ -50,16 +51,10 @@ enum LoadingStep {
 class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   final GlobalKey<ChatDialogueState> _dialogueKey = GlobalKey<ChatDialogueState>();
   final GlobalKey<ChatInputState> _inputKey = GlobalKey<ChatInputState>();
-  bool _isSidebarOpen = false;
   bool _isLoading = true;
   String? _sessionId;
   WebSocketChannel? _webSocketChannel;
   LoadingStep _currentStep = LoadingStep.readingFile;
-
-  final TextEditingController _scenarioSupplementController = TextEditingController();
-  final TextEditingController _userOpinionController = TextEditingController();
-  final TextEditingController _modificationController = TextEditingController();
-  final TextEditingController _contentInputController = TextEditingController(); // 新增：内容输入控制器
 
   DialoguePackage? _currentDialoguePackage;
   
@@ -70,10 +65,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   // 新增：存储建议关键词的列表
   List<String> _suggestionKeywords = ['建议1', '建议2', '建议3'];
   
-  // 新增：用户意见相关状态
-  String _userOpinionBackup = '';
-  Timer? _userOpinionTimer;
-  bool _isUserOpinionTimerActive = false;
+
   
   // 新增：回答生成数控制
   int _responseCount = 3; // 默认值，将从dialoguePackage读取
@@ -107,6 +99,20 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   // 对话人档案相关状态
   PartnerProfile? _currentPartnerProfile;
 
+  // AI生成面板相关状态
+  bool _isAIPanelVisible = false;
+
+  // 侧边栏输入控制器
+  final TextEditingController _scenarioSupplementController = TextEditingController();
+  final TextEditingController _userOpinionController = TextEditingController();
+  final TextEditingController _modificationController = TextEditingController();
+  final TextEditingController _contentInputController = TextEditingController();
+
+  // 用户意见备份和计时器
+  String _userOpinionBackup = '';
+  Timer? _userOpinionTimer;
+  bool _isUserOpinionTimerActive = false;
+
   final Map<LoadingStep, String> _stepDescriptions = {
     LoadingStep.readingFile: '正在读取对话文件...',
     LoadingStep.settingUpPage: '正在设置页面...',
@@ -129,6 +135,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeDefaultRoles();
       _loadCurrentDialogue();
+      _startUserOpinionTimer(); // 启动用户意见计时器
     });
   }
 
@@ -188,7 +195,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         scenarioDescription: _scenarioSupplementController.text,
         responseCount: _responseCount,
         modification: _modificationController.text,
-        userOpinion: _userOpinionController.text,
+        userOpinion: _inputKey.currentState?.getUserOpinion() ?? '', // 从ChatInput组件获取用户意见
         override: true,
       );
       debugPrint('当前进度已保存到$targetDpFile.dp');
@@ -361,10 +368,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         _dialogueDescription = dialoguePackage.description;
       });
       
-      // 填充侧边栏输入框的值
-      _scenarioSupplementController.text = dialoguePackage.scenarioSupplement;
-      _userOpinionController.text = dialoguePackage.userOpinion;
-      _modificationController.text = dialoguePackage.modification;
+
       
       // 初始化回答生成数
       setState(() {
@@ -377,6 +381,13 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       debugPrint('情景补充: ${dialoguePackage.scenarioSupplement}');
       debugPrint('用户意见: ${dialoguePackage.userOpinion}');
       debugPrint('修改意见: ${dialoguePackage.modification}');
+      
+      // 将用户意见设置到输入组件中
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_inputKey.currentState != null) {
+          _inputKey.currentState!.setUserOpinion(dialoguePackage.userOpinion);
+        }
+      });
       
       // 转换为ChatMessage列表并添加到对话中，但不指定message_id
       List<Map<String, dynamic>> chatMessages = dpManager.toChatMessages(dialoguePackage);
@@ -808,11 +819,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
 
 
-  void _toggleSidebar() {
-    setState(() {
-      _isSidebarOpen = !_isSidebarOpen;
-    });
-  }
+
 
   Future<void> _startRecording() async {
     if (_isRecording) {
@@ -1055,14 +1062,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         ),
       ),
       
-      // 侧边栏控制按钮 - 统一使用主题主色调
-      FloatingActionButton(
-        heroTag: 'sidebar_button',
-        onPressed: _toggleSidebar,
-        tooltip: '打开侧边栏',
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        child: const Icon(Icons.menu, color: Colors.white),
-      ),
+
     ];
   }
 
@@ -1138,7 +1138,6 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     
     // 清理控制器
     _scenarioSupplementController.dispose();
-    _userOpinionController.dispose();
     _modificationController.dispose();
     _contentInputController.dispose();
     
@@ -1323,448 +1322,49 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
               }
               return ChatInput(
                 key: _inputKey,
-                dialogueState: dialogueState,
+                dialogueState: _dialogueKey.currentState!,
                 onSend: _handleSendMessage,
+                onPlusButtonPressed: () {
+                  // 切换AI生成面板的显示状态
+                  setState(() {
+                    _isAIPanelVisible = !_isAIPanelVisible;
+                  });
+                },
+                onAppendText: (text) {
+                  // 处理追加文本的回调
+                  if (_inputKey.currentState != null) {
+                    _inputKey.currentState!.addText(text);
+                  }
+                },
               );
             }
           ),
         ),
+        
+        // AI生成面板
+        if (_isAIPanelVisible)
+          AIGenerationPanel(
+            isVisible: _isAIPanelVisible,
+            onSuggestionSelected: (text) {
+              // 将AI生成的文本追加到输入框
+              if (_inputKey.currentState != null) {
+                _inputKey.currentState!.addText(text);
+              }
+            },
+            onClose: () {
+              // 关闭AI生成面板
+              setState(() {
+                _isAIPanelVisible = false;
+              });
+            },
+          ),
       ],
     );
   }
 
-  // 主布局 - 包含侧边栏和主内容
+  // 主布局 - 简化版，移除侧边栏
   Widget _buildMainLayout() {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final screenWidth = constraints.maxWidth;
-        final screenHeight = constraints.maxHeight;
-        final isPortrait = screenWidth < screenHeight;
-        
-        if (isPortrait) {
-          // 手机模式：使用覆盖式侧边栏
-          return _buildMobileLayout();
-        } else {
-          // 平板/桌面模式：使用抽屉式侧边栏
-          return _buildTabletLayout();
-        }
-      },
-    );
-  }
-
-  // 手机模式布局
-  Widget _buildMobileLayout() {
-    return Stack(
-      children: [
-        // 主内容
-        _buildMainContent(),
-        
-        // 重连状态提示
-        if (_isReconnecting)
-          Positioned(
-            top: 60,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '连接断开，正在重连... ($_reconnectAttempts/$maxReconnectAttempts)',
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        
-        // 侧边栏覆盖层
-        if (_isSidebarOpen)
-          Positioned.fill(
-            child: GestureDetector(
-              onTap: _toggleSidebar,
-              child: Container(
-                color: Colors.black54,
-              ),
-            ),
-          ),
-          
-        // 侧边栏内容
-        AnimatedPositioned(
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeInOut,
-          left: _isSidebarOpen ? 0 : -MediaQuery.of(context).size.width * 0.75,
-          top: 0,
-          bottom: 0,
-          child: Container(
-            width: MediaQuery.of(context).size.width * 0.75,
-            color: Theme.of(context).colorScheme.surface,
-            child: _buildSidebarMenu(),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // 平板/桌面模式布局
-  Widget _buildTabletLayout() {
-    return Stack(
-      children: [
-        Row(
-          children: [
-            // 侧边栏（抽屉式）
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              curve: Curves.easeInOut,
-              width: _isSidebarOpen ? 250 : 0,
-              child: _isSidebarOpen
-                  ? Container(
-                      color: Theme.of(context).colorScheme.surface,
-                      child: _buildSidebarMenu(),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-              
-            // 主内容区域
-            Expanded(
-              child: _buildMainContent(),
-            ),
-          ],
-        ),
-        
-        // 重连状态提示
-        if (_isReconnecting)
-          Positioned(
-            top: 20,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.9),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '连接断开，正在重连... ($_reconnectAttempts/$maxReconnectAttempts)',
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  // 侧边栏菜单内容
-  Widget _buildSidebarMenu() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                
-                // 场景描述展示
-                Text(
-                  '场景描述',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  _currentDialoguePackage?.scenarioDescription ?? '当前对话场景的描述内容',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 16),
-                
-                // 情景补充输入框
-                BaseLineInput(
-                  label: '情景补充',
-                  placeholder: '请输入情景补充信息; Enter发送',
-                  controller: _scenarioSupplementController,
-                  onChanged: (value) {
-                    // TODO: 处理情景补充输入
-                  },
-                  onSubmitted: (value) {
-                    // 当用户按下Enter键时发送情景补充并更新场景描述
-                    final trimmedValue = value.trim();
-                    if (trimmedValue.isNotEmpty && _sessionId != null) {
-                      // 发送WebSocket消息
-                      _sendScenarioSupplement(trimmedValue);
-                      
-                      // 将内容添加到场景描述
-                      setState(() {
-                        if (_currentDialoguePackage != null) {
-                          if (_currentDialoguePackage!.scenarioDescription.isEmpty) {
-                            _currentDialoguePackage!.scenarioDescription = trimmedValue;
-                          } else {
-                            _currentDialoguePackage!.scenarioDescription += '; $trimmedValue';
-                          }
-                        }
-                      });
-                      
-                      // 清空输入框
-                      _scenarioSupplementController.clear();
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-                
-                // 分隔符
-                Divider(
-                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                  thickness: 1,
-                ),
-                const SizedBox(height: 16),
-                
-                // 用户意见输入框
-                BaseLineInput(
-                  label: '用户意见',
-                  placeholder: '请输入您的意见',
-                  controller: _userOpinionController,
-                  onChanged: (value) {
-                    // 当用户开始输入时启动计时器（如果尚未启动）
-                    if (!_isUserOpinionTimerActive && value.isNotEmpty) {
-                      _startUserOpinionTimer();
-                    }
-                    
-                    // 如果用户清空了输入，停止计时器
-                    if (value.isEmpty && _isUserOpinionTimerActive) {
-                      _stopUserOpinionTimer();
-                      _userOpinionBackup = '';
-                    }
-                  },
-                  onSubmitted: (value) {
-                    final trimmedValue = value.trim();
-                    if (trimmedValue.isNotEmpty && trimmedValue != _userOpinionBackup) {
-                      _sendManualGenerate(trimmedValue);
-                      _userOpinionBackup = trimmedValue;
-                    }
-                    
-                    // 按Enter后清空输入框
-                    _userOpinionController.clear();
-                    
-                    // 停止计时器
-                    _stopUserOpinionTimer();
-                    _userOpinionBackup = '';
-                  },
-                ),
-                const SizedBox(height: 12),
-                
-                // 建议意见按钮行
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 2),
-                        child: _buildSuggestionButton(_suggestionKeywords.isNotEmpty ? _suggestionKeywords[0] : '建议1'),
-                      ),
-                    ),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 2),
-                        child: _buildSuggestionButton(_suggestionKeywords.length > 1 ? _suggestionKeywords[1] : '建议2'),
-                      ),
-                    ),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 2),
-                        child: _buildSuggestionButton(_suggestionKeywords.length > 2 ? _suggestionKeywords[2] : '建议3'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                
-                // 分隔符
-                Divider(
-                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                  thickness: 1,
-                ),
-                const SizedBox(height: 16),
-                
-                // 内容输入框
-                BaseTextArea(
-                  label: '内容输入',
-                  placeholder: '请输入内容...',
-                  maxLines: null, // 允许自动扩展
-                  minLines: 3,
-                  controller: _contentInputController, // 添加控制器
-                  onChanged: (value) {
-                    // TODO: 处理大输入框内容
-                  },
-                ),
-                const SizedBox(height: 8),
-                
-                // 状态提示文字
-                if (_isGeneratingResponse)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Text(
-                      _generatingMessage,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.6),
-                      ),
-                    ),
-                  ),
-                
-                // LLM响应建议按钮
-                if (_responseSuggestions.isNotEmpty)
-                  Column(
-                    children: [
-                      ..._responseSuggestions.map((suggestion) => 
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _buildLLMResponseButton(suggestion),
-                        )
-                      ),
-                      const SizedBox(height: 8),
-                    ],
-                  ),
-                const SizedBox(height: 4),
-                
-                // 回答生成数控制
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      '回答生成数',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    Container(
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                          width: 1,
-                        ),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          // 减号按钮
-                          BaseElevatedButton(
-                            onPressed: _responseCount > 1 
-                                ? () => _sendResponseCountUpdate(_responseCount - 1)
-                                : null,
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            width: 32,
-                            height: 28,
-                            borderRadius: 4,
-                            backgroundColor: Colors.transparent,
-                            foregroundColor: Theme.of(context).colorScheme.onSurface,
-                            label: '-',
-                          ),
-                          
-                          // 数字显示
-                          Container(
-                            width: 40,
-                            height: 28,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              border: Border.symmetric(
-                                horizontal: BorderSide(
-                                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.3),
-                                  width: 1,
-                                ),
-                              ),
-                            ),
-                            child: Text(
-                              '$_responseCount',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          
-                          // 加号按钮
-                          BaseElevatedButton(
-                            onPressed: _responseCount < 5 
-                                ? () => _sendResponseCountUpdate(_responseCount + 1)
-                                : null,
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            width: 32,
-                            height: 28,
-                            borderRadius: 4,
-                            backgroundColor: Colors.transparent,
-                            foregroundColor: Theme.of(context).colorScheme.onSurface,
-                            label: '+',
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                
-                // 修改意见输入框
-                BaseLineInput(
-                  label: '修改意见',
-                  placeholder: '不满意？想改改？',
-                  controller: _modificationController,
-                  onChanged: (value) {
-                    // TODO: 处理修改意见输入
-                  },
-                  onSubmitted: (value) {
-                    // 当用户按下Enter键时发送修改建议
-                    if (value.trim().isNotEmpty) {
-                      _sendUserModification(value.trim());
-                    }
-                  },
-                ),
-                const SizedBox(height: 16),
-                
-                // 移置对话框并语音合成按钮
-                BaseElevatedButton.icon(
-                  onPressed: _handleMoveToDialogAndTTS,
-                  label: '移置对话框并语音合成',
-                  icon: const Icon(Icons.speaker_phone, size: 16),
-                  expanded: true,
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Colors.white,
-                ),
-              ],
-            ),
-      ),
-    );
+    return _buildMainContent();
   }
 
   // 建议意见按钮构建方法
@@ -1773,10 +1373,8 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     return BaseElevatedButton(
       onPressed: () {
         // 点击建议按钮时，将建议文本添加到用户意见输入框
-        if (_userOpinionController.text.isEmpty) {
-          _userOpinionController.text = suggestionText;
-        } else {
-          _userOpinionController.text = '${_userOpinionController.text} $suggestionText';
+        if (_inputKey.currentState != null) {
+          _inputKey.currentState!.appendUserOpinion(suggestionText);
         }
       },
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
@@ -1835,7 +1433,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
   // 检查用户意见变化并发送消息
   void _checkAndSendUserOpinion() {
-    final currentOpinion = _userOpinionController.text.trim();
+    final currentOpinion = _inputKey.currentState?.getUserOpinion().trim() ?? '';
     
     if (currentOpinion.isNotEmpty && currentOpinion != _userOpinionBackup) {
       _sendManualGenerate(currentOpinion);
@@ -2031,11 +1629,10 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       // 获取所有聊天消息
       final chatMessages = _dialogueKey.currentState?.getAllMessages() ?? [];
       
-      // 获取侧边栏数据
+      // 获取相关数据
       final scenarioDescription = _currentDialoguePackage?.scenarioDescription ?? '';
-      final scenarioSupplement = _scenarioSupplementController.text;
-      final userOpinion = _userOpinionController.text;
-      final modification = _modificationController.text;
+      // 从ChatInput组件获取用户意见
+      final userOpinion = _inputKey.currentState?.getUserOpinion() ?? '';
       final responseCount = _responseCount;
       
       // 创建新的对话包
@@ -2047,9 +1644,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         description: _dialogueDescription,
         scenarioDescription: scenarioDescription,
         responseCount: responseCount,
-        modification: modification,
         userOpinion: userOpinion,
-        scenarioSupplement: scenarioSupplement,
         override: true,
       );
       
