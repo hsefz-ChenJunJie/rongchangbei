@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:idialogue/services/theme_manager.dart';
 import '../shared/base_line_input.dart';
 import 'chat_dialogue.dart';
 import 'role_selector.dart';
@@ -193,6 +194,7 @@ class ChatInputState extends State<ChatInput> {
     // 获取屏幕高度，限制最大高度为屏幕高度的15%
     final screenHeight = MediaQuery.of(context).size.height;
     final maxHeight = screenHeight * 0.15;
+    final ThemeManagerInstance = ThemeManager();
     
     return Container(
       constraints: BoxConstraints(
@@ -201,7 +203,7 @@ class ChatInputState extends State<ChatInput> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 角色选择区域
+          // 角色选择和AI面板按钮区域
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             child: Row(
@@ -212,6 +214,21 @@ class ChatInputState extends State<ChatInput> {
                   builder: (context, _) {
                     return const RoleSelector();
                   },
+                ),
+                const SizedBox(width: 8), // 在角色选择器和按钮之间添加间距
+                // AI生成面板按钮 (加号按钮)
+                Container(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: IconButton(
+                    icon: Icon(Icons.add, color: ThemeManagerInstance.darkTextColor, size: 20),
+                    tooltip: '打开AI生成面板',
+                    onPressed: widget.onPlusButtonPressed, // 使用传入的回调
+                    padding: const EdgeInsets.all(8),
+                    constraints: const BoxConstraints(),
+                  ),
                 ),
                 const Spacer(),
                 // 发送按钮
@@ -262,7 +279,7 @@ class ChatInputState extends State<ChatInput> {
                           placeholder: '输入消息...',
                           controller: _controller,
                           maxLines: null, // 改为null让输入框自动适应
-                          contentPadding: const EdgeInsets.fromLTRB(12, 8, 48, 8), // 减小内边距
+                          contentPadding: const EdgeInsets.fromLTRB(12, 8, 8, 8), // 减小内边距，移除右侧空间给按钮
                           labelStyle: TextStyle(
                             fontSize: 12, // 减小字体大小
                             color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.9),
@@ -282,7 +299,7 @@ class ChatInputState extends State<ChatInput> {
                         ),
                         if (_isShowingSuggestion && _suggestion.isNotEmpty)
                           Positioned(
-                            right: 48,
+                            right: 12, // 调整位置
                             bottom: 8, // 调整位置
                             child: Text(
                               _suggestion,
@@ -293,15 +310,6 @@ class ChatInputState extends State<ChatInput> {
                             ),
                           ),
                       ],
-                    ),
-                  ),
-                  // + 按钮
-                  Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    child: IconButton(
-                      icon: const Icon(Icons.add, size: 24),
-                      onPressed: widget.onPlusButtonPressed,
-                      padding: const EdgeInsets.all(4),
                     ),
                   ),
                 ],

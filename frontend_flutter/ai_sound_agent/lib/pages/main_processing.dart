@@ -143,10 +143,12 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   Future<void> _handleDisconnectionAndReconnect() async {
     if (_reconnectAttempts >= maxReconnectAttempts) {
       debugPrint('已达到最大重连次数，停止重连');
-      setState(() {
-        _sessionId = null;
-        _isReconnecting = false;
-      });
+      if (mounted) {
+        setState(() {
+          _sessionId = null;
+          _isReconnecting = false;
+        });
+      }
       return;
     }
 
@@ -154,10 +156,12 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     await _saveCurrentProgress();
 
     // 开始重连
-    setState(() {
-      _isReconnecting = true;
-      _reconnectAttempts++;
-    });
+    if (mounted) {
+      setState(() {
+        _isReconnecting = true;
+        _reconnectAttempts++;
+      });
+    }
 
     final delay = baseReconnectDelay * (1 << (_reconnectAttempts - 1)); // 指数退避
     debugPrint('WebSocket连接断开，${delay.inSeconds}秒后尝试第$_reconnectAttempts次重连');
@@ -232,10 +236,12 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       }
       
       debugPrint('WebSocket重连成功');
-      setState(() {
-        _isReconnecting = false;
-        _reconnectAttempts = 0;
-      });
+      if (mounted) {
+        setState(() {
+          _isReconnecting = false;
+          _reconnectAttempts = 0;
+        });
+      }
     } catch (e) {
       debugPrint('WebSocket重连失败: $e');
       if (mounted) {
@@ -326,10 +332,12 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
   Future<void> _loadCurrentDialogue() async {
     try {
-      setState(() {
-        _isLoading = true;
-        _currentStep = LoadingStep.readingFile;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+          _currentStep = LoadingStep.readingFile;
+        });
+      }
 
       // 初始化DPManager
       final dpManager = DPManager();
@@ -347,9 +355,11 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         }
       }
 
-      setState(() {
-        _currentStep = LoadingStep.settingUpPage;
-      });
+      if (mounted) {
+        setState(() {
+          _currentStep = LoadingStep.settingUpPage;
+        });
+      }
 
       // 检查目标dp文件是否存在，如果不存在则创建（仅当是current.dp时）
       if (targetDpFile == 'current' && !await dpManager.exists('current')) {
@@ -363,17 +373,21 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       _currentDialoguePackage = dialoguePackage;
       
       // 加载对话标题和描述
-      setState(() {
-        _dialogueTitle = dialoguePackage.packageName;
-        _dialogueDescription = dialoguePackage.description;
-      });
+      if (mounted) {
+        setState(() {
+          _dialogueTitle = dialoguePackage.packageName;
+          _dialogueDescription = dialoguePackage.description;
+        });
+      }
       
 
       
       // 初始化回答生成数
-      setState(() {
-        _responseCount = dialoguePackage.responseCount.clamp(1, 5);
-      });
+      if (mounted) {
+        setState(() {
+          _responseCount = dialoguePackage.responseCount.clamp(1, 5);
+        });
+      }
       
       // 记录调试信息
       debugPrint('已加载对话包数据:');
@@ -420,9 +434,11 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       final username = userdata.username;
       final baseUrl = userdata.preferences['base_url'] ?? 'ws://localhost:8000/conservation';
 
-      setState(() {
-        _currentStep = LoadingStep.sendingStartRequest;
-      });
+      if (mounted) {
+        setState(() {
+          _currentStep = LoadingStep.sendingStartRequest;
+        });
+      }
 
       // 建立WebSocket连接并直接发送包含历史消息的启动包
       await _establishWebSocketConnection(
@@ -434,10 +450,12 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
     } catch (e) {
       debugPrint('加载current.dp或建立WebSocket连接时出错: $e');
-      setState(() {
-        _isLoading = false;
-        _currentStep = LoadingStep.completed;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _currentStep = LoadingStep.completed;
+        });
+      }
     }
   }
 
@@ -547,10 +565,12 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
       if (data['type'] == 'session_created') {
         final sessionId = data['data']['session_id'] as String;
-        setState(() {
-          _sessionId = sessionId;
-          _currentStep = LoadingStep.receivingSessionId;
-        });
+        if (mounted) {
+          setState(() {
+            _sessionId = sessionId;
+            _currentStep = LoadingStep.receivingSessionId;
+          });
+        }
         debugPrint('会话已创建，session_id: $sessionId');
         
         // 收到session_created消息后才标记为完成
@@ -1343,20 +1363,23 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         
         // AI生成面板
         if (_isAIPanelVisible)
-          AIGenerationPanel(
-            isVisible: _isAIPanelVisible,
-            onSuggestionSelected: (text) {
-              // 将AI生成的文本追加到输入框
-              if (_inputKey.currentState != null) {
-                _inputKey.currentState!.addText(text);
-              }
-            },
-            onClose: () {
-              // 关闭AI生成面板
-              setState(() {
-                _isAIPanelVisible = false;
-              });
-            },
+          SizedBox(
+            height: 300, // Limit the height of the AI panel
+            child: AIGenerationPanel(
+              isVisible: _isAIPanelVisible,
+              onSuggestionSelected: (text) {
+                // 将AI生成的文本追加到输入框
+                if (_inputKey.currentState != null) {
+                  _inputKey.currentState!.addText(text);
+                }
+              },
+              onClose: () {
+                // 关闭AI生成面板
+                setState(() {
+                  _isAIPanelVisible = false;
+                });
+              },
+            ),
           ),
       ],
     );
@@ -1435,7 +1458,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   void _checkAndSendUserOpinion() {
     final currentOpinion = _inputKey.currentState?.getUserOpinion().trim() ?? '';
     
-    if (currentOpinion.isNotEmpty && currentOpinion != _userOpinionBackup) {
+    if (currentOpinion.isNotEmpty && currentOpinion != _userOpinionBackup && mounted) {
       _sendManualGenerate(currentOpinion);
       _userOpinionBackup = currentOpinion;
     }
@@ -1486,9 +1509,11 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       debugPrint('已发送回答生成数更新: ${json.encode(message)}');
       
       // 更新本地状态
-      setState(() {
-        _responseCount = newCount;
-      });
+      if (mounted) {
+        setState(() {
+          _responseCount = newCount;
+        });
+      }
     } catch (e) {
       debugPrint('发送回答生成数更新时出错: $e');
     }
@@ -1583,15 +1608,19 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
           initialTitle: _dialogueTitle,
           initialDescription: _dialogueDescription,
           onSave: (newTitle, newDescription) {
-            setState(() {
-              _dialogueTitle = newTitle;
-              _dialogueDescription = newDescription;
-            });
+            if (mounted) {
+              setState(() {
+                _dialogueTitle = newTitle;
+                _dialogueDescription = newDescription;
+              });
+            }
             
             // 保存成功后显示提示
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('对话信息已更新')),
-            );
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('对话信息已更新')),
+              );
+            }
           },
         );
       },
@@ -1779,6 +1808,7 @@ void _autoAddRoleFromSender(String senderName) {
     debugPrint('已自动添加新角色: $senderName');
   }
 }
+
 
 
 

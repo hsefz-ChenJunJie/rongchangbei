@@ -82,7 +82,7 @@ class _AIGenerationPanelState extends State<AIGenerationPanel> with TickerProvid
           child: Opacity(
             opacity: _fadeAnimation.value,
             child: Container(
-              width: 300,
+              width: MediaQuery.of(context).size.width, // 横向扩展到整个屏幕
               decoration: BoxDecoration(
                 color: Theme.of(context).scaffoldBackgroundColor,
                 border: Border.all(color: Theme.of(context).dividerColor),
@@ -130,19 +130,19 @@ class _AIGenerationPanelState extends State<AIGenerationPanel> with TickerProvid
                     ),
                   ),
                   
-                  // 内容区域
-                  Expanded(
+                  // 内容区域 - 使用Flexible避免无限高度约束问题
+                  Flexible(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(16),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // 建议按钮
+                          // 建议按钮 - 水平滚动布局
                           _buildSuggestionSection(),
                           
                           const SizedBox(height: 16),
                           
-                          // 情景补充
+                          // 情景补充 - 水平滚动布局
                           _buildScenarioSection(),
                         ],
                       ),
@@ -169,19 +169,29 @@ class _AIGenerationPanelState extends State<AIGenerationPanel> with TickerProvid
           ),
         ),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _buildSuggestionButton('表达同意'),
-            _buildSuggestionButton('表示反对'),
-            _buildSuggestionButton('提出质疑'),
-            _buildSuggestionButton('表示困惑'),
-            _buildSuggestionButton('表示理解'),
-            _buildSuggestionButton('继续深入'),
-            _buildSuggestionButton('转换话题'),
-            _buildSuggestionButton('总结要点'),
-          ],
+        // 水平滚动的建议按钮
+        SizedBox(
+          height: 50,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              _buildSuggestionButton('表达同意'),
+              const SizedBox(width: 8),
+              _buildSuggestionButton('表示反对'),
+              const SizedBox(width: 8),
+              _buildSuggestionButton('提出质疑'),
+              const SizedBox(width: 8),
+              _buildSuggestionButton('表示困惑'),
+              const SizedBox(width: 8),
+              _buildSuggestionButton('表示理解'),
+              const SizedBox(width: 8),
+              _buildSuggestionButton('继续深入'),
+              const SizedBox(width: 8),
+              _buildSuggestionButton('转换话题'),
+              const SizedBox(width: 8),
+              _buildSuggestionButton('总结要点'),
+            ],
+          ),
         ),
       ],
     );
@@ -199,17 +209,25 @@ class _AIGenerationPanelState extends State<AIGenerationPanel> with TickerProvid
           ),
         ),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            _buildScenarioButton('在讨论中'),
-            _buildScenarioButton('在辩论中'),
-            _buildScenarioButton('在咨询中'),
-            _buildScenarioButton('在学习中'),
-            _buildScenarioButton('在工作中'),
-            _buildScenarioButton('在娱乐中'),
-          ],
+        // 水平滚动的情景按钮
+        SizedBox(
+          height: 50,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              _buildScenarioButton('在讨论中'),
+              const SizedBox(width: 8),
+              _buildScenarioButton('在辩论中'),
+              const SizedBox(width: 8),
+              _buildScenarioButton('在咨询中'),
+              const SizedBox(width: 8),
+              _buildScenarioButton('在学习中'),
+              const SizedBox(width: 8),
+              _buildScenarioButton('在工作中'),
+              const SizedBox(width: 8),
+              _buildScenarioButton('在娱乐中'),
+            ],
+          ),
         ),
       ],
     );
@@ -219,7 +237,7 @@ class _AIGenerationPanelState extends State<AIGenerationPanel> with TickerProvid
     return ElevatedButton(
       onPressed: () => widget.onSuggestionSelected(text),
       style: ElevatedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         backgroundColor: Theme.of(context).colorScheme.surface,
         foregroundColor: Theme.of(context).colorScheme.onSurface,
         side: BorderSide(color: Theme.of(context).dividerColor),
@@ -238,7 +256,7 @@ class _AIGenerationPanelState extends State<AIGenerationPanel> with TickerProvid
     return ElevatedButton(
       onPressed: () => widget.onSuggestionSelected(text),
       style: ElevatedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         backgroundColor: Theme.of(context).colorScheme.surface,
         foregroundColor: Theme.of(context).colorScheme.onSurface,
         side: BorderSide(color: Theme.of(context).dividerColor),
