@@ -82,7 +82,27 @@
         "sender": "用户姓名", // [必需] 消息发送者标识
         "content": "消息内容" // [必需] 消息内容
       }
-    ]
+    ],
+    "user_profile": { // [可选] 用户档案（mock 存储）
+      "name": "测试用户",
+      "age": 28,
+      "gender": "female",
+      "relations": ["self"],
+      "personalities": ["理性", "耐心"],
+      "preferences": ["简洁表达"],
+      "taboos": ["过度承诺"],
+      "common_topics": ["项目进展", "技术分享"]
+    },
+    "target_profile": { // [可选] 当前对话对象档案（mock 存储）
+      "name": "对话机器人",
+      "age": 2,
+      "gender": "neutral",
+      "relations": ["assistant"],
+      "personalities": ["友好"],
+      "preferences": ["明确问题"],
+      "taboos": ["含糊其辞"],
+      "common_topics": ["任务澄清", "需求拆解"]
+    }
   }
 }
 ```
@@ -125,11 +145,7 @@
   "type": "manual_generate", // [必需]
   "data": {
     "session_id": "会话ID", // [必需]
-    "focused_message_ids": ["msg_001", "msg_003"], // [可选] 用户选择聚焦的消息ID数组
-    "user_corpus": "用户提供的语料库文本", // [可选] 用户提供的用于增强回复的语料
-    "user_background": "用户背景信息，如身份/角色", // [可选] 用户身份与背景
-    "user_preferences": "用户的喜好与偏好", // [可选] 用户偏好提示
-    "user_recent_experiences": "用户最近的经历或事件" // [可选] 用户近期经历
+    "focused_message_ids": ["msg_001", "msg_003"] // [可选] 用户选择聚焦的消息ID数组
   }
 }
 ```
@@ -221,6 +237,37 @@
   }
 }
 ```
+
+#### 档案回传 (profile_archive)
+```json
+{
+  "type": "profile_archive", // [必需]
+  "data": {
+    "session_id": "会话ID", // [必需]
+    "user_profile": { // [可选] conversation_start 中存储的用户档案
+      "name": "测试用户",
+      "age": 28,
+      "gender": "female",
+      "relations": ["self"],
+      "personalities": ["理性", "耐心"],
+      "preferences": ["简洁表达"],
+      "taboos": ["过度承诺"],
+      "common_topics": ["项目进展", "技术分享"]
+    },
+    "target_profile": { // [可选] conversation_start 中存储的对话对象档案
+      "name": "对话机器人",
+      "age": 2,
+      "gender": "neutral",
+      "relations": ["assistant"],
+      "personalities": ["友好"],
+      "preferences": ["明确问题"],
+      "taboos": ["含糊其辞"],
+      "common_topics": ["任务澄清", "需求拆解"]
+    }
+  }
+}
+```
+> 触发：收到 `conversation_end` 后立即返回（mock），连接保持开启。
 
 #### 会话恢复成功
 ```json

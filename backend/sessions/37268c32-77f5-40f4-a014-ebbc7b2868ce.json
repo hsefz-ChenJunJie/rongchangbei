@@ -1,0 +1,28 @@
+{
+  "id": "37268c32-77f5-40f4-a014-ebbc7b2868ce",
+  "scenario_description": "对话情景描述文本",
+  "response_count": 3,
+  "status": "idle",
+  "messages": [
+    {
+      "id": "msg_001",
+      "sender": "anonymous",
+      "content": "Damn, oh my fish!",
+      "timestamp": "2025-12-24T05:12:29.261588",
+      "is_user_selected": false
+    }
+  ],
+  "modifications": [],
+  "focused_message_ids": [],
+  "user_opinion": null,
+  "user_corpus": null,
+  "user_background": null,
+  "user_preferences": null,
+  "user_recent_experiences": null,
+  "current_message_sender": null,
+  "active_opinion_request_id": null,
+  "active_response_request_id": null,
+  "created_at": "2025-12-24T05:12:18.477908",
+  "updated_at": "2025-12-24T05:16:00.422965",
+  "persisted_at": "2025-12-24T05:16:00.423335"
+}

@@ -568,7 +568,9 @@ class RemoteTestBase:
     async def start_conversation(self, websocket: websockets.WebSocketServerProtocol,
                                 scenario_description: Optional[str] = None,
                                 response_count: Optional[int] = None,
-                                history_messages: Optional[List[Dict]] = None) -> Optional[str]:
+                                history_messages: Optional[List[Dict]] = None,
+                                user_profile: Optional[Dict[str, Any]] = None,
+                                target_profile: Optional[Dict[str, Any]] = None) -> Optional[str]:
         """
         开始对话
         
@@ -577,6 +579,8 @@ class RemoteTestBase:
             scenario_description: 对话场景描述
             response_count: 回答数量
             history_messages: 历史消息
+            user_profile: 用户档案
+            target_profile: 对话对象档案
             
         Returns:
             会话ID或None
@@ -588,6 +592,10 @@ class RemoteTestBase:
         
         if history_messages:
             event_data["history_messages"] = history_messages
+        if user_profile:
+            event_data["user_profile"] = user_profile
+        if target_profile:
+            event_data["target_profile"] = target_profile
         
         # 发送对话开始事件
         success = await self.send_websocket_event(websocket, "conversation_start", event_data)

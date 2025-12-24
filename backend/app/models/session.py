@@ -37,6 +37,18 @@ class Message(BaseModel):
         }
 
 
+class ProfileArchive(BaseModel):
+    """对话参与者档案"""
+    name: Optional[str] = Field(default=None, description="姓名")
+    age: Optional[int] = Field(default=None, description="年龄")
+    gender: Optional[str] = Field(default=None, description="性别")
+    relations: List[str] = Field(default_factory=list, description="与用户的关系")
+    personalities: List[str] = Field(default_factory=list, description="性格特点")
+    preferences: List[str] = Field(default_factory=list, description="偏好")
+    taboos: List[str] = Field(default_factory=list, description="禁忌")
+    common_topics: List[str] = Field(default_factory=list, description="共同话题")
+
+
 class Session(BaseModel):
     """会话数据模型"""
     id: str = Field(description="会话唯一ID")
@@ -54,10 +66,8 @@ class Session(BaseModel):
     modifications: List[str] = Field(default_factory=list, description="修改建议列表")
     focused_message_ids: List[str] = Field(default_factory=list, description="聚焦消息ID列表")
     user_opinion: Optional[str] = Field(default=None, description="用户意见倾向")
-    user_corpus: Optional[str] = Field(default=None, description="用户提供的语料库")
-    user_background: Optional[str] = Field(default=None, description="用户背景信息（身份/角色等）")
-    user_preferences: Optional[str] = Field(default=None, description="用户的偏好与喜好")
-    user_recent_experiences: Optional[str] = Field(default=None, description="用户最近的经历或事件")
+    user_profile: Optional[ProfileArchive] = Field(default=None, description="用户自己的档案")
+    target_profile: Optional[ProfileArchive] = Field(default=None, description="当前对话对象的档案")
     
     # 请求管理
     active_opinion_request_id: Optional[str] = Field(default=None, description="进行中的意见生成请求ID")
@@ -141,24 +151,6 @@ class Session(BaseModel):
         self.user_opinion = opinion
         self.updated_at = datetime.utcnow()
 
-    def update_user_context(
-        self,
-        user_corpus: Optional[str] = None,
-        user_background: Optional[str] = None,
-        user_preferences: Optional[str] = None,
-        user_recent_experiences: Optional[str] = None,
-    ):
-        """更新用户相关上下文信息"""
-        if user_corpus is not None:
-            self.user_corpus = user_corpus
-        if user_background is not None:
-            self.user_background = user_background
-        if user_preferences is not None:
-            self.user_preferences = user_preferences
-        if user_recent_experiences is not None:
-            self.user_recent_experiences = user_recent_experiences
-        self.updated_at = datetime.utcnow()
-    
     def set_history_messages(self, history_messages: List[Dict[str, str]]):
         """设置历史消息"""
         self.history_messages = [
@@ -248,10 +240,8 @@ class Session(BaseModel):
             "modifications": self.modifications,
             "focused_message_ids": self.focused_message_ids,
             "user_opinion": self.user_opinion,
-            "user_corpus": self.user_corpus,
-            "user_background": self.user_background,
-            "user_preferences": self.user_preferences,
-            "user_recent_experiences": self.user_recent_experiences,
+            "user_profile": self.user_profile.dict() if self.user_profile else None,
+            "target_profile": self.target_profile.dict() if self.target_profile else None,
             "active_opinion_request_id": self.active_opinion_request_id,
             "active_response_request_id": self.active_response_request_id,
             "partial_transcription": self.partial_transcription,

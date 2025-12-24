@@ -11,7 +11,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 from config.settings import settings
-from app.models.session import Session, Message
+from app.models.session import Session, Message, ProfileArchive
 
 logger = logging.getLogger(__name__)
 
@@ -114,8 +114,6 @@ class LLMService:
         session: Session, 
         count: int = 3,
         focused_message_ids: Optional[List[str]] = None,
-        user_opinion: Optional[str] = None,
-        user_context: Optional[Dict[str, Optional[str]]] = None
     ) -> List[str]:
         """
         生成回答建议
@@ -124,8 +122,6 @@ class LLMService:
             session: 会话对象
             count: 生成数量
             focused_message_ids: 聚焦消息ID列表
-            user_opinion: 用户意见
-            user_context: 用户上下文信息，包含语料库、背景、偏好、近期经历等
             
         Returns:
             List[str]: 回答建议列表
@@ -135,14 +131,11 @@ class LLMService:
             return []
         
         try:
-            user_context = user_context or {}
             # 构建提示词
             user_prompt = self._format_response_prompt(
                 session=session,
                 count=count,
                 focused_message_ids=focused_message_ids,
-                user_opinion=user_opinion,
-                user_context=user_context,
             )
             system_prompt = self._build_response_system_prompt(count)
             messages = self._build_messages(
@@ -157,13 +150,7 @@ class LLMService:
                 extra={
                     "response_count": count,
                     "focused_message_ids": focused_message_ids or [],
-                    "user_opinion": user_opinion,
-                    "has_user_corpus": bool(user_context.get("corpus") or session.user_corpus),
-                    "has_user_background": bool(user_context.get("background") or session.user_background),
-                    "has_user_preferences": bool(user_context.get("preferences") or session.user_preferences),
-                    "has_user_recent_experiences": bool(
-                        user_context.get("recent_experiences") or session.user_recent_experiences
-                    ),
+                    "user_opinion": session.user_opinion,
                 },
             )
             
@@ -192,8 +179,6 @@ class LLMService:
         session: Session, 
         count: int,
         focused_message_ids: Optional[List[str]] = None,
-        user_opinion: Optional[str] = None,
-        user_context: Optional[Dict[str, Optional[str]]] = None
     ) -> str:
         """
         格式化回答生成提示词
@@ -202,36 +187,25 @@ class LLMService:
             session: 会话对象
             count: 生成数量
             focused_message_ids: 聚焦消息ID列表
-            user_opinion: 用户意见
-            user_context: 用户上下文信息
             
         Returns:
             str: 格式化的提示词
         """
         parts: List[str] = []
-        ctx = user_context or {}
-        user_corpus = ctx.get("corpus") or session.user_corpus
-        user_background = ctx.get("background") or session.user_background
-        user_preferences = ctx.get("preferences") or session.user_preferences
-        user_recent_experiences = ctx.get("recent_experiences") or session.user_recent_experiences
         
         # 添加对话情景
         if session.scenario_description:
             parts.append(f"## 对话情景\n{session.scenario_description}")
-        
-        # 用户背景、偏好、经历与语料
-        if user_background:
-            parts.append(f"## 用户背景\n{user_background}")
-        if user_preferences:
-            parts.append(f"## 用户偏好\n{user_preferences}")
-        if user_recent_experiences:
-            parts.append(f"## 用户近期经历\n{user_recent_experiences}")
-        if user_corpus:
-            parts.append(f"## 用户参考语料\n{user_corpus}")
+
+        # 档案信息（仅做占位，后续可深化使用）
+        if session.user_profile:
+            parts.append(self._format_profile_block("用户档案", session.user_profile))
+        if session.target_profile:
+            parts.append(self._format_profile_block("对话对象档案", session.target_profile))
         
         # 用户倾向
-        if user_opinion:
-            parts.append(f"## 用户倾向\n{user_opinion}")
+        if session.user_opinion:
+            parts.append(f"## 用户倾向\n{session.user_opinion}")
         
         # 添加消息历史
         if session.messages:
@@ -254,6 +228,27 @@ class LLMService:
                 parts.append(f"- {modification}")
         
         return "\n\n".join(parts)
+
+    def _format_profile_block(self, title: str, profile: ProfileArchive) -> str:
+        """格式化档案信息（占位版，仅用于上下文补充）"""
+        lines: List[str] = [f"## {title}"]
+        if profile.name:
+            lines.append(f"- 姓名: {profile.name}")
+        if profile.age is not None:
+            lines.append(f"- 年龄: {profile.age}")
+        if profile.gender:
+            lines.append(f"- 性别: {profile.gender}")
+        if profile.relations:
+            lines.append(f"- 关系: {', '.join(profile.relations)}")
+        if profile.personalities:
+            lines.append(f"- 性格: {', '.join(profile.personalities)}")
+        if profile.preferences:
+            lines.append(f"- 偏好: {', '.join(profile.preferences)}")
+        if profile.taboos:
+            lines.append(f"- 禁忌: {', '.join(profile.taboos)}")
+        if profile.common_topics:
+            lines.append(f"- 共同话题: {', '.join(profile.common_topics)}")
+        return "\n".join(lines)
 
     async def generate_opinion_prediction(
         self, 

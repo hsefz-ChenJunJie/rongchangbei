@@ -17,11 +17,25 @@ class HistoryMessage(BaseModel):
     content: str = Field(description="消息内容")
 
 
+class ProfileData(BaseModel):
+    """对话参与者档案"""
+    name: Optional[str] = Field(default=None, description="姓名")
+    age: Optional[int] = Field(default=None, description="年龄")
+    gender: Optional[str] = Field(default=None, description="性别")
+    relations: List[str] = Field(default_factory=list, description="与用户的关系")
+    personalities: List[str] = Field(default_factory=list, description="性格特点")
+    preferences: List[str] = Field(default_factory=list, description="偏好")
+    taboos: List[str] = Field(default_factory=list, description="禁忌")
+    common_topics: List[str] = Field(default_factory=list, description="共同话题")
+
+
 class ConversationStartData(BaseModel):
     """对话开始事件数据"""
     scenario_description: Optional[str] = Field(default=None, description="对话情景描述文本")
     response_count: int = Field(ge=1, le=5, description="1-5之间的整数，生成回答数量")
     history_messages: Optional[List[HistoryMessage]] = Field(default=None, description="之前会话中记录的所有消息")
+    user_profile: Optional[ProfileData] = Field(default=None, description="用户自己的档案信息")
+    target_profile: Optional[ProfileData] = Field(default=None, description="当前对话对象的档案信息")
 
 
 class MessageStartData(BaseModel):
@@ -45,10 +59,6 @@ class ManualGenerateData(BaseModel):
     """手动触发生成回答事件数据"""
     session_id: str = Field(description="目标会话标识")
     focused_message_ids: Optional[List[str]] = Field(default=None, description="用户选择聚焦的消息ID数组")
-    user_corpus: Optional[str] = Field(default=None, description="用户提供的语料库")
-    user_background: Optional[str] = Field(default=None, description="用户背景信息，例如身份、角色")
-    user_preferences: Optional[str] = Field(default=None, description="用户的喜好与偏好")
-    user_recent_experiences: Optional[str] = Field(default=None, description="用户最近的经历或事件")
 
 
 class UserModificationData(BaseModel):
@@ -110,6 +120,13 @@ class MessageHistoryResponseData(BaseModel):
     messages: List[MessageHistoryItem] = Field(description="消息历史列表")
     total_count: int = Field(description="总消息数量")
     request_id: Optional[str] = Field(default=None, description="用于请求追踪")
+
+
+class ProfileArchiveData(BaseModel):
+    """会话档案返回事件数据"""
+    session_id: str = Field(description="目标会话标识")
+    user_profile: Optional[ProfileData] = Field(default=None, description="用户自己的档案信息")
+    target_profile: Optional[ProfileData] = Field(default=None, description="当前对话对象的档案信息")
 
 
 # ===============================
@@ -291,6 +308,11 @@ class MessageHistoryResponseEvent(BaseModel):
     data: MessageHistoryResponseData
 
 
+class ProfileArchiveEvent(BaseModel):
+    type: Literal["profile_archive"] = "profile_archive"
+    data: ProfileArchiveData
+
+
 # 联合类型定义
 IncomingEvent = Union[
     ConversationStartEvent,
@@ -315,7 +337,8 @@ OutgoingEvent = Union[
     StatusUpdateEvent,
     ErrorEvent,
     SessionRestoredEvent,
-    MessageHistoryResponseEvent
+    MessageHistoryResponseEvent,
+    ProfileArchiveEvent
 ]
 
 
@@ -351,6 +374,7 @@ class EventTypes:
     ERROR = "error"
     SESSION_RESTORED = "session_restored"
     MESSAGE_HISTORY_RESPONSE = "message_history_response"
+    PROFILE_ARCHIVE = "profile_archive"
 
 # --- Data Models for Events ---
 

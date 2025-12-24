@@ -20,10 +20,10 @@ from app.models.events import (
     SessionResumeEvent, GetMessageHistoryEvent,
     SessionCreatedEvent, MessageRecordedEvent,
     LLMResponseEvent, StatusUpdateEvent, ErrorEvent, SessionRestoredEvent,
-    MessageHistoryResponseEvent, OpinionPredictionEvent,
+    MessageHistoryResponseEvent, OpinionPredictionEvent, ProfileArchiveEvent,
     SessionCreatedData, MessageRecordedData,
     LLMResponseData, StatusUpdateData, ErrorData, SessionRestoredData,
-    MessageHistoryResponseData, MessageHistoryItem, OpinionPredictionData
+    MessageHistoryResponseData, MessageHistoryItem, OpinionPredictionData, ProfileArchiveData
 )
 
 logger = logging.getLogger(__name__)
@@ -257,6 +257,16 @@ class WebSocketHandler:
             scenario_description=event.data.scenario_description,
             response_count=event.data.response_count
         )
+
+        # 保存档案信息（占位存储，供后续对接使用）
+        try:
+            self.session_manager.set_profiles(
+                session_id=session_id,
+                user_profile=event.data.user_profile.dict() if event.data.user_profile else None,
+                target_profile=event.data.target_profile.dict() if event.data.target_profile else None,
+            )
+        except Exception as e:
+            logger.error(f"设置会话档案失败 {session_id}: {e}")
         
         # 设置历史消息（如果有）
         if event.data.history_messages:
@@ -418,14 +428,6 @@ class WebSocketHandler:
         # 更新会话数据
         if event.data.focused_message_ids:
             self.session_manager.set_focused_messages(session_id, event.data.focused_message_ids)
-        # 记录用户上下文信息，便于后续生成复用
-        self.session_manager.update_user_context(
-            session_id=session_id,
-            user_corpus=event.data.user_corpus,
-            user_background=event.data.user_background,
-            user_preferences=event.data.user_preferences,
-            user_recent_experiences=event.data.user_recent_experiences,
-        )
         
         # 更新状态
         await self.send_status_update(session_id, "generating_response", "生成回答建议")
@@ -435,10 +437,6 @@ class WebSocketHandler:
             await self.request_manager.generate_response_suggestions(
                 session_id=session_id,
                 focused_message_ids=event.data.focused_message_ids,
-                user_corpus=event.data.user_corpus,
-                user_background=event.data.user_background,
-                user_preferences=event.data.user_preferences,
-                user_recent_experiences=event.data.user_recent_experiences,
             )
         
         logger.info(f"手动触发生成: {session_id}")
@@ -562,7 +560,8 @@ class WebSocketHandler:
         session_id = event.data.session_id
         
         # 验证会话存在
-        if not self.session_manager.session_exists(session_id):
+        session = self.session_manager.get_session(session_id)
+        if not session:
             await self.send_error(
                 client_id,
                 ErrorCodes.SESSION_NOT_FOUND,
@@ -570,6 +569,13 @@ class WebSocketHandler:
                 session_id=session_id
             )
             return
+
+        # 先返回档案信息（mock）
+        await self.send_profile_archive(
+            session_id=session_id,
+            user_profile=session.user_profile,
+            target_profile=session.target_profile,
+        )
         
         # 取消所有进行中的请求
         if self.request_manager:
@@ -894,7 +900,25 @@ class WebSocketHandler:
                 )
             )
             await self.send_event(client_id, event)
-    
+
+    async def send_profile_archive(
+        self,
+        session_id: str,
+        user_profile,
+        target_profile,
+    ):
+        """发送会话档案事件（用户档案 + 对话对象档案）"""
+        for client_id in self.active_connections:
+            event = ProfileArchiveEvent(
+                type=EventTypes.PROFILE_ARCHIVE,
+                data=ProfileArchiveData(
+                    session_id=session_id,
+                    user_profile=user_profile.dict() if user_profile else None,
+                    target_profile=target_profile.dict() if target_profile else None,
+                ),
+            )
+            await self.send_event(client_id, event)
+
 
     
     async def send_llm_response(self, session_id: str, suggestions: list, request_id: str = None):

@@ -6,7 +6,7 @@ import logging
 from typing import Dict, Optional, List
 from datetime import datetime
 
-from app.models.session import Session, Message, SessionStatus
+from app.models.session import Session, Message, SessionStatus, ProfileArchive
 
 logger = logging.getLogger(__name__)
 
@@ -395,42 +395,28 @@ class SessionManager:
         
         logger.info(f"用户意见设置: {session_id}, 意见: {opinion}")
 
-    def update_user_context(
+    def set_profiles(
         self,
         session_id: str,
-        user_corpus: Optional[str] = None,
-        user_background: Optional[str] = None,
-        user_preferences: Optional[str] = None,
-        user_recent_experiences: Optional[str] = None,
+        user_profile: Optional[dict] = None,
+        target_profile: Optional[dict] = None,
     ):
         """
-        更新用户相关上下文信息
-        
-        Args:
-            session_id: 会话ID
-            user_corpus: 用户语料
-            user_background: 用户背景信息
-            user_preferences: 用户偏好
-            user_recent_experiences: 用户最近经历
+        设置会话的用户档案和对话对象档案
         """
         session = self.get_session(session_id)
         if not session:
             raise ValueError(f"会话不存在: {session_id}")
 
-        session.update_user_context(
-            user_corpus=user_corpus,
-            user_background=user_background,
-            user_preferences=user_preferences,
-            user_recent_experiences=user_recent_experiences,
-        )
+        session.user_profile = ProfileArchive(**user_profile) if user_profile else None
+        session.target_profile = ProfileArchive(**target_profile) if target_profile else None
+        session.updated_at = datetime.utcnow()
 
         logger.info(
-            "更新用户上下文: %s (background=%s, preferences=%s, recent=%s, corpus=%s)",
+            "更新档案: %s (user_profile=%s, target_profile=%s)",
             session_id,
-            bool(user_background),
-            bool(user_preferences),
-            bool(user_recent_experiences),
-            bool(user_corpus),
+            bool(user_profile),
+            bool(target_profile),
         )
     
     def get_user_opinion(self, session_id: str) -> Optional[str]:
@@ -659,6 +645,8 @@ class SessionManager:
             "focused_message_count": len(session.focused_message_ids),
             "has_scenario": session.scenario_description is not None,
             "has_user_opinion": session.user_opinion is not None,
+            "has_user_profile": session.user_profile is not None,
+            "has_target_profile": session.target_profile is not None,
             "response_count": session.response_count,
             "created_at": session.created_at.isoformat(),
             "updated_at": session.updated_at.isoformat(),

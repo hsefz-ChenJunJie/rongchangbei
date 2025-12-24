@@ -10,7 +10,7 @@ from typing import Dict, Optional, List
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from app.models.session import Session
+from app.models.session import Session, ProfileArchive
 
 logger = logging.getLogger(__name__)
 
@@ -58,10 +58,8 @@ class SessionPersistenceManager:
             "modifications": session.modifications,
             "focused_message_ids": session.focused_message_ids,
             "user_opinion": session.user_opinion,
-            "user_corpus": session.user_corpus,
-            "user_background": session.user_background,
-            "user_preferences": session.user_preferences,
-            "user_recent_experiences": session.user_recent_experiences,
+            "user_profile": session.user_profile.dict() if session.user_profile else None,
+            "target_profile": session.target_profile.dict() if session.target_profile else None,
             "current_message_sender": session.current_message_sender,
             "active_opinion_request_id": session.active_opinion_request_id,
             "active_response_request_id": session.active_response_request_id,
@@ -86,10 +84,10 @@ class SessionPersistenceManager:
         session.modifications = data.get("modifications", [])
         session.focused_message_ids = data.get("focused_message_ids", [])
         session.user_opinion = data.get("user_opinion")
-        session.user_corpus = data.get("user_corpus")
-        session.user_background = data.get("user_background")
-        session.user_preferences = data.get("user_preferences")
-        session.user_recent_experiences = data.get("user_recent_experiences")
+        user_profile = data.get("user_profile")
+        target_profile = data.get("target_profile")
+        session.user_profile = ProfileArchive(**user_profile) if user_profile else None
+        session.target_profile = ProfileArchive(**target_profile) if target_profile else None
         session.current_message_sender = data.get("current_message_sender")
         session.active_opinion_request_id = data.get("active_opinion_request_id")
         session.active_response_request_id = data.get("active_response_request_id")
