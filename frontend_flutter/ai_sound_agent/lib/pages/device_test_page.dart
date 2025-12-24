@@ -1,10 +1,8 @@
-import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import 'package:record/record.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:dio/dio.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
 import '../widgets/shared/base.dart';
 import '../widgets/shared/base_elevated_button.dart';
@@ -36,15 +34,6 @@ class DeviceTestPageState extends BasePageState<DeviceTestPage> {
   String _recordingStatus = '未测试';
   String? _recordedFilePath;
   
-  // 语音识别相关
-  final stt.SpeechToText _speechToText = stt.SpeechToText();
-  bool _speechInitialized = false;
-  bool _isListening = false;
-  String _speechStatus = '未测试';
-  String _lastWords = '';
-  String _confidence = '';
-  Timer? _speechTimer;
-  
   // 扬声器测试相关
   final AudioPlayer _audioPlayer = AudioPlayer();
   bool _isPlaying = false;
@@ -69,14 +58,12 @@ class DeviceTestPageState extends BasePageState<DeviceTestPage> {
   void initState() {
     super.initState();
     _checkPermissions();
-    _initSpeech();
     _initTts();
   }
 
   @override
   void dispose() {
     _audioPlayer.dispose();
-    _speechTimer?.cancel();
     _flutterTts.stop();
     super.dispose();
   }
@@ -89,119 +76,9 @@ class DeviceTestPageState extends BasePageState<DeviceTestPage> {
     });
   }
 
-  /// 初始化语音识别
-  Future<void> _initSpeech() async {
-    try {
-      _speechInitialized = await _speechToText.initialize(
-        onStatus: (status) {
-          debugPrint('语音识别状态: $status');
-          if (mounted) {
-            setState(() {
-              if (status == 'listening') {
-                _speechStatus = '识别中...';
-              } else if (status == 'notListening') {
-                _speechStatus = '已停止';
-                _isListening = false;
-              } else if (status == 'done') {
-                _speechStatus = '完成';
-                _isListening = false;
-              }
-            });
-          }
-        },
-        onError: (errorNotification) {
-          debugPrint('语音识别错误: ${errorNotification.errorMsg}');
-          if (mounted) {
-            setState(() {
-              _speechStatus = '错误: ${errorNotification.errorMsg}';
-              _isListening = false;
-            });
-          }
-        },
-      );
-      if (!_speechInitialized) {
-        setState(() {
-          _speechStatus = '初始化失败';
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _speechStatus = '初始化错误: $e';
-      });
-    }
-  }
 
-  /// 开始/停止语音识别
-  Future<void> _toggleSpeechRecognition() async {
-    if (!_speechInitialized) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('语音识别未初始化')),
-      );
-      return;
-    }
 
-    if (_isListening) {
-      // 停止语音识别
-      await _speechToText.stop();
-      if (mounted) {
-        setState(() {
-          _isListening = false;
-          _speechTimer?.cancel();
-        });
-      }
-    } else {
-      // 开始语音识别
-      setState(() {
-        _lastWords = '';
-        _confidence = '';
-      });
 
-      try {
-        await _speechToText.listen(
-          onResult: (result) {
-            if (mounted) {
-              setState(() {
-                _lastWords = result.recognizedWords;
-                if (result.hasConfidenceRating && result.confidence > 0) {
-                  _confidence = '置信度: ${(result.confidence * 100).toStringAsFixed(1)}%';
-                }
-              });
-            }
-          },
-          listenFor: const Duration(seconds: 30),
-          pauseFor: const Duration(seconds: 2),
-          localeId: 'zh_CN',
-          partialResults: true,
-        );
-
-        if (mounted) {
-          setState(() {
-            _isListening = true;
-            _speechStatus = '识别中...';
-          });
-        }
-
-        // 设置30秒后自动停止
-        _speechTimer = Timer(const Duration(seconds: 30), () async {
-          if (_isListening) {
-            await _speechToText.stop();
-            if (mounted) {
-              setState(() {
-                _isListening = false;
-              });
-            }
-          }
-        });
-      } catch (e) {
-        if (mounted) {
-          setState(() {
-            _speechStatus = '启动失败: $e';
-            _isListening = false;
-          });
-        }
-      }
-    }
-  }
 
   @override
   Widget buildContent(BuildContext context) {
@@ -476,83 +353,6 @@ class DeviceTestPageState extends BasePageState<DeviceTestPage> {
             ),
           ),
           const SizedBox(height: 20),
-          // 语音识别测试部分
-          Card(
-            elevation: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    '语音识别测试',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      const Text('识别状态:'),
-                      const SizedBox(width: 8),
-                      _buildStatusIcon(_speechStatus),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '状态: $_speechStatus',
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                  if (_lastWords.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    const Text('识别结果:'),
-                    const SizedBox(height: 4),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(4),
-                        border: Border.all(color: Colors.grey[300]!),
-                      ),
-                      child: Text(
-                        _lastWords,
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    ),
-                  ],
-                  if (_confidence.isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      _confidence,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).textTheme.bodySmall?.color,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: BaseElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _isListening ? Colors.orange : Colors.green,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      onPressed: _toggleSpeechRecognition,
-                      icon: Icon(
-                        _isListening ? Icons.mic_off : Icons.mic,
-                        size: 20,
-                      ),
-                      label: _isListening ? '停止识别' : '开始语音识别',
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
         ],
       ),
     );

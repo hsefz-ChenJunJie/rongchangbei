@@ -8,11 +8,15 @@ import 'role_manager.dart';
 class ChatInput extends StatefulWidget {
   final ChatDialogueState dialogueState;
   final VoidCallback? onSend;
+  final VoidCallback? onPlusButtonPressed;
+  final Function(String)? onAppendText;
 
   const ChatInput({
     super.key,
     required this.dialogueState,
     this.onSend,
+    this.onPlusButtonPressed,
+    this.onAppendText,
   });
 
   @override
@@ -25,6 +29,7 @@ class ChatInputState extends State<ChatInput> {
   
   String _suggestion = '';
   bool _isShowingSuggestion = false;
+  bool _isShowingAIPanel = false;
 
   @override
   void initState() {
@@ -154,6 +159,35 @@ class ChatInputState extends State<ChatInput> {
     });
   }
 
+  // 切换AI面板显示状态
+  void toggleUserOpinionPanel() {
+    setState(() {
+      _isShowingAIPanel = !_isShowingAIPanel;
+    });
+  }
+
+  // 获取当前用户意见
+  String getUserOpinion() {
+    return _controller.text;
+  }
+
+  // 设置用户意见
+  void setUserOpinion(String opinion) {
+    _controller.text = opinion;
+    _controller.selection = TextSelection.collapsed(offset: opinion.length);
+  }
+
+  // 追加用户意见
+  void appendUserOpinion(String opinion) {
+    final currentText = _controller.text;
+    if (currentText.isEmpty) {
+      _controller.text = opinion;
+    } else {
+      _controller.text = currentText + ' ' + opinion;
+    }
+    _controller.selection = TextSelection.collapsed(offset: _controller.text.length);
+  }
+
   @override
   Widget build(BuildContext context) {
     // 获取屏幕高度，限制最大高度为屏幕高度的15%
@@ -259,6 +293,15 @@ class ChatInputState extends State<ChatInput> {
                             ),
                           ),
                       ],
+                    ),
+                  ),
+                  // + 按钮
+                  Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    child: IconButton(
+                      icon: const Icon(Icons.add, size: 24),
+                      onPressed: widget.onPlusButtonPressed,
+                      padding: const EdgeInsets.all(4),
                     ),
                   ),
                 ],
