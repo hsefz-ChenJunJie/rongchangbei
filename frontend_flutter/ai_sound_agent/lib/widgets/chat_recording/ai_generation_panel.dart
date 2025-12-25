@@ -257,7 +257,7 @@ class _AIGenerationPanelState extends State<AIGenerationPanel> with TickerProvid
             ...widget.responseSuggestions.map((suggestion) => 
               Column(
                 children: [
-                  _buildSuggestionButton(suggestion),
+                  _buildLLMSuggestionButton(suggestion),
                   const SizedBox(height: 8),
                 ],
               )
@@ -353,16 +353,34 @@ class _AIGenerationPanelState extends State<AIGenerationPanel> with TickerProvid
     );
   }
 
+  Widget _buildLLMSuggestionButton(String text) {
+    return ElevatedButton(
+      onPressed: () {
+        // LLM响应建议，直接追加到输入框
+        widget.onSuggestionSelected(text);
+      },
+      style: ElevatedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        foregroundColor: Theme.of(context).colorScheme.onSurface,
+        side: BorderSide(color: Theme.of(context).dividerColor),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+      child: Text(
+        text,
+        textAlign: TextAlign.center,
+        style: const TextStyle(fontSize: 14),
+      ),
+    );
+  }
+
   Widget _buildSuggestionButton(String text) {
     return ElevatedButton(
       onPressed: () {
-        // 如果是LLM响应建议，直接追加到输入框
-        if (text.startsWith('建议回答')) {
-          widget.onSuggestionSelected(text);
-        } else {
-          // 如果是意见预测建议，发送user_modification消息
-          widget.onUserModification(text);
-        }
+        // AI助手建议，发送用户修改意见
+        widget.onUserModification(text);
       },
       style: ElevatedButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
