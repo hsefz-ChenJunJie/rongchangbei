@@ -101,6 +101,8 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
   // AI生成面板相关状态
   bool _isAIPanelVisible = false;
+  bool _llmResponseSameScreen = false; // 同屏模式设置
+  bool _clickToSwitch = false; // 点击后切换设置
 
   // 侧边栏输入控制器
   final TextEditingController _scenarioSupplementController = TextEditingController();
@@ -132,11 +134,26 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     _currentPartnerProfile = widget.partnerProfile;
     
     // 初始化默认角色并加载current.dp
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
       _initializeDefaultRoles();
       _loadCurrentDialogue();
       _startUserOpinionTimer(); // 启动用户意见计时器
+      await _loadUserPreferences(); // 加载用户偏好设置
     });
+  }
+
+  // 加载用户偏好设置
+  Future<void> _loadUserPreferences() async {
+    try {
+      final userData = Userdata();
+      await userData.loadUserData();
+      setState(() {
+        _llmResponseSameScreen = userData.preferences['llm_response_same_screen'] ?? false;
+        _clickToSwitch = userData.preferences['click_to_switch'] ?? false;
+      });
+    } catch (e) {
+      debugPrint('加载用户偏好设置失败: $e');
+    }
   }
 
   // 处理断线重连
@@ -1442,11 +1459,19 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
               isVisible: _isAIPanelVisible,
               suggestionKeywords: _suggestionKeywords, // 来自后端的建议关键词
               responseSuggestions: _responseSuggestions, // 来自后端的LLM响应建议
-              onSuggestionSelected: (text) {
+              llmResponseSameScreen: _llmResponseSameScreen, // 同屏模式设置
+              clickToSwitch: _clickToSwitch, // 点击后切换设置
+              onSuggestionSelected: (text) async {
                 // 将AI生成的文本追加到输入框
                 if (_inputKey.currentState != null) {
                   _inputKey.currentState!.addText(text);
                 }
+                
+                // 发送用户选择的响应消息到后端
+                await _sendUserSelectedResponse(text);
+                
+                // 播放TTS语音
+                await _flutterTts.speak(text);
               },
               onUserModification: _sendUserModification, // 发送用户修改意见
               onScenarioSupplement: _sendScenarioSupplement, // 发送情景补充

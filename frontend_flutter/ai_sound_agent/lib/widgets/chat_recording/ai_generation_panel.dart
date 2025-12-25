@@ -10,6 +10,8 @@ class AIGenerationPanel extends StatefulWidget {
   final List<String> responseSuggestions; // 来自后端的LLM响应建议
   final Function(String) onUserModification; // 发送用户修改意见
   final Function(String) onScenarioSupplement; // 发送情景补充
+  final bool llmResponseSameScreen; // 是否启用同屏模式
+  final bool clickToSwitch; // 是否点击后自动切换到LLM响应标签页
 
   const AIGenerationPanel({
     super.key,
@@ -20,6 +22,8 @@ class AIGenerationPanel extends StatefulWidget {
     this.responseSuggestions = const [], // 默认值
     required this.onUserModification,
     required this.onScenarioSupplement,
+    this.llmResponseSameScreen = false, // 默认不启用同屏模式
+    this.clickToSwitch = false, // 默认不启用点击切换
   });
 
   @override
@@ -32,6 +36,9 @@ class _AIGenerationPanelState extends State<AIGenerationPanel> with TickerProvid
   late Animation<double> _fadeAnimation;
   List<String> _defaultSuggestions = [];
   bool _isLoadingSuggestions = true;
+  
+  // Tab controller for switching between tabs when needed
+  int _currentTabIndex = 0;
 
   @override
   void initState() {
@@ -102,20 +109,6 @@ class _AIGenerationPanelState extends State<AIGenerationPanel> with TickerProvid
       return const SizedBox.shrink();
     }
 
-    // 创建标签页配置
-    final tabs = [
-      TabConfig(
-        label: 'AI助手',
-        icon: Icons.auto_awesome,
-        content: _buildAIAssistantContent(),
-      ),
-      TabConfig(
-        label: 'LLM响应',
-        icon: Icons.data_object,
-        content: _buildLLMResponseContent(),
-      ),
-    ];
-
     return AnimatedBuilder(
       animation: _animationController,
       builder: (context, child) {
@@ -172,12 +165,11 @@ class _AIGenerationPanelState extends State<AIGenerationPanel> with TickerProvid
                     ),
                   ),
                   
-                  // 标签页组件
+                  // 根据同屏模式决定显示内容
                   Expanded(
-                    child: LightweightTabs(
-                      tabs: tabs,
-                      initialIndex: 0,
-                    ),
+                    child: widget.llmResponseSameScreen 
+                      ? _buildUnifiedContent()  // 同屏模式：无标签页，直接显示内容
+                      : _buildTabbedContent(), // 标签页模式
                   ),
                 ],
               ),
@@ -204,6 +196,64 @@ class _AIGenerationPanelState extends State<AIGenerationPanel> with TickerProvid
           _buildScenarioSection(),
         ],
       ),
+    );
+  }
+
+  // 构建LLM响应部分（用于同屏模式）
+  Widget _buildLLMResponseSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'LLM响应处理',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 16,
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (widget.responseSuggestions.isEmpty)
+          const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '等待生成中...',
+                style: TextStyle(
+                  fontStyle: FontStyle.italic,
+                  color: Colors.orange,
+                  fontSize: 14,
+                ),
+              ),
+              SizedBox(height: 8),
+              Text(
+                '请输入您的意见或点击手动生成按钮',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                ),
+              ),
+            ],
+          )
+        else ...[
+          const Text(
+            '收到的建议:',
+            style: TextStyle(
+              fontWeight: FontWeight.w500,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 8),
+          // 建议按钮列表 - 垂直排列
+          ...widget.responseSuggestions.map((suggestion) => 
+            Column(
+              children: [
+                _buildLLMSuggestionButton(suggestion),
+                const SizedBox(height: 8),
+              ],
+            )
+          ),
+        ],
+      ],
     );
   }
 
@@ -381,6 +431,14 @@ class _AIGenerationPanelState extends State<AIGenerationPanel> with TickerProvid
       onPressed: () {
         // AI助手建议，发送用户修改意见
         widget.onUserModification(text);
+        
+        // 如果在标签页模式下且启用了点击切换，则切换到LLM响应标签页
+        if (!widget.llmResponseSameScreen && widget.clickToSwitch) {
+          // 在标签页模式下，需要切换到LLM响应标签页 (索引为1)
+          setState(() {
+            _currentTabIndex = 1;
+          });
+        }
       },
       style: ElevatedButton.styleFrom(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -418,6 +476,141 @@ class _AIGenerationPanelState extends State<AIGenerationPanel> with TickerProvid
         text,
         style: const TextStyle(fontSize: 12),
       ),
+    );
+  }
+
+  // 构建统一内容视图（同屏模式）
+  Widget _buildUnifiedContent() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 建议按钮 - 水平滚动布局
+          _buildSuggestionSection(),
+          
+          const SizedBox(height: 16),
+          
+          // LLM响应部分 - 显示在建议和情景之间
+          _buildLLMResponseSection(),
+          
+          const SizedBox(height: 16),
+          
+          // 情景补充 - 水平滚动布局
+          _buildScenarioSection(),
+        ],
+      ),
+    );
+  }
+
+  // 构建标签页内容（传统模式）
+  Widget _buildTabbedContent() {
+    // 使用Column和TabBar/TabBarView实现可控制的标签页
+    return Column(
+      children: [
+        // 自定义标签栏
+        Container(
+          height: 48,
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: Theme.of(context).dividerColor),
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      _currentTabIndex = 0;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: _currentTabIndex == 0 
+                        ? Theme.of(context).primaryColor 
+                        : Colors.transparent,
+                      border: Border(
+                        right: BorderSide(color: Theme.of(context).dividerColor),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.auto_awesome,
+                          size: 18,
+                          color: _currentTabIndex == 0 
+                            ? Colors.white 
+                            : Theme.of(context).textTheme.bodyMedium?.color,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'AI助手',
+                          style: TextStyle(
+                            color: _currentTabIndex == 0 
+                              ? Colors.white 
+                              : Theme.of(context).textTheme.bodyMedium?.color,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      _currentTabIndex = 1;
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: _currentTabIndex == 1 
+                        ? Theme.of(context).primaryColor 
+                        : Colors.transparent,
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.data_object,
+                          size: 18,
+                          color: _currentTabIndex == 1 
+                            ? Colors.white 
+                            : Theme.of(context).textTheme.bodyMedium?.color,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'LLM响应',
+                          style: TextStyle(
+                            color: _currentTabIndex == 1 
+                              ? Colors.white 
+                              : Theme.of(context).textTheme.bodyMedium?.color,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        // 标签页内容
+        Expanded(
+          child: IndexedStack(
+            index: _currentTabIndex,
+            children: [
+              _buildAIAssistantContent(),
+              _buildLLMResponseContent(),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
