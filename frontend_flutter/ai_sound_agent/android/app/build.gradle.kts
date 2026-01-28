@@ -42,7 +42,7 @@ android {
         minSdk = flutter.minSdkVersion
         targetSdk = 36
         versionCode = 16
-        versionName = "1.3.0"
+        versionName = "1.3.0-alpha-hotfix.1"
     }
 
     buildTypes {

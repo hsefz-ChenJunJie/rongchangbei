@@ -1,7 +1,7 @@
 name: idialogue
 description: "iDialogue: The solution for language barrier."
 publish_to: 'none'
-version: 1.3.0
+version: 1.3.0-alpha-hotfix.1
 
 
 environment:

@@ -1003,8 +1003,49 @@ class DeviceTestPageState extends BasePageState<DeviceTestPage> {
           _isSpeaking = false;
           _ttsStatus = '错误: $msg';
         });
+        // 显示TTS错误的友好提示
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('TTS错误: $msg'),
+            action: SnackBarAction(
+              label: '了解更多',
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('请确保设备已安装中文语音引擎，如谷歌文字转语音'),
+                    duration: Duration(seconds: 3),
+                  ),
+                );
+              },
+            ),
+            duration: Duration(seconds: 5),
+          ),
+        );
       }
     });
+
+    // 检测设备是否支持TTS
+    bool isLanguageAvailable = await _flutterTts.isLanguageAvailable("zh-CN");
+    if (!isLanguageAvailable && mounted) {
+      // 显示设备不支持TTS的友好提示
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('设备不支持中文TTS功能'),
+          action: SnackBarAction(
+            label: '了解更多',
+            onPressed: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('请确保设备已安装中文语音引擎，如谷歌文字转语音'),
+                  duration: Duration(seconds: 3),
+                ),
+              );
+            },
+          ),
+          duration: Duration(seconds: 5),
+        ),
+      );
+    }
 
     // 获取可用语言
     await _getLanguages();
