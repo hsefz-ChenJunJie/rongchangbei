@@ -85,6 +85,9 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
   // TTS相关状态
   final FlutterTts _flutterTts = FlutterTts();
+  bool _isTtsAvailable = false; // TTS可用性状态
+  bool _isTtsInitialized = false; // TTS初始化状态
+  String _ttsError = ''; // TTS错误信息
 
   // 新增：角色队列
   List<String> _roleQueue = [];
@@ -239,7 +242,6 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         if (_currentDialoguePackage != null) {
           await _establishWebSocketConnection(
             baseUrl: baseUrl,
-            username: userdata.username,
             dialoguePackage: _currentDialoguePackage!,
             historyMessages: currentMessages,
           );
@@ -353,17 +355,84 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
       _flutterTts.setErrorHandler((msg) {
         debugPrint('TTS播放错误: $msg');
+        if (mounted) {
+          setState(() {
+            _ttsError = msg;
+            _isTtsAvailable = false;
+          });
+        }
       });
 
-      // 设置TTS参数
-      await _flutterTts.setLanguage("zh-CN");
-      await _flutterTts.setSpeechRate(0.5);
-      await _flutterTts.setVolume(1.0);
-      await _flutterTts.setPitch(1.0);
-      
-      debugPrint('TTS初始化完成');
+      // 检测设备是否支持TTS
+      bool isLanguageAvailable = await _flutterTts.isLanguageAvailable("zh-CN");
+      debugPrint('TTS语言支持检测: $isLanguageAvailable');
+
+      if (isLanguageAvailable) {
+        // 设置TTS参数
+        await _flutterTts.setLanguage("zh-CN");
+        await _flutterTts.setSpeechRate(0.5);
+        await _flutterTts.setVolume(1.0);
+        await _flutterTts.setPitch(1.0);
+        
+        if (mounted) {
+          setState(() {
+            _isTtsAvailable = true;
+            _isTtsInitialized = true;
+            _ttsError = '';
+          });
+        }
+        debugPrint('TTS初始化完成，设备支持TTS');
+      } else {
+        if (mounted) {
+          setState(() {
+            _isTtsAvailable = false;
+            _isTtsInitialized = true;
+            _ttsError = '设备不支持中文TTS';
+          });
+          // 显示设备不支持TTS的友好提示
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('设备不支持中文TTS功能'),
+              action: SnackBarAction(
+                label: '了解更多',
+                onPressed: () {
+                  // 可以在这里添加更多信息，例如如何安装TTS引擎
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('请确保设备已安装中文语音引擎，如谷歌文字转语音'),
+                      duration: Duration(seconds: 3),
+                    ),
+                  );
+                },
+              ),
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
+        debugPrint('设备不支持中文TTS');
+      }
     } catch (e) {
       debugPrint('初始化TTS失败: $e');
+      if (mounted) {
+        setState(() {
+          _isTtsAvailable = false;
+          _isTtsInitialized = true;
+          _ttsError = 'TTS初始化失败: $e';
+        });
+        // 显示TTS初始化失败的友好提示
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('TTS初始化失败: $e'),
+            action: SnackBarAction(
+              label: '重试',
+              onPressed: () {
+                _initializeTts();
+              },
+            ),
+            duration: Duration(seconds: 5),
+          ),
+        );
+      }
     }
   }
 
@@ -465,10 +534,9 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         await completer.future; // 等待消息处理完成
       }
 
-      // 加载用户数据以获取用户名和base_url
+      // 加载用户数据以获取base_url
       final userdata = Userdata();
       await userdata.loadUserData();
-      final username = userdata.username;
       final baseUrl = userdata.preferences['base_url'] ?? 'ws://localhost:8000/conservation';
 
       if (mounted) {
@@ -477,10 +545,9 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         });
       }
 
-      // 建立WebSocket连接并直接发送包含历史消息的启动包
+          // 建立WebSocket连接并直接发送包含历史消息的启动包
       await _establishWebSocketConnection(
         baseUrl: baseUrl,
-        username: username,
         dialoguePackage: dialoguePackage,
         historyMessages: chatMessages,
       );
@@ -498,7 +565,6 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
 
   Future<void> _establishWebSocketConnection({
     required String baseUrl,
-    required String username,
     required DialoguePackage dialoguePackage,
     required List<Map<String, dynamic>> historyMessages,
   }) async {
@@ -562,21 +628,20 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         };
       }).toList();
 
-      // 构建场景描述，如果存在当前聊天对象则附加其信息
-      String enhancedScenarioDescription = dialoguePackage.scenarioDescription;
+      // 构建目标对话对象档案
+      Map<String, dynamic>? targetProfile;
       if (_currentPartnerProfile != null) {
-        final partnerInfo = _buildPartnerInfoString();
-        enhancedScenarioDescription = '${dialoguePackage.scenarioDescription}\n\n你现在的聊天对象：$partnerInfo';
+        targetProfile = _buildTargetProfile();
       }
 
-      // 构建并发送对话启动数据包（包含历史消息）
+      // 构建并发送对话启动数据包（包含历史消息和目标档案）
       final startMessage = {
         'type': 'conversation_start',
         'data': {
-          'username': username,
-          'scenario_description': enhancedScenarioDescription,
+          'scenario_description': dialoguePackage.scenarioDescription,
           'response_count': dialoguePackage.responseCount.clamp(1, 5), // 确保在1-5之间
           'history_messages': formattedHistoryMessages,
+          if (targetProfile != null) 'target_profile': targetProfile,
         }
       };
 
@@ -783,6 +848,128 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
   }
 
   /// 构建聊天对象的详细信息字符串
+  /// 构建目标对话对象档案（符合后端要求的格式）
+  Map<String, dynamic> _buildTargetProfile() {
+    if (_currentPartnerProfile == null) return {};
+    
+    final profile = _currentPartnerProfile!;
+    
+    return {
+      'name': profile.name,
+      'age': profile.age ?? 0,
+      'gender': _mapGenderToBackendFormat(profile.gender),
+      'relations': [_mapRelationshipToBackendFormat(profile.fullRelationship)],
+      'personalities': profile.personalityTags,
+      'preferences': _buildPreferencesFromProfile(profile),
+      'taboos': _buildTaboosFromProfile(profile),
+      'common_topics': _buildCommonTopicsFromProfile(profile),
+    };
+  }
+
+  /// 将性别映射为后端要求的格式
+  String _mapGenderToBackendFormat(String? gender) {
+    if (gender == null) return 'neutral';
+    switch (gender) {
+      case '男':
+        return 'male';
+      case '女':
+        return 'female';
+      default:
+        return 'neutral';
+    }
+  }
+
+  /// 将关系映射为后端要求的格式
+  String _mapRelationshipToBackendFormat(String relationship) {
+    switch (relationship) {
+      case '家人':
+        return 'family';
+      case '朋友':
+        return 'friend';
+      case '同事':
+        return 'colleague';
+      case '医生':
+        return 'doctor';
+      default:
+        return 'assistant'; // 默认作为助手
+    }
+  }
+
+  /// 从档案构建偏好列表
+  List<String> _buildPreferencesFromProfile(PartnerProfile profile) {
+    final preferences = <String>[];
+    
+    // 根据性格标签推断偏好
+    if (profile.personalityTags.contains('理性')) {
+      preferences.add('逻辑清晰');
+    }
+    if (profile.personalityTags.contains('感性')) {
+      preferences.add('情感共鸣');
+    }
+    if (profile.personalityTags.contains('开朗')) {
+      preferences.add('积极互动');
+    }
+    if (profile.personalityTags.contains('内向')) {
+      preferences.add('温和交流');
+    }
+    
+    // 如果没有特定的偏好，添加默认值
+    if (preferences.isEmpty) {
+      preferences.add('明确问题');
+    }
+    
+    return preferences;
+  }
+
+  /// 从档案构建禁忌列表
+  List<String> _buildTaboosFromProfile(PartnerProfile profile) {
+    final taboos = <String>[];
+    
+    // 从禁忌话题中提取
+    if (profile.tabooTopics != null && profile.tabooTopics!.isNotEmpty) {
+      // 简单分割禁忌话题（假设用逗号或分号分隔）
+      final topics = profile.tabooTopics!.split(RegExp(r'[,，;；]'));
+      taboos.addAll(topics.map((topic) => topic.trim()).where((topic) => topic.isNotEmpty));
+    }
+    
+    // 如果没有特定的禁忌，添加默认值
+    if (taboos.isEmpty) {
+      taboos.add('含糊其辞');
+    }
+    
+    return taboos;
+  }
+
+  /// 从档案构建常见话题列表
+  List<String> _buildCommonTopicsFromProfile(PartnerProfile profile) {
+    final topics = <String>[];
+    
+    // 根据关系类型添加常见话题
+    switch (profile.fullRelationship) {
+      case '家人':
+        topics.addAll(['家庭生活', '日常关心', '健康问候']);
+        break;
+      case '朋友':
+        topics.addAll(['兴趣爱好', '生活分享', '情感支持']);
+        break;
+      case '同事':
+        topics.addAll(['工作协作', '项目讨论', '职业发展']);
+        break;
+      case '医生':
+        topics.addAll(['健康咨询', '医疗建议', '康复指导']);
+        break;
+      default:
+        topics.addAll(['任务澄清', '需求拆解', '信息确认']);
+    }
+    
+    // 根据共同经历添加话题
+    if (profile.sharedExperiences != null && profile.sharedExperiences!.isNotEmpty) {
+      topics.add('共同回忆');
+    }
+    
+    return topics;
+  }
+
   String _buildPartnerInfoString() {
     if (_currentPartnerProfile == null) return '';
     
@@ -860,6 +1047,12 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     try {
       debugPrint('开始执行TTS朗读检查...');
       
+      // 检查TTS是否可用
+      if (!_isTtsAvailable) {
+        debugPrint('TTS不可用，跳过朗读');
+        return;
+      }
+      
       // 获取最后一条消息
       final messages = _dialogueKey.currentState?.getAllMessages() ?? [];
       debugPrint('获取到消息数量: ${messages.length}');
@@ -892,6 +1085,92 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
       }
     } catch (e) {
       debugPrint('语音合成发送消息时出错: $e');
+      if (mounted) {
+        setState(() {
+          _ttsError = '语音合成失败: $e';
+          _isTtsAvailable = false;
+        });
+      }
+    }
+  }
+
+  // 测试TTS功能
+  Future<void> _testTts() async {
+    try {
+      debugPrint('开始测试TTS功能...');
+      
+      // 检查TTS是否初始化
+      if (!_isTtsInitialized) {
+        debugPrint('TTS尚未初始化');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('TTS正在初始化，请稍候...'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+      
+      // 检查TTS是否可用
+      if (!_isTtsAvailable) {
+        debugPrint('TTS不可用');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('TTS不可用: $_ttsError'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
+      }
+      
+      // 测试文本
+      const testText = '您好，这是TTS语音测试。';
+      debugPrint('测试TTS朗读: $testText');
+      
+      // 显示测试开始提示
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('开始TTS测试...'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+      
+      // 添加延迟确保TTS准备就绪
+      await Future.delayed(const Duration(milliseconds: 100));
+      
+      // 执行TTS测试
+      await _flutterTts.speak(testText);
+      debugPrint('TTS测试调用成功');
+      
+      // 显示测试成功提示
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('TTS测试成功'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('TTS测试失败: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('TTS测试失败: $e'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+        setState(() {
+          _ttsError = '测试失败: $e';
+          _isTtsAvailable = false;
+        });
+      }
     }
   }
   
@@ -1374,6 +1653,36 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
                         ),
                       ),
                     ],
+                    // TTS状态指示器
+                    if (_isTtsInitialized) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: _isTtsAvailable 
+                              ? Colors.green.withAlpha(20)
+                              : Colors.red.withAlpha(20),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _isTtsAvailable ? Icons.volume_up : Icons.volume_off,
+                              size: 10,
+                              color: _isTtsAvailable ? Colors.green : Colors.red,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              _isTtsAvailable ? 'TTS可用' : 'TTS不可用',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: _isTtsAvailable ? Colors.green : Colors.red,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -1398,6 +1707,13 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
                     icon: const Icon(Icons.clear_all, size: 18),
                     tooltip: '清空对话',
                     onPressed: _clearChat,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.volume_up, size: 18),
+                    tooltip: '测试TTS语音',
+                    onPressed: _testTts,
                     padding: EdgeInsets.zero,
                     constraints: const BoxConstraints(),
                   ),
@@ -1470,8 +1786,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
                 // 发送用户选择的响应消息到后端
                 await _sendUserSelectedResponse(text);
                 
-                // 播放TTS语音
-                await _flutterTts.speak(text);
+                // 注意：不再在此处播放TTS语音，等待后端响应消息触发TTS
               },
               onUserModification: _sendUserModification, // 发送用户修改意见
               onScenarioSupplement: _sendScenarioSupplement, // 发送情景补充

@@ -1,7 +1,7 @@
 {
   "backend_server": {
-    "base_url": "http://lsj.2.frp.one:48788",
-    "port": 48788,
+    "base_url": "http://172.31.5.95",
+    "port": 8000,
     "health_endpoint": "/",
     "conversation_health_endpoint": "/conversation/health",
     "websocket_endpoint": "/conversation"

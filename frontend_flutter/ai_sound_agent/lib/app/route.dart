@@ -12,6 +12,7 @@ import 'package:idialogue/pages/chat_partners_page.dart';
 import 'package:idialogue/pages/partner_profile_list_page.dart';
 import 'package:idialogue/pages/partner_profile_detail_page.dart';
 import 'package:idialogue/pages/partner_profile_edit_page.dart';
+import 'package:idialogue/pages/user_profile_page.dart';
 
 // 定义路由名称常量
 class Routes {
@@ -27,6 +28,7 @@ class Routes {
   static const String partnerProfileList = '/partner-profiles';
   static const String partnerProfileDetail = '/partner-profile-detail';
   static const String partnerProfileEdit = '/partner-profile-edit';
+  static const String userProfile = '/user-profile';
 }
 
 // 路由映射配置
@@ -55,6 +57,7 @@ final Map<String, WidgetBuilder> appRoutes = {
       return const PartnerProfileEditPage();
     }
   },
+  Routes.userProfile: (context) => const UserProfilePage(),
 };
 
 // 路由状态类 (存储当前路由状态)

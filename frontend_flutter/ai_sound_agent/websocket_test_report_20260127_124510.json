@@ -1,0 +1,48 @@
+{
+  "test_config": {
+    "server_url": "http://172.31.5.95:8000:48788",
+    "websocket_url": "ws://172.31.5.95:8000:48788/conversation",
+    "test_settings": {
+      "connection_timeout": 15,
+      "response_timeout": 45,
+      "max_retries": 3,
+      "enable_detailed_logging": true,
+      "enable_file_logging": false,
+      "log_level": "INFO",
+      "show_list_items": false,
+      "test_audio_chunks": 5,
+      "mock_audio_duration": 2.0,
+      "websocket_timeout": 90
+    }
+  },
+  "test_summary": {
+    "total_tests": 3,
+    "passed_tests": 0,
+    "failed_tests": 3,
+    "success_rate": 0.0,
+    "results": [
+      {
+        "test_name": "WebSocket连接测试",
+        "success": false,
+        "timestamp": "2026-01-27T12:45:07.116587",
+        "details": "连接失败",
+        "data": null
+      },
+      {
+        "test_name": "对话流程测试",
+        "success": false,
+        "timestamp": "2026-01-27T12:45:08.131742",
+        "details": "WebSocket未连接",
+        "data": null
+      },
+      {
+        "test_name": "回答数量测试",
+        "success": false,
+        "timestamp": "2026-01-27T12:45:09.135376",
+        "details": "无法建立WebSocket连接",
+        "data": null
+      }
+    ]
+  },
+  "generated_at": "2026-01-27T12:45:10.148877"
+}

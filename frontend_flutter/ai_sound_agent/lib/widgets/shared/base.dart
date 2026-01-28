@@ -86,6 +86,13 @@ abstract class BasePageState<T extends BasePage> extends State<T> {
           (route) => false
         );
         break;
+      case 3: // 我的 (用户资料)
+        Navigator.pushNamedAndRemoveUntil(
+          context, 
+          Routes.userProfile, 
+          (route) => false
+        );
+        break;
     }
   }
 
