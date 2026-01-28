@@ -17,6 +17,7 @@ import 'package:idialogue/pages/partner_profile_detail_page.dart';  // 新增导
 import 'dart:convert';
 import 'dart:async';  // 新增：导入Timer
 import 'dart:typed_data';
+
 import 'package:web_socket_channel/web_socket_channel.dart';
 import 'package:loading_indicator/loading_indicator.dart';
 import 'package:record/record.dart';
@@ -1035,9 +1036,6 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
     // 消息发送后的回调，可以在这里添加额外逻辑
     // 例如：滚动到底部、触发AI响应等
     
-    // 有一定概率添加"我想想……"填充消息
-    _maybeAddThinkingMessage();
-    
     // 文字转语音：朗读刚发送的消息
     _speakLastSentMessage();
   }
@@ -1172,34 +1170,6 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
         });
       }
     }
-  }
-  
-  // 随机添加"我想想……"填充消息
-  void _maybeAddThinkingMessage() {
-    // 30%的概率触发
-    if (_shouldShowThinkingMessage()) {
-      // 延迟1-3秒后添加填充消息，模拟思考时间
-      final delay = Duration(milliseconds: 1000 + (DateTime.now().millisecond % 2000));
-      
-      Future.delayed(delay, () {
-        if (mounted && _sessionId != null) {
-          // 添加"我想想……"消息到对话中
-          if (_dialogueKey.currentState != null) {
-            _dialogueKey.currentState!.addMessage(
-              name: 'system',
-              content: '我想想……',
-              isMe: false,
-            );
-            debugPrint('已添加"我想想……"填充消息');
-          }
-        }
-      });
-    }
-  }
-  
-  // 决定是否显示思考消息（30%概率）
-  bool _shouldShowThinkingMessage() {
-    return DateTime.now().millisecond % 100 < 30; // 30%概率
   }
 
   void _clearChat() {
@@ -1773,7 +1743,7 @@ class _MainProcessingPageState extends BasePageState<MainProcessingPage> {
             height: 300, // Limit the height of the AI panel
             child: AIGenerationPanel(
               isVisible: _isAIPanelVisible,
-              suggestionKeywords: _suggestionKeywords, // 来自后端的建议关键词
+              suggestionKeywords: (_suggestionKeywords.length == 3 && _suggestionKeywords[0] == '建议1' && _suggestionKeywords[1] == '建议2' && _suggestionKeywords[2] == '建议3') ? [] : _suggestionKeywords, // 来自后端的建议关键词，默认值时不显示
               responseSuggestions: _responseSuggestions, // 来自后端的LLM响应建议
               llmResponseSameScreen: _llmResponseSameScreen, // 同屏模式设置
               clickToSwitch: _clickToSwitch, // 点击后切换设置
